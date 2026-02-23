@@ -1,0 +1,65 @@
+.NotationViewer {
+  background: #151f2d;
+  border: 1px solid #2b3a4f;
+  border-radius: 12px;
+  padding: 1rem;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+}
+
+.NotationViewer h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+  color: #c8d5e6;
+}
+
+.NotationViewer-controls {
+  margin: 0 0 0.75rem;
+}
+
+.NotationViewer-canvas {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid #2f3e56;
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: #0b111a;
+  display: flex;
+  justify-content: center;
+}
+
+.NotationViewer-canvas svg {
+  filter: invert(0.88) hue-rotate(180deg) brightness(0.9) contrast(0.86);
+  display: block;
+  margin: 0 auto;
+  width: 100% !important;
+  height: auto !important;
+}
+
+.NotationViewer-error {
+  color: #ff7f7f;
+}
+
+.AppThemeLight .NotationViewer {
+  background: #f2f6fc;
+  border-color: #b5c3d6;
+}
+
+.AppThemeLight .NotationViewer h2 {
+  color: #1f2f44;
+}
+
+.AppThemeLight .NotationViewer-canvas {
+  background: #ffffff;
+  border-color: #9eb1c8;
+}
+
+.AppThemeLight .NotationViewer-canvas svg {
+  filter: none;
+  color: #1f2f44;
+}
+
+.AppThemeLight .NotationViewer-canvas svg text {
+  fill: #1f2f44;
+}

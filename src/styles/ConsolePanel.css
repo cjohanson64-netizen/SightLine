@@ -1,0 +1,29 @@
+.ConsolePanel {
+  background: #151f2d;
+  border: 1px solid #2b3a4f;
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.ConsolePanel h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  color: #d7e3f2;
+}
+
+.ConsolePanel-logWindow {
+  min-height: 130px;
+  max-height: 220px;
+  overflow: auto;
+  background: #0b111a;
+  color: #d8e6f8;
+  border-radius: 10px;
+  border: 1px solid #2f3e56;
+  padding: 0.75rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+}
+
+.ConsolePanel-logWindow p {
+  margin: 0 0 0.3rem;
+}

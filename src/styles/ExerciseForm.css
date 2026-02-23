@@ -1,0 +1,394 @@
+.ExerciseForm {
+  background: #151f2d;
+  border: 1px solid #2b3a4f;
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 450px;
+  max-height: 56vh;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.ExerciseForm h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.ExerciseForm-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+.ExerciseForm-chunks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.ExerciseForm-chunk {
+  border: 1px solid #30435c;
+  border-radius: 10px;
+  padding: 0.7rem;
+  background: #101a28;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.ExerciseForm-chunk > h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #cbd9ea;
+}
+
+.ExerciseForm-chunk--core,
+.ExerciseForm-chunk--illegal {
+  min-width: 320px;
+}
+
+.ExerciseForm-chunk--phrase {
+  min-width: 530px;
+}
+
+.ExerciseForm-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.ExerciseForm-row label {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.ExerciseForm-row--four label {
+  flex: 1 1 0;
+}
+
+.ExerciseForm-row--four {
+  flex-wrap: nowrap;
+}
+
+.ExerciseForm-row--two label {
+  flex: 1 1 180px;
+}
+
+.ExerciseForm-row--two {
+  flex-wrap: nowrap;
+}
+
+.ExerciseForm-titleRow label:first-child {
+  flex: 2 1 0;
+}
+
+.ExerciseForm-titleRow label:last-child {
+  flex: 1 1 0;
+}
+
+.ExerciseForm-row--three label {
+  flex: 1 1 160px;
+}
+
+.ExerciseForm label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+  color: #d7e3f2;
+}
+
+.ExerciseForm-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.ExerciseForm input,
+.ExerciseForm select,
+.ExerciseForm button {
+  border: 1px solid #33455d;
+  border-radius: 8px;
+  padding: 0.5rem 0.55rem;
+  font-size: 0.92rem;
+  background: #0f1724;
+  color: #e6edf6;
+  width: 100%;
+  min-width: 0;
+}
+
+.ExerciseForm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.ExerciseForm-phraseBuilder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.ExerciseForm-phraseHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.ExerciseForm-phraseHeader h3 {
+  margin: 0;
+  font-size: 0.98rem;
+}
+
+.ExerciseForm-structurePreview {
+  font-size: 0.85rem;
+  color: #9eb3cc;
+}
+
+.ExerciseForm-phraseCard {
+  border: 1px solid #30435c;
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: #101a28;
+  display: flex;
+  flex-direction: row;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.ExerciseForm-phraseTitle {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #d7e3f2;
+  min-width: 4.6rem;
+  text-align: center;
+}
+
+.ExerciseForm-phraseCardRow {
+  display: grid;
+  grid-template-columns: minmax(4.3rem, 0.9fr) auto minmax(8.8rem, 1.5fr) auto;
+  gap: 0.55rem;
+  align-items: end;
+  width: 100%;
+}
+
+.ExerciseForm-phraseCardRow label {
+  min-width: 0;
+}
+
+.ExerciseForm-primeField input[type='checkbox'] {
+  appearance: none;
+  width: 2.1rem;
+  min-width: 2.1rem;
+  height: 2.1rem;
+  min-height: 2.1rem;
+  margin: 0;
+  align-self: stretch;
+  justify-self: start;
+  background: transparent;
+  border: 1px solid #d9e5f5;
+  border-radius: 8px;
+  cursor: pointer;
+  position: relative;
+}
+
+.ExerciseForm-primeField input[type='checkbox']:checked {
+  background: #4f79b7;
+  border-color: #4f79b7;
+}
+
+.ExerciseForm-primeField input[type='checkbox']:disabled {
+  border-color: #5d6d83;
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.ExerciseForm-phraseActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.ExerciseForm-constraintSection {
+  border: 1px solid #344a66;
+  border-radius: 8px;
+  padding: 0.5rem;
+  background: #0f1724;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.ExerciseForm-constraintSection h3 {
+  margin: 0;
+  font-size: 0.92rem;
+  color: #cbd9ea;
+}
+
+.ExerciseForm-toggleGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem 0.65rem;
+}
+
+.ExerciseForm-toggleGrid--degrees {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.ExerciseForm-toggleGrid--intervals {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.ExerciseForm-toggleItem {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  color: #d7e3f2;
+}
+
+.ExerciseForm-toggleItem input[type='checkbox'] {
+  width: 1rem;
+  min-width: 1rem;
+  height: 1rem;
+  min-height: 1rem;
+  appearance: none;
+  background: transparent;
+  border: 1px solid #d9e5f5;
+  border-radius: 4px;
+}
+
+.ExerciseForm-toggleItem input[type='checkbox']:checked {
+  background: #4f79b7;
+  border-color: #4f79b7;
+}
+
+.ExerciseForm-toggleItem span {
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+
+.ExerciseForm-toggleItem sup {
+  font-size: 0.64em;
+}
+
+.ExerciseForm-transitionRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.55rem;
+  align-items: end;
+}
+
+.ExerciseForm-transitionList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.ExerciseForm-transitionList p {
+  margin: 0;
+  color: #9eb3cc;
+  font-size: 0.86rem;
+}
+
+.ExerciseForm-transitionItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid #344a66;
+  border-radius: 8px;
+  padding: 0.4rem 0.5rem;
+  background: #0f1724;
+  color: #d7e3f2;
+}
+
+.ExerciseForm-iconButton {
+  width: 2.1rem;
+  min-width: 2.1rem;
+  max-width: 2.1rem;
+  padding: 0.45rem 0;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.ExerciseForm button {
+  cursor: pointer;
+  background: #1f2d42;
+  transition: background 0.2s ease;
+  flex: 1 1 180px;
+  min-width: 0;
+  white-space: normal;
+}
+
+.ExerciseForm button:hover {
+  background: #2b3d58;
+}
+
+.AppThemeLight .ExerciseForm {
+  background: #f2f6fc;
+  border-color: #b5c3d6;
+}
+
+.AppThemeLight .ExerciseForm h2,
+.AppThemeLight .ExerciseForm label,
+.AppThemeLight .ExerciseForm-chunk > h3,
+.AppThemeLight .ExerciseForm-phraseTitle,
+.AppThemeLight .ExerciseForm-phraseHeader h3 {
+  color: #1f2f44;
+}
+
+.AppThemeLight .ExerciseForm-chunk,
+.AppThemeLight .ExerciseForm-phraseCard,
+.AppThemeLight .ExerciseForm-constraintSection,
+.AppThemeLight .ExerciseForm-transitionItem {
+  background: #f8fbff;
+  border-color: #c1cede;
+  color: #1f2f44;
+}
+
+.AppThemeLight .ExerciseForm input,
+.AppThemeLight .ExerciseForm select,
+.AppThemeLight .ExerciseForm button {
+  background: #ffffff;
+  color: #1f2f44;
+  border-color: #9eb1c8;
+}
+
+.AppThemeLight .ExerciseForm-structurePreview,
+.AppThemeLight .ExerciseForm-transitionList p {
+  color: #516a89;
+}
+
+@media (max-width: 960px) {
+  .ExerciseForm {
+    max-height: none;
+  }
+
+  .ExerciseForm-chunks {
+    grid-template-columns: 1fr;
+  }
+
+  .ExerciseForm-chunk--core,
+  .ExerciseForm-chunk--illegal,
+  .ExerciseForm-chunk--phrase {
+    min-width: 0;
+  }
+
+  .ExerciseForm-row--four {
+    flex-direction: column;
+  }
+
+  .ExerciseForm-row--two {
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+
+  .ExerciseForm-actions {
+    flex-direction: column;
+  }
+}

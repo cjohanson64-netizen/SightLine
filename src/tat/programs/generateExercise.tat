@@ -1,0 +1,94 @@
+{
+  "name": "generateExercise",
+  "steps": [
+    {
+      "op": "graftBranch",
+      "args": {
+        "parentId": "$graph.root",
+        "id": "exercise-spec",
+        "label": "ExerciseSpec",
+        "data": "$inputs.spec"
+      }
+    },
+    {
+      "op": "graftBranch",
+      "args": {
+        "parentId": "$graph.root",
+        "id": "artifact-body",
+        "label": "Exercise Artifact"
+      }
+    },
+    {
+      "op": "graftPhraseSpecs",
+      "args": {
+        "parentId": "artifact-body"
+      }
+    },
+    {
+      "op": "graftConstraintSpec",
+      "args": {
+        "parentId": "exercise-spec"
+      }
+    },
+    {
+      "op": "buildTonnetz",
+      "args": {
+        "key": "$inputs.spec.key",
+        "storeAs": "tonnetz",
+        "graphNodeId": "tonnetz"
+      }
+    },
+    {
+      "op": "generateHarmony",
+      "args": {
+        "parentId": "artifact-body",
+        "tonnetzRef": "tonnetz",
+        "seedOffset": 11,
+        "storeAs": "harmony"
+      }
+    },
+    {
+      "op": "generateMelody",
+      "args": {
+        "parentId": "artifact-body",
+        "harmonyRef": "harmony",
+        "tonnetzRef": "tonnetz",
+        "seedOffset": 37,
+        "storeAs": "candidates"
+      }
+    },
+    {
+      "op": "scoreCandidates",
+      "args": {
+        "candidatesRef": "candidates",
+        "storeAs": "scoredCandidates"
+      }
+    },
+    {
+      "op": "selectBestCandidate",
+      "args": {
+        "candidatesRef": "scoredCandidates",
+        "storeAs": "bestCandidate",
+        "parentId": "artifact-body"
+      }
+    },
+    {
+      "op": "pruneByKind",
+      "args": {
+        "kind": "bud",
+        "keepIds": "$state.keepCandidateIds"
+      }
+    },
+    {
+      "op": "commitBestCandidate",
+      "args": {
+        "bestRef": "bestCandidate",
+        "parentId": "artifact-body"
+      }
+    },
+    {
+      "op": "pruneDisconnected",
+      "args": {}
+    }
+  ]
+}
