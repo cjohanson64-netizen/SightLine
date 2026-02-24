@@ -51,18 +51,6 @@ function durationToMusicXml(duration: string): Pick<MusicXmlNote, 'duration' | '
   return { duration: 2, type: 'quarter' };
 }
 
-function harmonyDegreeLyricFromChordId(chordId: string): string | undefined {
-  const match = /-d(\d+)$/.exec(chordId);
-  if (!match) {
-    return undefined;
-  }
-  const degree = Number(match[1]);
-  if (!Number.isFinite(degree) || degree < 1 || degree > 7) {
-    return undefined;
-  }
-  return String(degree);
-}
-
 function buildMusicXmlFromSpecAndMelody(
   spec: Record<string, unknown>,
   melodyEvents: MelodyEvent[],
@@ -87,7 +75,6 @@ function buildMusicXmlFromSpecAndMelody(
     notesByMeasure[index].push({
       ...pitch,
       ...rhythm,
-      lyric: harmonyDegreeLyricFromChordId(event.chordId),
       onset: event.onsetBeat ?? event.beat,
       color: isHighlighted ? options?.highlightColor ?? '#ff2da6' : undefined
     });
