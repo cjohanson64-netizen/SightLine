@@ -426,9 +426,11 @@ export default function App(): JSX.Element {
     return toMusicXmlFromMelody(
       currentHistoryEntry.specSnapshot as unknown as Record<string, unknown>,
       currentPatchedMelody,
-      selectedMelodyIndex >= 0 ? { highlightedMelodyIndex: selectedMelodyIndex, highlightColor: "#ff2da6" } : undefined,
+      pitchEditMode && selectedMelodyIndex >= 0
+        ? { highlightedMelodyIndex: selectedMelodyIndex, highlightColor: "#ff2da6" }
+        : undefined,
     );
-  }, [currentHistoryEntry, currentPatchedMelody, selectedMelodyIndex, musicXml]);
+  }, [currentHistoryEntry, currentPatchedMelody, selectedMelodyIndex, pitchEditMode, musicXml]);
 
   const selectedOriginalAttack =
     selectedMelodyIndex >= 0 && currentHistoryEntry
