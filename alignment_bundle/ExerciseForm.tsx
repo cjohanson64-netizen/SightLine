@@ -1,5 +1,5 @@
-import '../../styles/ExerciseForm.css';
-import type { ExerciseSpec } from '../../tat';
+import '../src/styles/ExerciseForm.css';
+import type { ExerciseSpec } from './schema';
 
 interface ExerciseFormProps {
   spec: ExerciseSpec;

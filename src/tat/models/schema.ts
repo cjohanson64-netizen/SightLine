@@ -114,6 +114,10 @@ export interface MelodyEvent {
   tieStart?: boolean;
   tieStop?: boolean;
   functionTags?: Array<'anchor' | 'structural' | 'connective_nht' | 'smoothing_run' | 'climax' | 'cadence'>;
+  originalMidi?: number;
+  editedMidi?: number;
+  editedPitch?: string;
+  isEdited?: boolean;
 }
 
 export interface AssayMetric {

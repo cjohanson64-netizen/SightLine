@@ -6,6 +6,7 @@ export interface MusicXmlNote {
   type: 'eighth' | 'quarter' | 'half' | 'whole';
   beam?: 'begin' | 'continue' | 'end';
   lyric?: string;
+  color?: string;
 }
 
 export interface MusicXmlBuildInput {
@@ -25,8 +26,9 @@ function noteXml(note: MusicXmlNote): string {
   const alterXml = note.alter !== 0 ? `<alter>${note.alter}</alter>` : '';
   const beamXml = note.beam ? `<beam number="1">${note.beam}</beam>` : '';
   const lyricXml = note.lyric ? `<lyric><text>${note.lyric}</text></lyric>` : '';
+  const noteOpenTag = note.color ? `<note color="${note.color}">` : '<note>';
   return [
-    '<note>',
+    noteOpenTag,
     '<pitch>',
     `<step>${note.step}</step>`,
     alterXml,

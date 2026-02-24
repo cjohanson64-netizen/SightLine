@@ -1,24 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import ExerciseForm from "../components/ExerciseForm/ExerciseForm";
 import NotationViewer from "../components/NotationViewer/NotationViewer";
 import { generateExercise } from "../core/engine";
+import { toMusicXmlFromMelody } from "../core/projection/toMusicXml";
 import ErrorBanner from "../components/ErrorBanner/ErrorBanner";
 import type { ExerciseSpec, MelodyEvent } from "../tat";
 import Logo from "../assets/TAT Logo.svg";
 import "../styles/App.css";
 
+interface PitchPatchEntry {
+  midi: number;
+  pitch: string;
+}
+
 interface MelodyHistoryEntry {
   seed: number;
+  baseTitle: string;
   title: string;
-  musicXml: string;
   logs: string[];
   relaxationNotice: string;
   melody: MelodyEvent[];
   beatsPerMeasure: number;
+  specSnapshot: ExerciseSpec;
+  pitchPatch: Record<string, PitchPatchEntry>;
 }
 
 const defaultSpec: ExerciseSpec = {
-  title: "SlightLine Sight Singing Exercise",
+  title: "SightLine Melody",
   startingDegree: 1,
   key: "C",
   mode: "major",
@@ -62,6 +71,122 @@ const defaultSpec: ExerciseSpec = {
   },
 };
 
+const KEY_TO_PC: Record<string, number> = {
+  C: 0,
+  "C#": 1,
+  Db: 1,
+  D: 2,
+  "D#": 3,
+  Eb: 3,
+  E: 4,
+  F: 5,
+  "F#": 6,
+  Gb: 6,
+  G: 7,
+  "G#": 8,
+  Ab: 8,
+  A: 9,
+  "A#": 10,
+  Bb: 10,
+  B: 11,
+};
+
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+type StepMode = "diatonic" | "octave" | "chromatic";
+
+interface AttackView {
+  event: MelodyEvent;
+  midi: number;
+  noteId: string;
+}
+
+function modeScale(mode: ExerciseSpec["mode"]): number[] {
+  return mode === "major" ? [0, 2, 4, 5, 7, 9, 11] : [0, 2, 3, 5, 7, 8, 10];
+}
+
+function midiToPc(midi: number): number {
+  return ((midi % 12) + 12) % 12;
+}
+
+function toOctave(midi: number): number {
+  return Math.floor(midi / 12) - 1;
+}
+
+function midiToPitch(midi: number): string {
+  return `${NOTE_NAMES[midiToPc(midi)]}${toOctave(midi)}`;
+}
+
+function midiToDegree(midi: number, keyScale: number[]): number {
+  const idx = keyScale.indexOf(midiToPc(midi));
+  return idx === -1 ? 1 : idx + 1;
+}
+
+function isIllegalTransition(
+  prevDegree: number,
+  currDegree: number,
+  transitions: ExerciseSpec["illegalTransitions"]
+): boolean {
+  return transitions.some((rule) => rule.mode === "adjacent" && rule.a === prevDegree && rule.b === currDegree);
+}
+
+function tessituraRange(specInput: ExerciseSpec): { minMidi: number; maxMidi: number } {
+  const tonicPc = KEY_TO_PC[specInput.key] ?? 0;
+  const scale = modeScale(specInput.mode).map((step) => (tonicPc + step) % 12);
+  const lowPc = scale[(specInput.range.lowDegree - 1 + 700) % 7] ?? tonicPc;
+  const highPc = scale[(specInput.range.highDegree - 1 + 700) % 7] ?? tonicPc;
+  const lowMidi = (specInput.range.lowOctave + 1) * 12 + lowPc;
+  const highMidi = (specInput.range.highOctave + 1) * 12 + highPc;
+  return { minMidi: Math.min(lowMidi, highMidi), maxMidi: Math.max(lowMidi, highMidi) };
+}
+
+function noteKey(event: MelodyEvent, index: number): string {
+  const onset = Number((event.onsetBeat ?? event.beat).toFixed(3));
+  return `${event.measure}:${onset}:${event.chordId}:${index}`;
+}
+
+function applyPitchPatch(melody: MelodyEvent[], patch: Record<string, PitchPatchEntry>): MelodyEvent[] {
+  return melody.map((event, index) => {
+    if (event.isAttack === false) {
+      return event;
+    }
+    const key = noteKey(event, index);
+    const override = patch[key];
+    if (!override) {
+      return event;
+    }
+    return {
+      ...event,
+      midi: override.midi,
+      pitch: override.pitch,
+      octave: toOctave(override.midi),
+      isEdited: true,
+      editedMidi: override.midi,
+      editedPitch: override.pitch,
+      originalMidi: event.midi,
+    };
+  });
+}
+
+function nextScaleStepMidi(currentMidi: number, direction: 1 | -1, keyScale: number[]): number | null {
+  for (let midi = currentMidi + direction; midi >= 0 && midi <= 127; midi += direction) {
+    if (keyScale.includes(midiToPc(midi))) {
+      return midi;
+    }
+  }
+  return null;
+}
+
+function allPcCandidatesInRange(pc: number, minMidi: number, maxMidi: number): number[] {
+  const result: number[] = [];
+  for (let midi = minMidi; midi <= maxMidi; midi += 1) {
+    if (midiToPc(midi) === pc) {
+      result.push(midi);
+    }
+  }
+  return result;
+}
+
 function randomSeed(): number {
   return Math.floor(Math.random() * 1_000_000);
 }
@@ -82,6 +207,10 @@ export default function App(): JSX.Element {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [tempoBpm, setTempoBpm] = useState<number>(120);
   const [instrument, setInstrument] = useState<OscillatorType>("triangle");
+  const [pitchEditMode, setPitchEditMode] = useState<boolean>(false);
+  const [selectionIndex, setSelectionIndex] = useState<number>(0);
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [editMessage, setEditMessage] = useState<string>("");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [showInstructions, setShowInstructions] = useState<boolean>(false);
   const playbackRef = useRef<{
@@ -92,6 +221,7 @@ export default function App(): JSX.Element {
     historyIndex >= 0 ? history[historyIndex]?.seed : null;
   const activeHistoryTitle =
     historyIndex >= 0 ? history[historyIndex]?.title : spec.title;
+  const currentHistoryEntry = historyIndex >= 0 ? history[historyIndex] : null;
 
   const relaxationMessage = (tier?: number): string => {
     const humanMessage =
@@ -173,7 +303,7 @@ export default function App(): JSX.Element {
     const beatSeconds = 60 / Math.max(30, Math.min(240, tempoBpm));
     const startTime = audioContext.currentTime + 0.05;
     const beatsPerMeasure = Math.max(1, current.beatsPerMeasure || 4);
-    const playableEvents = [...current.melody]
+    const playableEvents = applyPitchPatch(current.melody, current.pitchPatch)
       .filter((event) => event.isAttack !== false)
       .sort(
         (a, b) =>
@@ -247,17 +377,84 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [showInstructions]);
 
-  const generated = useMemo(() => {
-    if (!musicXml) {
-      return null;
+  const currentPatchedMelody = useMemo<MelodyEvent[]>(() => {
+    if (!currentHistoryEntry) {
+      return [];
     }
+    return applyPitchPatch(currentHistoryEntry.melody, currentHistoryEntry.pitchPatch);
+  }, [currentHistoryEntry]);
 
-    return { musicXml, logs };
-  }, [musicXml, logs]);
+  const renderableAttacks = useMemo<AttackView[]>(() => {
+    if (!currentHistoryEntry) {
+      return [];
+    }
+    const patched = applyPitchPatch(currentHistoryEntry.melody, currentHistoryEntry.pitchPatch);
+    return patched
+      .map((event, index) => ({
+        event,
+        midi: event.midi,
+        noteId: noteKey(currentHistoryEntry.melody[index], index),
+      }))
+      .filter((entry) => entry.event.isAttack !== false)
+      .sort(
+        (a, b) =>
+          a.event.measure - b.event.measure ||
+          (a.event.onsetBeat ?? a.event.beat) - (b.event.onsetBeat ?? b.event.beat),
+      );
+  }, [currentHistoryEntry]);
 
-  const addHistoryEntry = (entry: MelodyHistoryEntry) => {
+  const selectedAttack = renderableAttacks[selectionIndex] ?? null;
+
+  const selectedMelodyIndex = useMemo(() => {
+    if (!selectedAttack || !currentHistoryEntry) {
+      return -1;
+    }
+    return currentHistoryEntry.melody.findIndex((event, i) => noteKey(event, i) === selectedAttack.noteId);
+  }, [currentHistoryEntry, selectedAttack]);
+
+  const exportMusicXml = useMemo(() => {
+    if (!currentHistoryEntry) {
+      return musicXml;
+    }
+    return toMusicXmlFromMelody(currentHistoryEntry.specSnapshot as unknown as Record<string, unknown>, currentPatchedMelody);
+  }, [currentHistoryEntry, currentPatchedMelody, musicXml]);
+
+  const notationMusicXml = useMemo(() => {
+    if (!currentHistoryEntry) {
+      return musicXml;
+    }
+    return toMusicXmlFromMelody(
+      currentHistoryEntry.specSnapshot as unknown as Record<string, unknown>,
+      currentPatchedMelody,
+      selectedMelodyIndex >= 0 ? { highlightedMelodyIndex: selectedMelodyIndex, highlightColor: "#ff2da6" } : undefined,
+    );
+  }, [currentHistoryEntry, currentPatchedMelody, selectedMelodyIndex, musicXml]);
+
+  const selectedOriginalAttack =
+    selectedMelodyIndex >= 0 && currentHistoryEntry
+      ? currentHistoryEntry.melody[selectedMelodyIndex]
+      : null;
+
+  const selectedEditLabel =
+    selectedAttack && selectedOriginalAttack
+      ? selectedAttack.midi === selectedOriginalAttack.midi
+        ? "Edited: no"
+        : `Edited: MIDI ${selectedOriginalAttack.midi} -> ${selectedAttack.midi}`
+      : "Edited: no";
+
+  const addHistoryEntry = (entry: Omit<MelodyHistoryEntry, "title">) => {
     setHistory((prev) => {
-      const next = [...prev, entry];
+      const baseTitle = (entry.baseTitle || "SightLine Exercise").trim() || "SightLine Exercise";
+      const nextCount = prev.filter((item) => item.baseTitle === baseTitle).length + 1;
+      const titledEntry: MelodyHistoryEntry = {
+        ...entry,
+        title: `${baseTitle} #${nextCount}`,
+        specSnapshot: {
+          ...entry.specSnapshot,
+          title: `${baseTitle} #${nextCount}`,
+        },
+      };
+      const next = [...prev, titledEntry];
       setHistoryIndex(next.length - 1);
       return next;
     });
@@ -271,9 +468,11 @@ export default function App(): JSX.Element {
     stopPlayback();
     setHistoryIndex(index);
     setSeed(entry.seed);
-    setMusicXml(entry.musicXml);
     setLogs(entry.logs);
     setRelaxationNotice(entry.relaxationNotice);
+    setSelectionIndex(0);
+    setSelectedNoteId(null);
+    setEditMessage("");
     setError(null);
   };
 
@@ -289,19 +488,275 @@ export default function App(): JSX.Element {
         setMusicXml("");
         setLogs([]);
         setRelaxationNotice("");
+        setSelectionIndex(0);
+        setSelectedNoteId(null);
+        setEditMessage("");
         setError(null);
       } else {
         const nextIndex = Math.min(historyIndex, next.length - 1);
         const entry = next[nextIndex];
         setHistoryIndex(nextIndex);
         setSeed(entry.seed);
-        setMusicXml(entry.musicXml);
         setLogs(entry.logs);
         setRelaxationNotice(entry.relaxationNotice);
+        setSelectionIndex(0);
+        setSelectedNoteId(null);
+        setEditMessage("");
         setError(null);
       }
       return next;
     });
+  };
+
+  useEffect(() => {
+    if (renderableAttacks.length === 0) {
+      if (selectedNoteId !== null) {
+        setSelectedNoteId(null);
+      }
+      if (selectionIndex !== 0) {
+        setSelectionIndex(0);
+      }
+      return;
+    }
+    const selectedIndex =
+      selectedNoteId === null
+        ? 0
+        : renderableAttacks.findIndex((attack) => attack.noteId === selectedNoteId);
+    const resolvedIndex =
+      selectedIndex >= 0
+        ? selectedIndex
+        : Math.max(0, Math.min(selectionIndex, renderableAttacks.length - 1));
+    if (resolvedIndex !== selectionIndex) {
+      setSelectionIndex(resolvedIndex);
+    }
+    const nextId = renderableAttacks[resolvedIndex]?.noteId ?? null;
+    if (nextId !== selectedNoteId) {
+      setSelectedNoteId(nextId);
+    }
+  }, [renderableAttacks, selectedNoteId, selectionIndex]);
+
+  const updatePitchPatchForCurrent = (noteId: string, patch: PitchPatchEntry | null) => {
+    if (historyIndex < 0) {
+      return;
+    }
+    setHistory((prev) =>
+      prev.map((entry, idx) => {
+        if (idx !== historyIndex) {
+          return entry;
+        }
+        const nextPatch = { ...entry.pitchPatch };
+        if (patch) {
+          nextPatch[noteId] = patch;
+        } else {
+          delete nextPatch[noteId];
+        }
+        return { ...entry, pitchPatch: nextPatch };
+      }),
+    );
+  };
+
+  const validatePitchCandidate = (
+    midiInput: number,
+    selectedIdx: number,
+    stepMode: StepMode,
+    direction: 1 | -1,
+    entry: MelodyHistoryEntry,
+  ): number | null => {
+    const { minMidi, maxMidi } = tessituraRange(entry.specSnapshot);
+    const tonicPc = KEY_TO_PC[entry.specSnapshot.key] ?? 0;
+    const keyScale = modeScale(entry.specSnapshot.mode).map((step) => (tonicPc + step) % 12);
+    const maxLeap = Math.max(1, entry.specSnapshot.userConstraints?.maxLeapSemitones ?? 12);
+    const illegalDegreeSet = new Set(entry.specSnapshot.illegalDegrees ?? []);
+    const illegalIntervalSet = new Set(entry.specSnapshot.illegalIntervalsSemis ?? []);
+    const illegalTransitions = entry.specSnapshot.illegalTransitions ?? [];
+    const prevMidi = selectedIdx > 0 ? renderableAttacks[selectedIdx - 1]?.midi : null;
+    const nextMidi = selectedIdx + 1 < renderableAttacks.length ? renderableAttacks[selectedIdx + 1]?.midi : null;
+
+    const maxLeapViolation = (midi: number): number => {
+      const prevGap = prevMidi === null ? 0 : Math.max(0, Math.abs(midi - prevMidi) - maxLeap);
+      const nextGap = nextMidi === null ? 0 : Math.max(0, Math.abs(nextMidi - midi) - maxLeap);
+      return Math.max(prevGap, nextGap);
+    };
+
+    const anyIllegalInterval = (midi: number): boolean => {
+      const prevInterval = prevMidi === null ? null : Math.abs(midi - prevMidi);
+      const nextInterval = nextMidi === null ? null : Math.abs(nextMidi - midi);
+      return (
+        (prevInterval !== null && illegalIntervalSet.has(prevInterval)) ||
+        (nextInterval !== null && illegalIntervalSet.has(nextInterval))
+      );
+    };
+
+    const anyIllegalTransition = (midi: number): boolean => {
+      const degree = midiToDegree(midi, keyScale);
+      const prevDegree = prevMidi === null ? null : midiToDegree(prevMidi, keyScale);
+      const nextDegree = nextMidi === null ? null : midiToDegree(nextMidi, keyScale);
+      return (
+        (prevDegree !== null && isIllegalTransition(prevDegree, degree, illegalTransitions)) ||
+        (nextDegree !== null && isIllegalTransition(degree, nextDegree, illegalTransitions))
+      );
+    };
+
+    const satisfiesAll = (midi: number): boolean => {
+      if (midi < minMidi || midi > maxMidi) {
+        return false;
+      }
+      if (maxLeapViolation(midi) > 0) {
+        return false;
+      }
+      if (illegalDegreeSet.has(midiToDegree(midi, keyScale))) {
+        return false;
+      }
+      if (anyIllegalInterval(midi)) {
+        return false;
+      }
+      if (anyIllegalTransition(midi)) {
+        return false;
+      }
+      return true;
+    };
+
+    let midi = midiInput;
+    if (midi < minMidi || midi > maxMidi) {
+      if (stepMode === "chromatic") {
+        midi = Math.max(minMidi, Math.min(maxMidi, midi));
+      } else {
+        const samePc = allPcCandidatesInRange(midiToPc(midi), minMidi, maxMidi);
+        if (samePc.length === 0) {
+          return null;
+        }
+        midi = samePc.reduce((best, candidate) =>
+          Math.abs(candidate - midiInput) < Math.abs(best - midiInput) ? candidate : best,
+        );
+      }
+    }
+
+    const leapGap = maxLeapViolation(midi);
+    if (leapGap > 0) {
+      if (stepMode !== "diatonic") {
+        return null;
+      }
+      const extra = nextScaleStepMidi(midi, direction, keyScale);
+      if (extra === null || extra < minMidi || extra > maxMidi || maxLeapViolation(extra) >= leapGap) {
+        return null;
+      }
+      midi = extra;
+    }
+
+    if (illegalDegreeSet.has(midiToDegree(midi, keyScale))) {
+      const alternatives = allPcCandidatesInRange(midiToPc(midi), minMidi, maxMidi);
+      const repaired = alternatives.find((candidate) => !illegalDegreeSet.has(midiToDegree(candidate, keyScale)) && satisfiesAll(candidate));
+      if (typeof repaired !== "number") {
+        return null;
+      }
+      midi = repaired;
+    }
+
+    if (anyIllegalInterval(midi)) {
+      const alternatives = allPcCandidatesInRange(midiToPc(midi), minMidi, maxMidi);
+      const repaired = alternatives.find((candidate) => !anyIllegalInterval(candidate) && satisfiesAll(candidate));
+      if (typeof repaired !== "number") {
+        return null;
+      }
+      midi = repaired;
+    }
+
+    if (anyIllegalTransition(midi)) {
+      const alternatives = allPcCandidatesInRange(midiToPc(midi), minMidi, maxMidi);
+      const repaired = alternatives.find((candidate) => !anyIllegalTransition(candidate) && satisfiesAll(candidate));
+      if (typeof repaired !== "number") {
+        return null;
+      }
+      midi = repaired;
+    }
+
+    return satisfiesAll(midi) ? midi : null;
+  };
+
+  const attemptPitchStep = (
+    selectedIdx: number,
+    direction: 1 | -1,
+    stepMode: StepMode,
+  ) => {
+    const selected = renderableAttacks[selectedIdx];
+    if (!selected || !currentHistoryEntry) {
+      return;
+    }
+    const tonicPc = KEY_TO_PC[currentHistoryEntry.specSnapshot.key] ?? 0;
+    const keyScale = modeScale(currentHistoryEntry.specSnapshot.mode).map((step) => (tonicPc + step) % 12);
+    let candidate: number | null = null;
+    if (stepMode === "diatonic") {
+      candidate = nextScaleStepMidi(selected.midi, direction, keyScale);
+    } else if (stepMode === "octave") {
+      candidate = selected.midi + 12 * direction;
+    } else {
+      candidate = selected.midi + direction;
+    }
+    if (candidate === null) {
+      return;
+    }
+    const validated = validatePitchCandidate(candidate, selectedIdx, stepMode, direction, currentHistoryEntry);
+    if (validated === null) {
+      setEditMessage("Move blocked by constraints");
+      return;
+    }
+    setEditMessage("");
+    const originalIndex = currentHistoryEntry.melody.findIndex((event, i) => noteKey(event, i) === selected.noteId);
+    if (originalIndex < 0) {
+      return;
+    }
+    const originalEvent = currentHistoryEntry.melody[originalIndex];
+    const isUnchanged = validated === originalEvent.midi;
+    updatePitchPatchForCurrent(
+      selected.noteId,
+      isUnchanged
+        ? null
+        : {
+            midi: validated,
+            pitch: midiToPitch(validated),
+          },
+    );
+  };
+
+  const handleNotationKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!event.key.startsWith("Arrow")) {
+      return;
+    }
+    event.preventDefault();
+    if (!pitchEditMode || renderableAttacks.length === 0) {
+      return;
+    }
+
+    if (event.key === "ArrowLeft") {
+      const next = Math.max(0, selectionIndex - 1);
+      setSelectionIndex(next);
+      setSelectedNoteId(renderableAttacks[next]?.noteId ?? null);
+      return;
+    }
+    if (event.key === "ArrowRight") {
+      const next = Math.min(renderableAttacks.length - 1, selectionIndex + 1);
+      setSelectionIndex(next);
+      setSelectedNoteId(renderableAttacks[next]?.noteId ?? null);
+      return;
+    }
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+      return;
+    }
+
+    const direction: 1 | -1 = event.key === "ArrowUp" ? 1 : -1;
+    if (event.altKey) {
+      const chromaticEnabled = currentHistoryEntry?.specSnapshot.chromatic === true;
+      if (!chromaticEnabled) {
+        return;
+      }
+      attemptPitchStep(selectionIndex, direction, "chromatic");
+      return;
+    }
+    if (event.shiftKey) {
+      attemptPitchStep(selectionIndex, direction, "octave");
+      return;
+    }
+    attemptPitchStep(selectionIndex, direction, "diatonic");
   };
 
   const runWithNewSeed = () => {
@@ -327,14 +782,18 @@ export default function App(): JSX.Element {
     setError(null);
     const notice = relaxationMessage(output.relaxationTier);
     setRelaxationNotice(notice);
+    setSelectionIndex(0);
+    setSelectedNoteId(null);
+    setEditMessage("");
     addHistoryEntry({
       seed: nextSeed,
-      title: spec.title,
-      musicXml: output.musicXml,
+      baseTitle: spec.title,
       logs: output.logs,
       relaxationNotice: notice,
       melody: extractMelodyEvents(output.artifact),
       beatsPerMeasure: Math.max(1, Number(spec.timeSig.split("/")[0]) || 4),
+      specSnapshot: normalizeUserConstraintsInSpec(spec),
+      pitchPatch: {},
     });
   };
 
@@ -360,23 +819,27 @@ export default function App(): JSX.Element {
     setError(null);
     const notice = relaxationMessage(output.relaxationTier);
     setRelaxationNotice(notice);
+    setSelectionIndex(0);
+    setSelectedNoteId(null);
+    setEditMessage("");
     addHistoryEntry({
       seed: fixedSeed,
-      title: spec.title,
-      musicXml: output.musicXml,
+      baseTitle: spec.title,
       logs: output.logs,
       relaxationNotice: notice,
       melody: extractMelodyEvents(output.artifact),
       beatsPerMeasure: Math.max(1, Number(spec.timeSig.split("/")[0]) || 4),
+      specSnapshot: normalizeUserConstraintsInSpec(spec),
+      pitchPatch: {},
     });
   };
 
   const handleExport = () => {
-    if (!musicXml) {
+    if (!exportMusicXml) {
       return;
     }
 
-    const blob = new Blob([musicXml], {
+    const blob = new Blob([exportMusicXml], {
       type: "application/vnd.recordare.musicxml+xml",
     });
     const url = URL.createObjectURL(blob);
@@ -413,7 +876,13 @@ export default function App(): JSX.Element {
               <p className="AppRelaxationNotice">{relaxationNotice}</p>
             ) : null}
             <NotationViewer
-              musicXml={generated?.musicXml ?? ""}
+              musicXml={notationMusicXml}
+              onKeyDown={handleNotationKeyDown}
+              focusTitle={
+                pitchEditMode
+                  ? "Pitch edit is on. Click to focus and use arrows."
+                  : "Pitch edit is off."
+              }
               headerControls={
                 <div className="AppHistoryControls">
                   <div className="AppHistoryNav">
@@ -507,10 +976,33 @@ export default function App(): JSX.Element {
                 type="button"
                 className="AppHistoryButton AppPanelButtonWide"
                 onClick={handleExport}
-                disabled={!musicXml}
+                disabled={!exportMusicXml}
               >
                 Export MusicXML
               </button>
+            </div>
+            <div className="AppPanelSpacer" aria-hidden="true" />
+            <h3>Pitch Edit</h3>
+            <div className="AppPanelButtons">
+              <button
+                type="button"
+                className="AppHistoryButton AppPanelButtonWide"
+                onClick={() => {
+                  setPitchEditMode((prev) => !prev);
+                  setEditMessage("");
+                }}
+                disabled={historyIndex < 0}
+              >
+                {pitchEditMode ? "Edit Pitches: On" : "Edit Pitches: Off"}
+              </button>
+              <p className="AppHistoryLabel">
+                Selected:{" "}
+                {selectedAttack
+                  ? `m${selectedAttack.event.measure} b${(selectedAttack.event.onsetBeat ?? selectedAttack.event.beat).toFixed(1)} (${selectedAttack.event.pitch})`
+                  : "none"}
+              </p>
+              <p className="AppHistoryLabel">{selectedEditLabel}</p>
+              {editMessage ? <p className="AppHistoryLabel">{editMessage}</p> : null}
             </div>
             <div className="AppPlaybackControls AppPlaybackControlsPanel">
               <button
@@ -601,6 +1093,9 @@ export default function App(): JSX.Element {
                 with your updated parameters.
               </li>
               <li>Review notation and use ← / → to browse melody history.</li>
+              <li>
+                Toggle <strong>Edit Pitches</strong>, click the score, then use arrow keys to edit pitch only.
+              </li>
               <li>Use Play, Tempo, and Instrument to hear your melody.</li>
               <li>
                 Use Export MusicXML to download, or Delete Melody to remove the

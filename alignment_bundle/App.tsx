@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import ExerciseForm from '../components/ExerciseForm/ExerciseForm';
-import NotationViewer from '../components/NotationViewer/NotationViewer';
-import ConsolePanel from '../components/ConsolePanel/ConsolePanel';
-import { generateExercise } from '../core/engine';
-import type { ExerciseSpec } from '../tat';
-import '../styles/App.css';
+import ExerciseForm from './ExerciseForm';
+import NotationViewer from '../src/components/NotationViewer/NotationViewer';
+import ConsolePanel from '../src/components/ConsolePanel/ConsolePanel';
+import { generateExercise } from './engine';
+import type { ExerciseSpec } from './schema';
+import '../src/styles/App.css';
 
 const defaultSpec: ExerciseSpec = {
   key: 'C',

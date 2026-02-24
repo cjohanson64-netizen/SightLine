@@ -1,6 +1,11 @@
 import type { ArtifactGraph, MelodyEvent } from '../../tat/models/schema';
 import { buildSinglePartMusicXml, type MusicXmlNote } from '../musicxml/builder';
 
+interface ProjectionRenderOptions {
+  highlightedMelodyIndex?: number;
+  highlightColor?: string;
+}
+
 const FIFTHS_BY_KEY: Record<string, number> = {
   C: 0,
   G: 1,
@@ -58,17 +63,11 @@ function harmonyDegreeLyricFromChordId(chordId: string): string | undefined {
   return String(degree);
 }
 
-export function toMusicXml(artifact: ArtifactGraph, _seed?: number): string {
-  const specNode = artifact.nodes.find((node) => node.id === 'exercise-spec');
-  const spec = (specNode?.data ?? {}) as Record<string, unknown>;
-
-  const melodyEvents = artifact.nodes
-    .filter((node) => {
-      const data = node.data as Partial<MelodyEvent>;
-      return node.kind === 'leaf' && typeof data.pitch === 'string' && typeof data.measure === 'number';
-    })
-    .map((node) => node.data as MelodyEvent)
-    .sort((a, b) => a.measure - b.measure || a.beat - b.beat);
+function buildMusicXmlFromSpecAndMelody(
+  spec: Record<string, unknown>,
+  melodyEvents: MelodyEvent[],
+  options?: ProjectionRenderOptions
+): string {
 
   const beats = Math.max(1, Number(String(spec.timeSig ?? '4/4').split('/')[0]) || 4);
   const beatType = Math.max(1, Number(String(spec.timeSig ?? '4/4').split('/')[1]) || 4);
@@ -79,15 +78,18 @@ export function toMusicXml(artifact: ArtifactGraph, _seed?: number): string {
   type MeasureNote = MusicXmlNote & { onset: number };
   const notesByMeasure: MeasureNote[][] = Array.from({ length: measures }, () => []);
 
-  for (const event of melodyEvents) {
+  for (let eventIndex = 0; eventIndex < melodyEvents.length; eventIndex += 1) {
+    const event = melodyEvents[eventIndex];
     const index = Math.max(0, Math.min(measures - 1, event.measure - 1));
     const pitch = pitchToMusicXml(event.pitch);
     const rhythm = durationToMusicXml(event.duration);
+    const isHighlighted = options?.highlightedMelodyIndex === eventIndex;
     notesByMeasure[index].push({
       ...pitch,
       ...rhythm,
       lyric: harmonyDegreeLyricFromChordId(event.chordId),
-      onset: event.onsetBeat ?? event.beat
+      onset: event.onsetBeat ?? event.beat,
+      color: isHighlighted ? options?.highlightColor ?? '#ff2da6' : undefined
     });
   }
 
@@ -146,7 +148,7 @@ export function toMusicXml(artifact: ArtifactGraph, _seed?: number): string {
   const phraseBoundaryMeasures = finalPhraseBoundary <= measures ? [finalPhraseBoundary] : [];
 
   return buildSinglePartMusicXml({
-    title: String(spec.title ?? 'SlightLine Sight Singing Exercise'),
+    title: String(spec.title ?? 'SightLine Melody'),
     keyFifths: FIFTHS_BY_KEY[String(spec.key ?? 'C')] ?? 0,
     timeBeats: beats,
     timeBeatType: beatType,
@@ -158,4 +160,27 @@ export function toMusicXml(artifact: ArtifactGraph, _seed?: number): string {
     ),
     phraseBoundaryMeasures
   });
+}
+
+export function toMusicXmlFromMelody(
+  spec: Record<string, unknown>,
+  melodyEvents: MelodyEvent[],
+  options?: ProjectionRenderOptions
+): string {
+  return buildMusicXmlFromSpecAndMelody(spec, melodyEvents, options);
+}
+
+export function toMusicXml(artifact: ArtifactGraph, _seed?: number): string {
+  const specNode = artifact.nodes.find((node) => node.id === 'exercise-spec');
+  const spec = (specNode?.data ?? {}) as Record<string, unknown>;
+
+  const melodyEvents = artifact.nodes
+    .filter((node) => {
+      const data = node.data as Partial<MelodyEvent>;
+      return node.kind === 'leaf' && typeof data.pitch === 'string' && typeof data.measure === 'number';
+    })
+    .map((node) => node.data as MelodyEvent)
+    .sort((a, b) => a.measure - b.measure || a.beat - b.beat);
+
+  return buildMusicXmlFromSpecAndMelody(spec, melodyEvents);
 }

@@ -209,10 +209,10 @@ export default function ExerciseForm({
 
   return (
     <section className="ExerciseForm">
-      <h2>Exercise Parameters</h2>
+      <h2>Melody Preferences</h2>
       <div className="ExerciseForm-chunks">
         <div className="ExerciseForm-chunk ExerciseForm-chunk--core">
-          <h3>Core Parameters</h3>
+          <h3>Core Preferences</h3>
           <div className="ExerciseForm-row ExerciseForm-titleRow">
             <label>
               Title
@@ -244,7 +244,7 @@ export default function ExerciseForm({
                 </label>
               ))}
             </div>
-            <small>Select at most 3 note values.</small>
+            <small>Select up to 3.</small>
           </div>
 
           <div className="ExerciseForm-row ExerciseForm-row--four">

@@ -1,14 +1,21 @@
 import { useEffect, useRef } from 'react';
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 import '../../styles/NotationViewer.css';
 
 interface NotationViewerProps {
   musicXml: string;
   headerControls?: ReactNode;
+  onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void;
+  focusTitle?: string;
 }
 
-export default function NotationViewer({ musicXml, headerControls }: NotationViewerProps): JSX.Element {
+export default function NotationViewer({
+  musicXml,
+  headerControls,
+  onKeyDown,
+  focusTitle
+}: NotationViewerProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -36,9 +43,14 @@ export default function NotationViewer({ musicXml, headerControls }: NotationVie
 
   return (
     <section className="NotationViewer">
-      <h2>Notation</h2>
-      {headerControls ? <div className="NotationViewer-controls">{headerControls}</div> : null}
-      <div className="NotationViewer-canvas" ref={containerRef} />
+      {headerControls ? <h2 className="NotationViewer-controls">{headerControls}</h2> : null}
+      <div
+        className="NotationViewer-canvas"
+        ref={containerRef}
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        title={focusTitle ?? 'Click to focus. Use arrow keys to navigate.'}
+      />
     </section>
   );
 }
