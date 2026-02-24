@@ -1,9 +1,3 @@
-Love it. Let’s give **SightLine** a README that matches the quality of the engine behind it.
-
-Here’s a clean, professional, teacher-facing but technically solid README you can drop straight into the repo.
-
----
-
 # SightLine
 
 **SightLine** is an intelligent sight-singing exercise generator designed for music teachers and students.
@@ -189,13 +183,3 @@ All rights reserved.
 
 This software and associated documentation files (the "Software") may not be copied, modified, distributed, or used without explicit permission from the copyright holder.
 
----
-
-If you’d like, I can also:
-
-* Write a short marketing version for a website landing page
-* Draft a more technical README for developers
-* Or refine this for a public GitHub release tone
-
-SightLine deserves to launch clean.
-# SightLine
