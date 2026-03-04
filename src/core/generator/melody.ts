@@ -174,10 +174,11 @@ function normalizeAndValidatePass0(spec: ExerciseSpec): ExerciseSpec {
   if (Math.abs(rhythmPercentTotal - 100) > 1e-6) {
     throw new Error(`input_invalid_rhythm_weight_total expected=100 actual=${rhythmPercentTotal}`);
   }
-  const inferredCadenceType: 'authentic' | 'half' =
+  const lastPhraseCadence = normalized.phrases[normalized.phrases.length - 1]?.cadence ?? 'authentic';
+  const inferredCadenceType: 'authentic' | 'half' | 'plagal' =
     normalized.userConstraints?.cadenceType ??
-    ((normalized.phrases[normalized.phrases.length - 1]?.cadence ?? 'authentic') === 'half' ? 'half' : 'authentic');
-  normalized.userConstraints = {
+    (lastPhraseCadence === 'half' ? 'half' : lastPhraseCadence === 'plagal' ? 'plagal' : 'authentic');
+  const normalizedUserConstraints = {
     startDegreeLocked: normalized.userConstraints?.startDegreeLocked === true,
     hardStartDo: normalized.userConstraints?.hardStartDo === true,
     cadenceType: inferredCadenceType,
@@ -200,7 +201,8 @@ function normalizeAndValidatePass0(spec: ExerciseSpec): ExerciseSpec {
       W: weights.whole
     }
   };
-  if ((normalized.userConstraints.allowedNoteValues?.length ?? 0) === 4) {
+  normalized.userConstraints = normalizedUserConstraints;
+  if ((normalizedUserConstraints.allowedNoteValues?.length ?? 0) === 4) {
     throw new Error('input_invalid_allowed_note_values_max_three');
   }
   return normalized;
@@ -2878,7 +2880,7 @@ function enforceEeMotionLawPass4(
 
 function applyCadenceShouldRule(
   events: MelodyEvent[],
-  cadenceType: 'authentic' | 'half',
+  cadenceType: 'authentic' | 'half' | 'plagal',
   tessitura: { minMidi: number; maxMidi: number },
   repairLog: Pass4RepairLogEntry[]
 ): void {
@@ -2894,6 +2896,32 @@ function applyCadenceShouldRule(
   const { tonicPc, keyScale } = parseKeyFromEvent(last);
   const doPc = tonicPc;
   const miPc = keyScale[(3 - 1 + 7) % 7];
+
+  // Plagal: final should resolve to Do (1), approach from Fa (4) or La (6)
+  if (cadenceType === 'plagal') {
+    const doTarget = nearestMidiWithPcInRange(doPc, last.midi, tessitura.minMidi, tessitura.maxMidi);
+    const finalDegree = midiToDegree(last.midi, keyScale);
+    if (doTarget !== null && finalDegree !== 1) {
+      repairLog.push({ code: 'should1_plagal_final_to_do', detail: { from: last.midi, to: doTarget } });
+      Object.assign(last, retuneEvent(last, doTarget));
+    }
+    if (!penult || Math.abs(last.midi - penult.midi) <= 2) {
+      return;
+    }
+    const faPc = keyScale[(4 - 1 + 7) % 7];
+    const laPc = keyScale[(6 - 1 + 7) % 7];
+    const plagalCandidates = [faPc, laPc]
+      .map((pc) => nearestMidiWithPcInRange(pc, penult.midi, tessitura.minMidi, tessitura.maxMidi))
+      .filter((midi): midi is number => midi !== null)
+      .filter((midi) => Math.abs(last.midi - midi) <= 2);
+    if (plagalCandidates.length > 0) {
+      repairLog.push({ code: 'should1_plagal_penult_fa_or_la', detail: { from: penult.midi, to: plagalCandidates[0] } });
+      Object.assign(penult, retuneEvent(penult, plagalCandidates[0]));
+    }
+    return;
+  }
+
+  // Authentic: final should be Do (1) or Mi (3)
   const doTarget = nearestMidiWithPcInRange(doPc, last.midi, tessitura.minMidi, tessitura.maxMidi);
   const miTarget = nearestMidiWithPcInRange(miPc, last.midi, tessitura.minMidi, tessitura.maxMidi);
   const cadenceTargets = [doTarget, miTarget].filter((midi): midi is number => midi !== null);
@@ -3264,7 +3292,7 @@ function nudgeRhythmDistributionTowardUserTarget(
   beatsPerMeasure: number,
   minEePairs: number,
   target?: { EE: number; Q: number; H: number; W: number },
-  cadenceType: 'authentic' | 'half' = 'authentic',
+  cadenceType: 'authentic' | 'half' | 'plagal' = 'authentic',
   repairLog: Pass10ConstraintLogEntry[] = []
 ): MelodyEvent[] {
   if (!target) {
@@ -3823,7 +3851,7 @@ export function applyUserConstraintsPass10(
       tessitura: ctx.tessitura,
       user: {
         hardStartDo,
-        cadenceType: cadenceType === 'half' ? 'half' : 'authentic',
+        cadenceType: cadenceType === 'half' ? 'half' : cadenceType === 'plagal' ? 'plagal' : 'authentic',
         minEighthPairsPerPhrase: minEePairs,
         maxLeapSemitones
       }
@@ -3870,6 +3898,11 @@ export function applyUserConstraintsPass10(
   if (!lockFinalRhythm) {
     ensureMeasureValidity(constrained, beatsPerMeasure, constraintLog);
   }
+
+  // Re-run illegal rule sweeps after cadence/leap authority passes, which can introduce new violations.
+  enforceIllegalDegreesPass10(constrained, ctx, constraintLog);
+  enforceIllegalIntervalsPass10(constrained, ctx, constraintLog);
+  enforceIllegalTransitionsPass10(constrained, ctx, constraintLog);
 
   const validation = validateAllMustPass10(constrained, ctx);
   if (validation.violations.length > 0) {
@@ -4791,8 +4824,10 @@ export function createMelodyCandidates(
       }
     }
 
-    const computedCadenceType = phrases[phrases.length - 1]?.cadence === 'half' ? 'half' : 'authentic';
-    const userCadenceType = normalizedSpec.userConstraints?.cadenceType ?? computedCadenceType;
+    const lastPhraseCadence = phrases[phrases.length - 1]?.cadence ?? 'authentic';
+    const computedCadenceType: 'authentic' | 'half' | 'plagal' =
+      lastPhraseCadence === 'half' ? 'half' : lastPhraseCadence === 'plagal' ? 'plagal' : 'authentic';
+    const userCadenceType: 'authentic' | 'half' | 'plagal' = normalizedSpec.userConstraints?.cadenceType ?? computedCadenceType;
     const userMinEePairs = normalizedSpec.userConstraints?.minEighthPairsPerPhrase ?? effectiveMinEePairsPerPhrase;
 
     const { pass5ConstraintSweep, pass5FinalMelody: initialPass5FinalMelody } = runFinalizationPipeline({

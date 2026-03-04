@@ -116,7 +116,7 @@ export function runFinalizationPipeline(input: {
       lockFinalRhythmFromPass2?: boolean;
       user: {
         hardStartDo?: boolean;
-        cadenceType?: 'authentic' | 'half';
+        cadenceType?: 'authentic' | 'half' | 'plagal';
         endOnDoHard?: boolean;
         rhythmDist?: { EE: number; Q: number; H: number; W: number };
         minEighthPairsPerPhrase?: number;
@@ -136,7 +136,7 @@ export function runFinalizationPipeline(input: {
     lockFinalRhythmFromPass2?: boolean;
     user: {
       hardStartDo?: boolean;
-      cadenceType?: 'authentic' | 'half';
+      cadenceType?: 'authentic' | 'half' | 'plagal';
       endOnDoHard?: boolean;
       rhythmDist?: { EE: number; Q: number; H: number; W: number };
       minEighthPairsPerPhrase?: number;

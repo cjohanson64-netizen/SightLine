@@ -1,5 +1,5 @@
-import type { ExerciseSpec, HarmonyEvent, MelodyEvent } from '../../tat/models/schema';
-import type { TonnetzGraph } from '../tonnetz/buildTonnetz';
+import type { ExerciseSpec, HarmonyEvent, MelodyEvent } from './schema';
+import type { TonnetzGraph } from './buildTonnetz';
 import { selectNextPitch, type SelectionDebug } from './selectNextPitch';
 import { generatePhrasePlan } from './phrasePlanner';
 

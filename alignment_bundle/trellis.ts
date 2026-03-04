@@ -1,5 +1,5 @@
 import { TatProgramParseError, TatRuntimeError } from './errors';
-import { assertGraphInvariant, type ArtifactGraph, type GenerationInput } from '../models/schema';
+import { assertGraphInvariant, type ArtifactGraph, type GenerationInput } from './schema';
 
 export interface TatProgramStep {
   op: string;

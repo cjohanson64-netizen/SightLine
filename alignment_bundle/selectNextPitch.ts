@@ -1,4 +1,4 @@
-import type { TonnetzGraph } from '../tonnetz/buildTonnetz';
+import type { TonnetzGraph } from './buildTonnetz';
 import type { PhraseDirection, PhraseTarget } from './phrasePlanner';
 
 export type NoteRole = 'ChordTone' | 'NonHarmonicTone' | 'FallbackTonic';

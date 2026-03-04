@@ -1,4 +1,4 @@
-import type { ExerciseSpec } from '../../tat/models/schema';
+import type { ExerciseSpec } from './schema';
 
 export type PhraseDirection = 'ascending' | 'descending' | 'arch' | 'invertedArch' | 'wave';
 

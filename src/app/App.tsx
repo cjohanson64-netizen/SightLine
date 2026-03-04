@@ -1114,12 +1114,12 @@ const normalizeUserConstraintsInSpec = (
   nextSpec: ExerciseSpec,
 ): ExerciseSpec => {
   const rhythmWeights = nextSpec.rhythmWeights ?? defaultSpec.rhythmWeights!;
-  const inferredCadenceType: "authentic" | "half" =
+  const inferredCadenceType: "authentic" | "half" | "plagal" =
     nextSpec.userConstraints?.cadenceType ??
-    ((nextSpec.phrases[nextSpec.phrases.length - 1]?.cadence ?? "authentic") ===
-    "half"
-      ? "half"
-      : "authentic");
+    (() => {
+      const cadence = nextSpec.phrases[nextSpec.phrases.length - 1]?.cadence ?? "authentic";
+      return cadence === "half" ? "half" : cadence === "plagal" ? "plagal" : "authentic";
+    })();
   return {
     ...nextSpec,
     userConstraints: {

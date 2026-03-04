@@ -56,7 +56,7 @@ export interface ExerciseSpec {
 export interface UserConstraints {
   startDegreeLocked?: boolean;
   hardStartDo?: boolean;
-  cadenceType?: 'authentic' | 'half';
+  cadenceType?: 'authentic' | 'half' | 'plagal';
   endOnDoHard?: boolean;
   maxLeapSemitones?: number;
   maxLargeLeapsPerPhrase?: number;

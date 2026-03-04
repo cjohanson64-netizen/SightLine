@@ -1,5 +1,5 @@
-import type { ArtifactGraph, MelodyEvent } from '../../tat/models/schema';
-import { buildSinglePartMusicXml, type MusicXmlNote } from '../musicxml/builder';
+import type { ArtifactGraph, MelodyEvent } from './schema';
+import { buildSinglePartMusicXml, type MusicXmlNote } from '../src/core/musicxml/builder';
 
 const FIFTHS_BY_KEY: Record<string, number> = {
   C: 0,

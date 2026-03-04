@@ -1,6 +1,6 @@
-import type { ExerciseSpec, HarmonyEvent } from '../../tat/models/schema';
-import type { Rng } from '../../utils/rng';
-import type { TonnetzGraph } from '../tonnetz/buildTonnetz';
+import type { ExerciseSpec, HarmonyEvent } from './schema';
+import type { Rng } from '../src/utils/rng';
+import type { TonnetzGraph } from './buildTonnetz';
 
 const KEY_TO_PC: Record<string, number> = {
   C: 0,
@@ -59,7 +59,7 @@ function buildNeighborMaps(tonnetz: TonnetzGraph): { one: Map<number, Set<number
   const two = new Map<number, Set<number>>();
 
   for (let pc = 0; pc < 12; pc += 1) {
-    const oneStep = new Set(
+    const oneStep = new Set<number>(
       tonnetz.edges.filter((edge) => edge.from === `pc-${pc}`).map((edge) => Number(edge.to.replace('pc-', '')))
     );
     one.set(pc, oneStep);

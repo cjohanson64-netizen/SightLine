@@ -1,4 +1,4 @@
-import type { Rng } from '../../utils/rng';
+import type { Rng } from '../src/utils/rng';
 import type { TonnetzGraph } from './buildTonnetz';
 
 export function traverseTonnetz(graph: TonnetzGraph, length: number, rng: Rng): number[] {

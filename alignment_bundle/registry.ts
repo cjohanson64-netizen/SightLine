@@ -1,14 +1,14 @@
-import type { CandidateExercise, MelodyEvent } from '../models/schema';
-import { graftBranch, graftBud, graftLeaf, graftVine } from '../ops/graft';
-import { pruneByKind, pruneDisconnected, pruneNode } from '../ops/prune';
-import { assayMetric } from '../ops/assay';
+import type { CandidateExercise, MelodyEvent } from './schema';
+import { graftBranch, graftBud, graftLeaf, graftVine } from '../src/tat/ops/graft';
+import { pruneByKind, pruneDisconnected, pruneNode } from '../src/tat/ops/prune';
+import { assayMetric } from '../src/tat/ops/assay';
 import type { TatOp, TrellisRegistry } from './trellis';
-import { buildTonnetz } from '../../core/tonnetz/buildTonnetz';
-import { traverseTonnetz } from '../../core/tonnetz/traversal';
-import { buildHarmonySpine } from '../../core/generator/harmony';
-import { createMelodyCandidates } from '../../core/generator/melody';
-import { scoreMelody } from '../../core/generator/scoring';
-import { createRng } from '../../utils/rng';
+import { buildTonnetz } from './buildTonnetz';
+import { traverseTonnetz } from './traversal';
+import { buildHarmonySpine } from './harmony';
+import { createMelodyCandidates } from './melody';
+import { scoreMelody } from './scoring';
+import { createRng } from '../src/utils/rng';
 
 class Registry implements TrellisRegistry {
   private readonly ops = new Map<string, TatOp>();

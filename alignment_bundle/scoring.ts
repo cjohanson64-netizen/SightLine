@@ -1,4 +1,4 @@
-import type { AssayMetric, MelodyEvent } from '../../tat/models/schema';
+import type { AssayMetric, MelodyEvent } from './schema';
 
 export interface CandidateScore {
   score: number;

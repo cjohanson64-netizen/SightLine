@@ -60,7 +60,7 @@ export interface Pass4RepairContext {
   tessitura: { minMidi: number; maxMidi: number };
   user: {
     hardStartDo?: boolean;
-    cadenceType?: 'authentic' | 'half';
+    cadenceType?: 'authentic' | 'half' | 'plagal';
     minEighthPairsPerPhrase?: number;
     maxLeapSemitones?: number;
   };
@@ -77,7 +77,7 @@ export interface Pass10UserConstraintContext {
   lockFinalRhythmFromPass2?: boolean;
   user: {
     hardStartDo?: boolean;
-    cadenceType?: 'authentic' | 'half';
+    cadenceType?: 'authentic' | 'half' | 'plagal';
     endOnDoHard?: boolean;
     rhythmDist?: { EE: number; Q: number; H: number; W: number };
     minEighthPairsPerPhrase?: number;
