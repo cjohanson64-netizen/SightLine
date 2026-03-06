@@ -2,6 +2,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import bcrypt from "npm:bcryptjs@2.4.3";
+import {
+  extractBearerToken,
+  requireActiveSubscription,
+  verifyTeacherAuth,
+} from "../_shared/billing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,21 +69,16 @@ Deno.serve(async (req: Request) => {
 
     const admin = createClient(supabaseUrl, serviceRoleKey);
 
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-
-    if (!token) {
-      return jsonResponse({ error: "Missing Bearer token" }, 401);
+    const authResult = await verifyTeacherAuth(admin, extractBearerToken(req));
+    if (!authResult.ok) {
+      return jsonResponse({ error: authResult.error }, authResult.status);
     }
+    const teacherId = authResult.teacherId;
 
-    const { data: userData, error: userErr } = await admin.auth.getUser(token);
-    if (userErr || !userData.user) {
-      console.error(
-        `[set_classroom_access] auth_get_user_failed error=${userErr?.message ?? "unknown"}`,
-      );
-      return jsonResponse({ error: "Invalid/expired token" }, 401);
+    const subscriptionResult = await requireActiveSubscription(admin, teacherId);
+    if (!subscriptionResult.ok) {
+      return jsonResponse({ error: subscriptionResult.error }, subscriptionResult.status);
     }
-    const teacherId = userData.user.id;
 
     const body = (await req.json().catch(() => ({}))) as Body;
     const folder_id = String(body.folder_id ?? "");

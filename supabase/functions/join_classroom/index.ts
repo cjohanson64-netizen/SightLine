@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import bcrypt from "npm:bcryptjs@2.4.3";
 import { SignJWT } from "npm:jose@5.9.6";
+import { ACTIVE_SUBSCRIPTION_STATUSES } from "../_shared/billing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -90,7 +91,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: folder, error: folderError } = await admin
       .from("folders")
-      .select("id, name, join_code, passcode_hash, is_published")
+      .select("id, name, join_code, passcode_hash, is_published, owner_id")
       .eq("join_code", join_code)
       .maybeSingle();
 
@@ -99,6 +100,18 @@ Deno.serve(async (req: Request) => {
     if (!folder || !folder.passcode_hash) {
       await recordJoinAttempt();
       return jsonResponse({ error: "Invalid classroom code" }, 401);
+    }
+
+    const { data: ownerSubscription, error: ownerSubscriptionError } = await admin
+      .from("subscriptions")
+      .select("status")
+      .eq("user_id", folder.owner_id)
+      .maybeSingle();
+
+    if (ownerSubscriptionError) throw ownerSubscriptionError;
+    const ownerStatus = String(ownerSubscription?.status ?? "inactive").toLowerCase();
+    if (!ACTIVE_SUBSCRIPTION_STATUSES.has(ownerStatus)) {
+      return jsonResponse({ error: "This class is not active." }, 403);
     }
 
     const passcodeOk = await bcrypt.compare(passcode, folder.passcode_hash);

@@ -465,3 +465,15 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/approve_submission/deno.json"
 entrypoint = "./functions/approve_submission/index.ts"
+
+[functions.create_checkout_session]
+enabled = true
+verify_jwt = false
+import_map = "./functions/create_checkout_session/deno.json"
+entrypoint = "./functions/create_checkout_session/index.ts"
+
+[functions.stripe_webhook]
+enabled = true
+verify_jwt = false
+import_map = "./functions/stripe_webhook/deno.json"
+entrypoint = "./functions/stripe_webhook/index.ts"

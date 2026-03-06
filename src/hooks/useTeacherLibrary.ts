@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { saveExercise } from "../data/exercises";
 import {
@@ -33,6 +33,7 @@ export type BatchPacketItem = {
   exerciseId: string; seed: number; title: string; musicXml: string; position: number;
 };
 export type RosterSortKey = "student_id" | "status" | "playtime" | "attempts" | "created";
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 
 function getSupabaseEnv() {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -107,6 +108,11 @@ export function useTeacherLibrary({
   const [classroomLastPasscode, setClassroomLastPasscode] = useState("");
   const [classroomDefaultsStatus, setClassroomDefaultsStatus] = useState<"idle" | "loading" | "loaded" | "error">("idle");
   const [classroomDefaultsMessage, setClassroomDefaultsMessage] = useState("");
+  const [subscriptionStatus, setSubscriptionStatus] = useState("inactive");
+  const [subscriptionCurrentPeriodEnd, setSubscriptionCurrentPeriodEnd] = useState<string | null>(null);
+  const [subscriptionLoadStatus, setSubscriptionLoadStatus] = useState<"idle" | "loading" | "loaded" | "error">("idle");
+  const [subscriptionMessage, setSubscriptionMessage] = useState("");
+  const [checkoutStatus, setCheckoutStatus] = useState<"idle" | "starting" | "redirecting" | "error">("idle");
 
   // Roster
   const [classroomRoster, setClassroomRoster] = useState<ClassroomStudentItem[]>([]);
@@ -172,6 +178,10 @@ export function useTeacherLibrary({
   const teacherProgressByStudentId = useMemo(
     () => new Map(teacherProgressRows.map(r => [r.student_id, r])),
     [teacherProgressRows],
+  );
+  const hasActiveSubscription = useMemo(
+    () => ACTIVE_SUBSCRIPTION_STATUSES.has(subscriptionStatus.toLowerCase()),
+    [subscriptionStatus],
   );
 
   const filteredSavedExercises = useMemo(() =>
@@ -263,6 +273,46 @@ export function useTeacherLibrary({
     setClassroomAccessStatus("idle");
     setClassroomAccessMessage("");
   }, [mode, selectedFolder]);
+
+  const refreshSubscriptionStatus = useCallback(async () => {
+    if (mode !== "teacher" || !authUserId) {
+      setSubscriptionStatus("inactive");
+      setSubscriptionCurrentPeriodEnd(null);
+      setSubscriptionLoadStatus("idle");
+      setSubscriptionMessage("");
+      return;
+    }
+    setSubscriptionLoadStatus("loading");
+    setSubscriptionMessage("");
+    const { data, error } = await supabase
+      .from("subscriptions")
+      .select("status, current_period_end")
+      .eq("user_id", authUserId)
+      .maybeSingle();
+    if (error) {
+      setSubscriptionLoadStatus("error");
+      setSubscriptionStatus("inactive");
+      setSubscriptionCurrentPeriodEnd(null);
+      setSubscriptionMessage(error.message);
+      return;
+    }
+    setSubscriptionStatus(typeof data?.status === "string" ? data.status : "inactive");
+    setSubscriptionCurrentPeriodEnd(
+      typeof data?.current_period_end === "string" ? data.current_period_end : null,
+    );
+    setSubscriptionLoadStatus("loaded");
+  }, [mode, authUserId]);
+
+  useEffect(() => {
+    if (mode !== "teacher" || !authUserId) {
+      setSubscriptionStatus("inactive");
+      setSubscriptionCurrentPeriodEnd(null);
+      setSubscriptionLoadStatus("idle");
+      setSubscriptionMessage("");
+      return;
+    }
+    void refreshSubscriptionStatus();
+  }, [mode, authUserId, refreshSubscriptionStatus]);
 
   const refreshRoster = async (folderId: string) => {
     const { data, error } = await supabase
@@ -539,6 +589,27 @@ export function useTeacherLibrary({
       setClassroomAccessMessage(error instanceof Error ? error.message : "Unable to set classroom access.");
     }
   };
+
+  const startCheckout = useCallback(async () => {
+    if (mode !== "teacher" || !authUserId) return false;
+    setCheckoutStatus("starting");
+    setSubscriptionMessage("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Sign in again.");
+      const payload = await callEdgeFunction("create_checkout_session", {}, session.access_token) as { url?: unknown };
+      if (typeof payload.url !== "string" || payload.url.length === 0) {
+        throw new Error("Checkout URL missing from response.");
+      }
+      setCheckoutStatus("redirecting");
+      window.location.assign(payload.url);
+      return true;
+    } catch (error) {
+      setCheckoutStatus("error");
+      setSubscriptionMessage(error instanceof Error ? error.message : "Unable to start checkout.");
+      return false;
+    }
+  }, [mode, authUserId]);
 
   const addRosterStudent = async () => {
     if (mode !== "teacher" || !selectedFolderId) return;
@@ -872,6 +943,8 @@ export function useTeacherLibrary({
     classroomPasscode, setClassroomPasscode, classroomJoinCode, setClassroomJoinCode,
     classroomPublish, setClassroomPublish, classroomAccessStatus, classroomAccessMessage,
     classroomLastPasscode, classroomDefaultsStatus, classroomDefaultsMessage,
+    subscriptionStatus, subscriptionCurrentPeriodEnd, subscriptionLoadStatus,
+    subscriptionMessage, checkoutStatus, hasActiveSubscription,
     // Roster
     classroomRoster, classroomRosterStatus, classroomRosterError,
     newRosterStudentId, setNewRosterStudentId, bulkRosterStudentIds, setBulkRosterStudentIds,
@@ -905,6 +978,7 @@ export function useTeacherLibrary({
     // Actions
     saveToSupabase, loadSavedExercise, deleteSavedExercise, createFolder,
     saveClassDefaults, clearClassDefaults, setClassroomAccess,
+    refreshSubscriptionStatus, startCheckout,
     addRosterStudent, bulkAddRosterStudents, toggleRosterStudent, deleteRosterStudent,
     approveSubmission, rejectSubmission,
     fetchPacketRenderItems, batchGenerate, openBatchModal, deletePacket,

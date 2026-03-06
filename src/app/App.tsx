@@ -10,6 +10,7 @@ import {
   Navigate,
   Route,
   Routes,
+  useLocation,
   useNavigate,
 } from "react-router-dom";
 
@@ -286,6 +287,7 @@ const extractMelodyEvents = (artifact: {
 
 function AppContent(): JSX.Element {
   const navigate = useNavigate();
+  const location = useLocation();
 
   // ── Hooks ──────────────────────────────────────────────────────────────────
   const auth = useAuth();
@@ -340,6 +342,7 @@ function AppContent(): JSX.Element {
   const [showAddStudentsModal, setShowAddStudentsModal] =
     useState<boolean>(false);
   const [showBatchModal, setShowBatchModal] = useState<boolean>(false);
+  const [billingNotice, setBillingNotice] = useState<string>("");
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const notationContainerRef = useRef<HTMLDivElement | null>(null);
@@ -480,6 +483,25 @@ function AppContent(): JSX.Element {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [showInstructions]);
+
+  useEffect(() => {
+    if (mode !== "teacher") {
+      setBillingNotice("");
+      return;
+    }
+    const params = new URLSearchParams(location.search);
+    const billing = params.get("billing");
+    if (billing === "success") {
+      setBillingNotice("Checkout complete. Verifying subscription status...");
+      void teacher.refreshSubscriptionStatus();
+      return;
+    }
+    if (billing === "cancel") {
+      setBillingNotice("Checkout canceled.");
+      return;
+    }
+    setBillingNotice("");
+  }, [mode, location.search, teacher.refreshSubscriptionStatus]);
 
   // Student interaction tracking
   const handleStudentInteractionClickCapture = (
@@ -898,6 +920,35 @@ function AppContent(): JSX.Element {
           </p>
         </div>
         <div className="AppDashboardCard">
+          <h3>Subscription</h3>
+          {mode === "teacher" ? (
+            <>
+              <p className="AppHistoryLabel">
+                Status: {teacher.hasActiveSubscription ? "Active" : "Inactive"}
+              </p>
+              {teacher.subscriptionCurrentPeriodEnd ? (
+                <p className="AppHistoryLabel">
+                  Renews: {formatSavedDate(teacher.subscriptionCurrentPeriodEnd)}
+                </p>
+              ) : null}
+              {!teacher.hasActiveSubscription ? (
+                <button
+                  type="button"
+                  className="AppHistoryButton AppProjectionToggleButton"
+                  onClick={() => void teacher.startCheckout()}
+                  disabled={teacher.checkoutStatus === "starting" || teacher.checkoutStatus === "redirecting"}
+                >
+                  {teacher.checkoutStatus === "starting" ? "Starting..." : "Upgrade"}
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <p className="AppHistoryLabel">
+              Sign in as teacher to manage billing.
+            </p>
+          )}
+        </div>
+        <div className="AppDashboardCard">
           <h3>Student Progress</h3>
           {mode === "student" ? (
             <p className="AppHistoryLabel">
@@ -924,6 +975,10 @@ function AppContent(): JSX.Element {
           )}
         </div>
       </div>
+      {billingNotice ? <p className="AppHistoryLabel">{billingNotice}</p> : null}
+      {mode === "teacher" && teacher.subscriptionMessage ? (
+        <p className="AppHistoryLabel">{teacher.subscriptionMessage}</p>
+      ) : null}
       <div className="AppDashboardActions">
         <Link className="AppHistoryButton" to="/generator">
           Open Melody Generator
@@ -934,8 +989,6 @@ function AppContent(): JSX.Element {
       </div>
     </section>
   );
-  void dashboardView;
-
   // ── Class access view ─────────────────────────────────────────────────────
   const classAccessView = (
     <section className="AppRoutePage">
@@ -1492,6 +1545,7 @@ function AppContent(): JSX.Element {
 
       <Routes>
         <Route path="/generator" element={<Navigate to="/" replace />} />
+        <Route path="/dashboard" element={dashboardView} />
 
         <Route
           path="/"

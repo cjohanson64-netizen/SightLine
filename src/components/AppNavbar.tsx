@@ -27,6 +27,14 @@ export default function AppNavbar({
     <header className="AppNavBar">
       <nav className="AppNavLinks" aria-label="Main navigation">
         <NavLink
+          to="/dashboard"
+          className={({ isActive }) =>
+            `AppNavLink${isActive ? " AppNavLinkActive" : ""}`
+          }
+        >
+          Dashboard
+        </NavLink>
+        <NavLink
           to="/"
           className={({ isActive }) =>
             `AppNavLink${isActive ? " AppNavLinkActive" : ""}`
