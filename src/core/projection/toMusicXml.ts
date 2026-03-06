@@ -76,7 +76,7 @@ function buildMusicXmlFromSpecAndMelody(
       ...pitch,
       ...rhythm,
       onset: event.onsetBeat ?? event.beat,
-      color: isHighlighted ? options?.highlightColor ?? '#ff2da6' : undefined
+      noteheadColor: isHighlighted ? options?.highlightColor ?? '#ff2da6' : undefined
     });
   }
 
@@ -135,7 +135,7 @@ function buildMusicXmlFromSpecAndMelody(
   const phraseBoundaryMeasures = finalPhraseBoundary <= measures ? [finalPhraseBoundary] : [];
 
   return buildSinglePartMusicXml({
-    title: String(spec.title ?? 'SightLine Melody'),
+    title: '',
     keyFifths: FIFTHS_BY_KEY[String(spec.key ?? 'C')] ?? 0,
     timeBeats: beats,
     timeBeatType: beatType,

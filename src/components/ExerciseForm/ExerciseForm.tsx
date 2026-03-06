@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import '../../styles/ExerciseForm.css';
 import type { ExerciseSpec, PhraseSpec } from '../../tat';
 
@@ -8,6 +9,9 @@ interface ExerciseFormProps {
   onRandomizeSeed: () => void;
   onExport: () => void;
   showActions?: boolean;
+  disableAdvancedPanels?: boolean;
+  headerActions?: ReactNode;
+  bare?: boolean;
 }
 
 const MAX_PHRASES = 4;
@@ -71,7 +75,10 @@ export default function ExerciseForm({
   onSpecChange,
   onRandomizeSeed,
   onExport,
-  showActions = true
+  showActions = true,
+  disableAdvancedPanels = false,
+  headerActions,
+  bare = false
 }: ExerciseFormProps): JSX.Element {
   const [transitionDraft, setTransitionDraft] = useState<{ a: number; b: number }>({ a: 1, b: 2 });
   const solfegeDegrees: Array<{ value: number; label: string }> = [
@@ -85,7 +92,7 @@ export default function ExerciseForm({
   ];
 
   const update = <K extends keyof ExerciseSpec>(field: K, value: ExerciseSpec[K]) => {
-    onSpecChange({ ...spec, [field]: value, mode: 'major' });
+    onSpecChange({ ...spec, [field]: value });
   };
 
   const updateRange = <K extends keyof ExerciseSpec['range']>(field: K, value: ExerciseSpec['range'][K]) => {
@@ -208,8 +215,13 @@ export default function ExerciseForm({
     .join('');
 
   return (
-    <section className="ExerciseForm">
-      <h2>Melody Preferences</h2>
+    <section className={`ExerciseForm${bare ? " ExerciseForm--bare" : ""}`}>
+      <div className="ExerciseForm-header">
+        <h2>Melody Preferences</h2>
+        {headerActions ? (
+          <div className="ExerciseForm-headerActions">{headerActions}</div>
+        ) : null}
+      </div>
       <div className="ExerciseForm-chunks">
         <div className="ExerciseForm-chunk ExerciseForm-chunk--core">
           <h3>Core Preferences</h3>
@@ -249,7 +261,15 @@ export default function ExerciseForm({
 
           <div className="ExerciseForm-row ExerciseForm-row--four">
             <label>
-              Key (Major)
+              Mode
+              <select value={spec.mode} onChange={(event) => update('mode', event.target.value as ExerciseSpec['mode'])}>
+                <option value="major">Major</option>
+                <option value="minor">Minor</option>
+              </select>
+            </label>
+
+            <label>
+              Key
               <select value={spec.key} onChange={(event) => update('key', event.target.value)}>
                 {['C', 'G', 'D', 'A', 'E', 'F', 'Bb', 'Eb', 'Ab'].map((key) => (
                   <option key={key} value={key}>
@@ -332,8 +352,15 @@ export default function ExerciseForm({
           </div>
         </div>
 
-        <div className="ExerciseForm-chunk ExerciseForm-chunk--illegal">
+        <fieldset
+          className="ExerciseForm-chunk ExerciseForm-chunk--illegal"
+          disabled={disableAdvancedPanels}
+          aria-disabled={disableAdvancedPanels}
+        >
           <h3>Illegal Rules</h3>
+          {disableAdvancedPanels ? (
+            <small>Sign in to edit illegal rules.</small>
+          ) : null}
           <div className="ExerciseForm-constraintSection">
             <h3>Illegal Degrees</h3>
             <div className="ExerciseForm-toggleGrid ExerciseForm-toggleGrid--degrees">
@@ -475,10 +502,17 @@ export default function ExerciseForm({
               )}
             </div>
           </div>
-        </div>
+        </fieldset>
 
-        <div className="ExerciseForm-chunk ExerciseForm-chunk--phrase">
+        <fieldset
+          className="ExerciseForm-chunk ExerciseForm-chunk--phrase"
+          disabled={disableAdvancedPanels}
+          aria-disabled={disableAdvancedPanels}
+        >
           <h3>Phrase Builder</h3>
+          {disableAdvancedPanels ? (
+            <small>Sign in to use phrase builder.</small>
+          ) : null}
           <div className="ExerciseForm-row ExerciseForm-row--two">
             <label>
               Phrase Length
@@ -581,7 +615,7 @@ export default function ExerciseForm({
               </button>
             </div>
           ) : null}
-        </div>
+        </fieldset>
       </div>
     </section>
   );

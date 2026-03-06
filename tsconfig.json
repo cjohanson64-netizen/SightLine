@@ -14,6 +14,6 @@
     "strict": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "alignment_bundle"],
+  "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

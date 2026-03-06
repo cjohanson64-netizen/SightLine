@@ -24,9 +24,33 @@
   border: 1px solid #2f3e56;
   border-radius: 10px;
   padding: 0.75rem;
-  background: #0b111a;
+  background: rgba(255, 255, 255, 0.25);
   display: flex;
   justify-content: center;
+  align-items: center;
+}
+
+.NotationViewer--projection {
+  height: 100%;
+  min-height: 100%;
+  padding: 0.6rem 0.75rem;
+}
+
+.NotationViewer--projection .NotationViewer-controls {
+  margin: 0 0 0.35rem;
+}
+
+.NotationViewer--projection .NotationViewer-canvas {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.2rem;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.NotationViewer--projection .NotationViewer-canvas svg {
+  width: auto !important;
+  max-width: none !important;
 }
 
 .NotationViewer-canvas:focus-visible {
@@ -40,6 +64,29 @@
   margin: 0 auto;
   width: 100% !important;
   height: auto !important;
+}
+
+.NotationViewer-canvas #osmdSvgPage1 {
+  background: #ffffff !important;
+  border-radius: 6px;
+}
+
+.NotationViewer--solfege .NotationViewer-canvas {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.NotationViewer--solfege .NotationViewer-canvas svg {
+  filter: none;
+  background: #ffffff;
+  border-radius: 6px;
+}
+
+.AppThemeLight .NotationViewer--solfege .NotationViewer-canvas {
+  background: #ffffff;
+}
+
+.AppThemeLight .NotationViewer--solfege .NotationViewer-canvas svg {
+  filter: none;
 }
 
 .NotationViewer-error {

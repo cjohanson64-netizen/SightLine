@@ -7,6 +7,7 @@ export interface MusicXmlNote {
   beam?: 'begin' | 'continue' | 'end';
   lyric?: string;
   color?: string;
+  noteheadColor?: string;
 }
 
 export interface MusicXmlBuildInput {
@@ -26,6 +27,9 @@ function noteXml(note: MusicXmlNote): string {
   const alterXml = note.alter !== 0 ? `<alter>${note.alter}</alter>` : '';
   const beamXml = note.beam ? `<beam number="1">${note.beam}</beam>` : '';
   const lyricXml = note.lyric ? `<lyric><text>${note.lyric}</text></lyric>` : '';
+  const noteheadXml = note.noteheadColor
+    ? `<notehead color="${note.noteheadColor}">normal</notehead>`
+    : '';
   const noteOpenTag = note.color ? `<note color="${note.color}">` : '<note>';
   return [
     noteOpenTag,
@@ -36,6 +40,7 @@ function noteXml(note: MusicXmlNote): string {
     '</pitch>',
     `<duration>${note.duration}</duration>`,
     `<type>${note.type}</type>`,
+    noteheadXml,
     beamXml,
     lyricXml,
     '</note>'
@@ -80,17 +85,19 @@ export function buildSinglePartMusicXml(input: MusicXmlBuildInput): string {
   const identificationXml = input.composer
     ? ['<identification>', `<creator type="composer">${input.composer}</creator>`, '</identification>'].join('')
     : '';
+  const trimmedTitle = input.title.trim();
+  const workXml = trimmedTitle
+    ? ['<work>', `<work-title>${trimmedTitle}</work-title>`, '</work>'].join('')
+    : '';
 
   return [
     '<?xml version="1.0" encoding="UTF-8" standalone="no"?>',
     '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">',
     '<score-partwise version="3.1">',
-    '<work>',
-    `<work-title>${input.title}</work-title>`,
-    '</work>',
+    workXml,
     identificationXml,
     '<part-list>',
-    '<score-part id="P1"><part-name>Voice</part-name></score-part>',
+    '<score-part id="P1"><part-name></part-name><part-abbreviation></part-abbreviation></score-part>',
     '</part-list>',
     `<part id="P1">${measureXml}</part>`,
     '</score-partwise>'

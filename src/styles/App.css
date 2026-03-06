@@ -51,6 +51,75 @@ body {
   color: #1d2a3b;
 }
 
+.AppThemeLight .AppNavBar,
+.AppThemeLight .AppDashboardCard {
+  background: #f5f8fd;
+  border-color: #b4c3d7;
+}
+
+.AppThemeLight .AppNavLink {
+  color: #304560;
+}
+
+.AppThemeLight .AppNavLink:hover {
+  background: #eaf0f8;
+  border-color: #9fb2cc;
+}
+
+.AppThemeLight .AppNavLinkActive {
+  background: #dde8f5;
+  border-color: #8ea5c3;
+  color: #1f344d;
+}
+
+.AppThemeLight .AppNavMode {
+  color: #546f8f;
+}
+
+.AppThemeLight .AppNavThemeField {
+  color: #32455e;
+}
+
+.AppThemeLight .AppNavThemeField select {
+  background: #f8fbff;
+  color: #1f2f44;
+  border-color: #9eb1c8;
+}
+
+.AppThemeLight .AppNavThemeField select:focus {
+  border-color: #6f88a7;
+}
+
+.AppThemeLight .AppLibraryCheckbox {
+  border-color: #9eb1c8;
+  background: #f8fbff;
+}
+
+.AppThemeLight .AppLibraryCheckbox:checked {
+  background: #2f67a8;
+  border-color: #2f67a8;
+}
+
+.AppThemeLight .AppLibraryCheckbox::after {
+  background: #ffffff;
+}
+
+.AppThemeLight .AppLibraryTitleInput {
+  border-color: #9eb1c8;
+  background: #f8fbff;
+  color: #1f2f44;
+}
+
+.AppThemeLight .AppLibraryTitleInput:focus {
+  border-color: #6f88a7;
+}
+
+.AppThemeLight .AppRosterTable th,
+.AppThemeLight .AppRosterTable td {
+  border-bottom-color: #c8d4e3;
+  color: #24384f;
+}
+
 .AppMain {
   display: flex;
   flex-direction: column;
@@ -58,15 +127,302 @@ body {
   flex: 1;
 }
 
+.AppNavBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #2b3a4f;
+  border-radius: 10px;
+  background: #111b2a;
+}
+
+.AppNavLinks {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.AppNavLink {
+  color: #c6d4e8;
+  text-decoration: none;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 0.92rem;
+}
+
+.AppNavLink:hover {
+  border-color: #4e6485;
+  background: #162235;
+}
+
+.AppNavLinkActive {
+  border-color: #6f88a7;
+  background: #1e2d43;
+  color: #e9f2ff;
+}
+
+.AppNavLinkDisabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.AppNavActions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.AppNavMode {
+  font-size: 0.82rem;
+  color: #8ea4be;
+}
+
+.AppNavThemeField {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.86rem;
+  color: #9fb0c9;
+}
+
+.AppNavThemeField select {
+  height: 2rem;
+  border-radius: 6px;
+  border: 1px solid #3a4b66;
+  background: #172233;
+  color: #e6edf6;
+  padding: 0 0.45rem;
+  font-size: 0.86rem;
+}
+
+.AppNavThemeField select:focus {
+  outline: none;
+  border-color: #5c7396;
+}
+
+.AppRoutePage {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 0.2rem 0;
+}
+
+.AppDashboardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.7rem;
+}
+
+.AppDashboardCard {
+  border: 1px solid #2b3a4f;
+  border-radius: 10px;
+  background: #111b2a;
+  padding: 0.65rem 0.75rem;
+}
+
+.AppDashboardCard h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.98rem;
+}
+
+.AppDashboardActions {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.AppClassControls {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.AppClassControls .AppToolbarField {
+  order: 1;
+}
+
+.AppClassControls .AppClassAddStudentsButton {
+  order: 2;
+  flex: 0 0 auto;
+}
+
+.AppClassControls .AppClassEditButton {
+  order: 3;
+  flex: 0 0 auto;
+}
+
+.AppClassControls .AppToolbarNewFolder {
+  order: 4;
+}
+
+.AppRosterCard {
+  grid-column: 1 / -1;
+}
+
+.AppClassAccessColumns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: 0.7rem;
+}
+
+.AppClassAccessColumn {
+  min-width: 0;
+}
+
+.AppClassAccessColumn--stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.AppRosterControls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.AppRosterTableWrap {
+  overflow-x: auto;
+}
+
+.AppRosterTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 680px;
+}
+
+.AppRosterTable th,
+.AppRosterTable td {
+  border-bottom: 1px solid #2b3a4f;
+  padding: 0.45rem 0.5rem;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.AppRosterTable th {
+  color: #b6c6db;
+  font-weight: 600;
+}
+
+.AppRosterSortButton {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.AppRosterRowActions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.AppLibraryTitleButton {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.AppLibraryTitleRow,
+.AppLibraryTitleEditRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.AppLibraryTitleInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 1.9rem;
+  border: 1px solid #3a4b66;
+  border-radius: 6px;
+  background: #172233;
+  color: #e6edf6;
+  padding: 0 0.5rem;
+  font-size: 0.88rem;
+}
+
+.AppLibraryTitleInput:focus {
+  outline: none;
+  border-color: #5c7396;
+}
+
+.AppLibraryTitleAction {
+  width: 1.85rem;
+  min-width: 1.85rem;
+  height: 1.85rem;
+  font-size: 0.9rem;
+}
+
+.AppLibraryCheckbox {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  border: 1px solid #5f7699;
+  border-radius: 4px;
+  background: #172233;
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+}
+
+.AppLibraryCheckbox::after {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  transform: scale(0);
+  transition: transform 0.12s ease-in-out;
+  clip-path: polygon(14% 46%, 0 60%, 43% 100%, 100% 20%, 84% 6%, 41% 71%);
+  background: #0e1724;
+}
+
+.AppLibraryCheckbox:checked {
+  background: #a8c7ea;
+  border-color: #a8c7ea;
+}
+
+.AppLibraryCheckbox:checked::after {
+  transform: scale(1);
+}
+
+.AppLibraryCheckbox:focus-visible {
+  outline: 2px solid #7ca1d4;
+  outline-offset: 1px;
+}
+
 .AppHeader {
   display: flex;
   gap: 20px;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .AppHeader img {
   width: 150px;
   border-radius: 50%;
+}
+
+.AppHeaderActions {
+  margin-left: auto;
+  display: flex;
+  align-items: flex-start;
 }
 
 .AppTitle {
@@ -86,6 +442,130 @@ body {
   width: 100%;
 }
 
+.AppNotationToolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  margin: 0 0 0.55rem;
+}
+
+.AppNotationToolbarRow {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.AppNotationToolbarRow--top {
+  align-items: flex-end;
+  justify-content: flex-start;
+}
+
+.AppNotationToolbarRow--bottom {
+  align-items: center;
+}
+
+.AppToolbarField {
+  min-width: 12rem;
+  flex: 1 1 12rem;
+}
+
+.AppToolbarTitleField {
+  min-width: 18rem;
+  flex: 2 1 22rem;
+}
+
+.AppToolbarCompactField {
+  min-width: 8.5rem;
+  flex: 0 1 auto;
+}
+
+.AppToolbarCompactField input {
+  width: 4.5rem;
+}
+
+.AppToolbarCompactField select {
+  min-width: 7.2rem;
+}
+
+.AppToolbarNewFolder {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 1 1 16rem;
+  min-width: 14rem;
+}
+
+.AppToolbarNewFolder .AppExerciseTitleInput {
+  width: auto !important;
+  flex: 1 1 auto;
+  min-height: 2rem;
+  border: 1px solid #3a4b66;
+  border-radius: 6px;
+  background: #172233;
+  color: #e6edf6;
+  padding: 0 0.55rem;
+  font-size: 0.9rem;
+}
+
+.AppToolbarNewFolder .AppExerciseTitleInput:focus {
+  outline: none;
+  border-color: #5c7396;
+}
+
+.AppNotationToolbarActions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  flex: 1 1 30rem;
+}
+
+.AppClassroomAccessPanel {
+  margin: 0 0 0.55rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #2b3a4f;
+  border-radius: 10px;
+  background: #101a28;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.AppClassroomAccessPanel .AppPlaybackField {
+  justify-content: flex-start;
+}
+
+.AppClassroomAccessPanel .AppToolbarField {
+  min-width: 16rem;
+}
+
+.AppClassroomAccessPanel .AppToolbarField input {
+  width: 100%;
+}
+
+.AppClassroomAccessPanel .AppPlaybackField input[type="checkbox"] {
+  width: auto;
+  height: auto;
+}
+
+.AppToolbarPlaybackGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.AppToolbarRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
 .AppNotationHeader {
   display: flex;
   align-items: center;
@@ -100,11 +580,31 @@ body {
 .AppTopRow .AppNotationPane {
   flex: 1 1 auto;
   min-width: 0;
+  height: calc(100dvh - 2rem);
+}
+
+.AppTopRow .AppNotationPane .NotationViewer {
+  height: 100%;
+  min-height: 0;
+}
+
+.AppPrimaryColumn {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.AppPrimaryColumnProjection {
+  height: 100%;
 }
 
 .AppMelodyPanel {
   flex: 0 0 260px;
   align-self: stretch;
+  height: calc(100dvh - 2rem);
+  min-height: 0;
   background: #151f2d;
   border: 1px solid #2b3a4f;
   border-radius: 12px;
@@ -126,6 +626,25 @@ body {
   gap: 0.45rem;
 }
 
+.AppPanelScrollableSection {
+  max-height: clamp(180px, 28vh, 320px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 0.2rem;
+}
+
+.AppMelodyPanel .AppPanelScrollableSection {
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.AppQuickActionsRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.45rem;
+}
+
 .AppPanelSpacer {
   height: 1px;
   background: #2b3a4f;
@@ -138,6 +657,17 @@ body {
   text-align: center;
   padding: 0 0.6rem;
   font-size: 0.88rem;
+}
+
+.AppSymbolButton {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.AppSquareButton {
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
 }
 
 .AppButtonLabelWithIcon {
@@ -202,6 +732,33 @@ body {
   text-align: center;
 }
 
+.AppProjectionToggleButton {
+  padding: 0 0.6rem;
+  font-size: 0.85rem;
+}
+
+.AppProjectionTitle {
+  width: 100%;
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.AppProjectionHeaderRow {
+  position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: opacity 0.18s ease;
+}
+
+.AppProjectionExitButton {
+  position: absolute;
+  right: 0;
+}
+
 .AppHistoryButton:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -212,11 +769,53 @@ body {
   color: #9fb0c9;
 }
 
+.AppHistoryLabel input:not([type="checkbox"]),
+.AppHistoryLabel select,
+.AppHistoryLabel textarea {
+  border: 1px solid #3a4b66;
+  border-radius: 6px;
+  background: #172233;
+  color: #e6edf6;
+}
+
+.AppHistoryLabel textarea {
+  padding: 0.45rem 0.55rem;
+}
+
+.AppHistoryLabel input:not([type="checkbox"]):focus,
+.AppHistoryLabel select:focus,
+.AppHistoryLabel textarea:focus {
+  outline: none;
+  border-color: #5c7396;
+}
+
 .AppPlaybackField {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   justify-content: space-between;
+}
+
+.AppPlaybackField.AppToolbarField {
+  justify-content: flex-start;
+}
+
+.AppNotationToolbarRow--top .AppToolbarField {
+  flex: 0 1 14rem;
+}
+
+.AppNotationToolbarRow--top .AppToolbarTitleField {
+  flex: 0 1 20rem;
+}
+
+.AppNotationToolbarRow--top .AppToolbarNewFolder {
+  flex: 0 1 16rem;
+}
+
+@media (max-width: 1200px) {
+  .AppToolbarRight {
+    margin-left: 0;
+  }
 }
 
 .AppPlaybackField input {
@@ -246,6 +845,13 @@ body {
   border-color: #5c7396;
 }
 
+.AppExerciseTitleInput {
+  width: 100% !important;
+  min-height: 2.4rem;
+  font-size: 0.95rem;
+  padding: 0 0.6rem;
+}
+
 .AppRelaxationNotice {
   margin: 0 0 0.7rem;
   padding: 0.45rem 0.65rem;
@@ -272,14 +878,43 @@ body {
   border-color: #9eb1c8;
 }
 
+.AppThemeLight .AppHistoryLabel input:not([type="checkbox"]),
+.AppThemeLight .AppHistoryLabel select,
+.AppThemeLight .AppHistoryLabel textarea {
+  background: #f8fbff;
+  color: #1f2f44;
+  border-color: #9eb1c8;
+}
+
+.AppThemeLight .AppToolbarNewFolder .AppExerciseTitleInput {
+  background: #f8fbff;
+  color: #1f2f44;
+  border-color: #9eb1c8;
+}
+
 .AppThemeLight .AppHistoryButton:not(:disabled):hover,
 .AppThemeLight .AppPlaybackField input:focus,
 .AppThemeLight .AppPlaybackField select:focus {
   border-color: #6f88a7;
 }
 
+.AppThemeLight .AppHistoryLabel input:not([type="checkbox"]):focus,
+.AppThemeLight .AppHistoryLabel select:focus,
+.AppThemeLight .AppHistoryLabel textarea:focus {
+  border-color: #6f88a7;
+}
+
+.AppThemeLight .AppToolbarNewFolder .AppExerciseTitleInput:focus {
+  border-color: #6f88a7;
+}
+
 .AppThemeLight .AppMelodyPanel {
   background: #f2f6fc;
+  border-color: #b5c3d6;
+}
+
+.AppThemeLight .AppClassroomAccessPanel {
+  background: #f8fbff;
   border-color: #b5c3d6;
 }
 
@@ -323,6 +958,37 @@ body {
   gap: 0.8rem;
 }
 
+.AppModalWide {
+  width: min(1280px, 96vw);
+  max-height: calc(100vh - 0.75rem);
+  height: calc(100vh - 0.75rem);
+}
+
+.AppPrefsHeaderActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.AppPrefsCloseButton {
+  width: 2rem !important;
+  min-width: 2rem !important;
+  height: 2rem !important;
+  padding: 0 !important;
+  flex: 0 0 2rem;
+  font-size: 1rem;
+}
+
+.AppPrefsHeaderSep {
+  color: #8ea4be;
+  font-size: 0.9rem;
+}
+
+.AppModalWide .ExerciseForm {
+  max-height: none;
+  overflow: visible;
+}
+
 .AppModalClose {
   position: absolute;
   top: 0.6rem;
@@ -360,10 +1026,98 @@ body {
   line-height: 1.35;
 }
 
+.AppBatchForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.AppBatchForm label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.AppBatchForm input,
+.AppBatchForm select {
+  border: 1px solid #3a4b66;
+  border-radius: 8px;
+  background: #172233;
+  color: #e6edf6;
+  height: 2rem;
+  padding: 0 0.55rem;
+  font-size: 0.9rem;
+}
+
+.AppBatchForm textarea {
+  border: 1px solid #3a4b66;
+  border-radius: 8px;
+  background: #172233;
+  color: #e6edf6;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.AppBatchCheckbox {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.AppBatchCheckbox input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  padding: 0;
+}
+
+.AppBatchActions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.AppStudentForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.AppStudentForm label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.AppStudentForm input {
+  border: 1px solid #3a4b66;
+  border-radius: 8px;
+  background: #172233;
+  color: #e6edf6;
+  height: 2rem;
+  padding: 0 0.55rem;
+  font-size: 0.88rem;
+}
+
 .AppThemeLight .AppModal {
   background: #f8fbff;
   border-color: #b5c3d6;
   color: #1f2f44;
+}
+
+.AppThemeLight .AppBatchForm input,
+.AppThemeLight .AppBatchForm select,
+.AppThemeLight .AppBatchForm textarea {
+  background: #f8fbff;
+  color: #1f2f44;
+  border-color: #9eb1c8;
+}
+
+.AppThemeLight .AppStudentForm input {
+  background: #f8fbff;
+  color: #1f2f44;
+  border-color: #9eb1c8;
 }
 
 .AppThemeLight .AppModalClose {
@@ -376,7 +1130,75 @@ body {
   background: rgba(27, 38, 52, 0.28);
 }
 
+.AppProjectionMode {
+  padding: 0.5rem;
+}
+
+.AppMainProjection {
+  height: calc(100vh - 1rem);
+}
+
+.AppTopRowProjection {
+  height: 100%;
+}
+
+.AppNotationPaneProjection {
+  height: 100%;
+  position: relative;
+}
+
+.AppProjectionMode .AppHistoryControls {
+  margin-bottom: 0.25rem;
+  width: 100%;
+}
+
+.AppProjectionMode .AppHistoryNav {
+  width: 100%;
+  justify-content: center;
+}
+
+.AppProjectionMode .AppHistoryButton {
+  height: 2.2rem;
+}
+
+.AppProjectionMode .AppHistoryLabel {
+  color: #d8e6f8;
+}
+
+.AppProjectionFloatingControls {
+  position: absolute;
+  right: 0.9rem;
+  bottom: 0.9rem;
+  display: inline-flex;
+  gap: 0.6rem;
+  z-index: 20;
+  transition: opacity 0.18s ease;
+}
+
+.AppProjectionControlsHidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.AppProjectionActionButton {
+  min-width: 8.6rem;
+  height: 2.5rem;
+  padding: 0 0.85rem;
+  font-size: 0.95rem;
+  background: rgba(23, 34, 51, 0.92);
+  border-color: #5a7194;
+  backdrop-filter: blur(2px);
+}
+
+.AppThemeLight .AppProjectionActionButton {
+  background: rgba(248, 251, 255, 0.95);
+}
+
 @media (max-width: 1050px) {
+  .AppClassAccessColumns {
+    grid-template-columns: 1fr;
+  }
+
   .AppTopRow {
     flex-direction: column;
   }
@@ -384,5 +1206,10 @@ body {
   .AppMelodyPanel {
     width: 100%;
     flex: 0 0 auto;
+    height: auto;
+  }
+
+  .AppTopRow .AppNotationPane {
+    height: auto;
   }
 }
