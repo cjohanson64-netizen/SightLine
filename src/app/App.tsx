@@ -1521,7 +1521,7 @@ function AppContent(): JSX.Element {
         onThemeChange={setTheme}
       />
 
-      {!projection.isProjectionMode ? (
+      {!projection.isProjectionMode && location.pathname === "/dashboard" ? (
         <div className="AppIntro">
           <div className="AppBrand">
             <img src={Logo} alt="TAT Logo" className="logo" />
