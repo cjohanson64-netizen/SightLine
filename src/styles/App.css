@@ -30,6 +30,11 @@ body {
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
+.logo {
+  width: 100px;
+  border-radius: 50%;
+}
+
 #root {
   min-height: 100vh;
 }
@@ -436,6 +441,19 @@ body {
 
 .AppSubtitle {
   color:#6f88a7;
+  margin: 0;
+}
+
+.AppIntro {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.AppBrand {
+  display: flex;
+  gap: 20px;
+  align-items: center;
 }
 
 .AppNotationPane {
