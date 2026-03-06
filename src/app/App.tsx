@@ -19,6 +19,7 @@ import NotationViewer from "../components/NotationViewer/NotationViewer";
 import StudentJoinForm from "../components/StudentJoinForm/StudentJoinForm";
 import ErrorBanner from "../components/ErrorBanner/ErrorBanner";
 import AppNavbar from "../components/AppNavbar";
+import GeneratorToolbar from "../components/GeneratorToolbar";
 
 import { generateExercise } from "../core/engine";
 import { buildPacketHtml } from "../core/packet/renderPacketHtml";
@@ -895,6 +896,8 @@ function AppContent(): JSX.Element {
   // ── Mode label / nav helpers ──────────────────────────────────────────────
   const modeLabel: "Teacher" | "Student" | "Guest" =
     mode === "teacher" ? "Teacher" : mode === "student" ? "Student" : "Guest";
+  const teacherFeaturesDisabled =
+    mode === "teacher" && !teacher.hasActiveSubscription;
   const navAuthLabel =
     mode === "student" || auth.authUser ? "Sign out" : "Sign In";
   const handleNavAuthClick = () => {
@@ -924,7 +927,7 @@ function AppContent(): JSX.Element {
           {mode === "teacher" ? (
             <>
               <p className="AppHistoryLabel">
-                Status: {teacher.hasActiveSubscription ? "Active" : "Inactive"}
+                Status: {teacher.subscriptionBadgeLabel}
               </p>
               {teacher.subscriptionCurrentPeriodEnd ? (
                 <p className="AppHistoryLabel">
@@ -993,7 +996,7 @@ function AppContent(): JSX.Element {
   const classAccessView = (
     <section className="AppRoutePage">
       <h2>Class Access</h2>
-      {mode === "teacher" ? (
+      {mode === "teacher" && !teacherFeaturesDisabled ? (
         <>
           <div className="AppClassControls">
             <label className="AppHistoryLabel AppPlaybackField AppToolbarField">
@@ -1490,6 +1493,23 @@ function AppContent(): JSX.Element {
             </div>
           </div>
         </>
+      ) : mode === "teacher" ? (
+        <div className="AppDashboardCard">
+          <p className="AppHistoryLabel">
+            Subscription required to access class tools.
+          </p>
+          <button
+            type="button"
+            className="AppHistoryButton AppProjectionToggleButton"
+            onClick={() => void teacher.startCheckout()}
+            disabled={
+              teacher.checkoutStatus === "starting" ||
+              teacher.checkoutStatus === "redirecting"
+            }
+          >
+            {teacher.checkoutStatus === "starting" ? "Starting..." : "Upgrade"}
+          </button>
+        </div>
       ) : (
         <div className="AppDashboardCard">
           <p className="AppHistoryLabel">
@@ -1556,283 +1576,83 @@ function AppContent(): JSX.Element {
               {!projection.isProjectionMode ? (
                 <>
                   <div className="AppNotationToolbar">
-                    <div className="AppNotationToolbarRow AppNotationToolbarRow--top">
-                      {mode !== "student" ? (
-                        <label className="AppHistoryLabel AppPlaybackField AppToolbarField">
-                          Class
-                          <select
-                            value={teacher.selectedFolderId}
-                            onChange={(e) =>
-                              teacher.setSelectedFolderId(e.target.value)
-                            }
-                            disabled={
-                              mode !== "teacher" || teacher.creatingFolder
-                            }
-                          >
-                            {teacher.folders.map((f) => (
-                              <option key={f.id} value={f.id}>
-                                {f.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      ) : null}
-                    </div>
-
-                    <div className="AppNotationToolbarRow AppNotationToolbarRow--bottom">
-                      <div className="AppNotationToolbarActions">
-                        <button
-                          type="button"
-                          className="AppHistoryButton AppProjectionToggleButton"
-                          onClick={() => setShowMelodyPreferencesModal(true)}
-                        >
-                          Melody Preferences
-                        </button>
-                        {mode !== "student" ? (
-                          <>
-                            <button
-                              type="button"
-                              className="AppHistoryButton AppProjectionToggleButton"
-                              onClick={() => void handleSaveToSupabase()}
-                              disabled={
-                                mode !== "teacher" ||
-                                !exportMusicXml ||
-                                saveStatus === "saving"
-                              }
-                            >
-                              {saveStatus === "saving" ? "..." : "Update"}
-                            </button>
-                            <button
-                              type="button"
-                              className="AppHistoryButton AppProjectionToggleButton"
-                              onClick={() => void handleSaveToSupabase(true)}
-                              disabled={
-                                mode !== "teacher" ||
-                                !exportMusicXml ||
-                                saveStatus === "saving"
-                              }
-                            >
-                              Save New
-                            </button>
-                            <button
-                              type="button"
-                              className="AppHistoryButton AppProjectionToggleButton"
-                              onClick={() => {
-                                teacher.openBatchModal(
-                                  teacher.selectedFolderId,
-                                  teacher.selectedFolder?.name ?? "Class",
-                                );
-                                setShowBatchModal(true);
-                              }}
-                              disabled={
-                                mode !== "teacher" ||
-                                teacher.batchStatus === "running"
-                              }
-                            >
-                              Batch Generate
-                            </button>
-                            <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField">
-                              Title
-                              <input
-                                className="AppExerciseTitleInput"
-                                type="text"
-                                value={spec.title}
-                                onChange={(e) =>
-                                  updateExerciseTitle(e.target.value)
-                                }
-                                placeholder="Exercise title"
-                              />
-                            </label>
-                          </>
-                        ) : null}
-                        {mode === "student" ? (
-                          <button
-                            type="button"
-                            className="AppHistoryButton AppProjectionToggleButton"
-                            onClick={() => void handleSubmitToTeacher()}
-                            disabled={
-                              student.studentSubmitStatus === "saving" ||
-                              !exportMusicXml
-                            }
-                          >
-                            {student.studentSubmitStatus === "saving"
-                              ? "Submitting..."
-                              : "Submit to Teacher"}
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="AppHistoryButton AppSymbolButton AppSquareButton"
-                          onClick={handleExport}
-                          disabled={isGuestMode || !exportMusicXml}
-                          title="Export MusicXML"
-                        >
-                          ⤓
-                        </button>
-                        <button
-                          type="button"
-                          className="AppHistoryButton AppSymbolButton AppSquareButton"
-                          onClick={runWithNewSeed}
-                          title="Generate Melody"
-                        >
-                          ⟳
-                        </button>
-                        <button
-                          type="button"
-                          className="AppHistoryButton AppSymbolButton AppSquareButton"
-                          onClick={rerunWithCurrentSeed}
-                          disabled={isGuestMode}
-                          title="Fix Melody"
-                        >
-                          ↺
-                        </button>
-                        <button
-                          type="button"
-                          className="AppHistoryButton AppSymbolButton AppSquareButton"
-                          onClick={() => {
-                            setPitchEditMode((prev) => !prev);
-                            setEditMessage("");
-                          }}
-                          disabled={isGuestMode || currentMelody.length === 0}
-                          title={
-                            pitchEditMode
-                              ? "Disable pitch edit"
-                              : "Enable pitch edit"
-                          }
-                        >
-                          {pitchEditMode ? "✎✓" : "✎"}
-                        </button>
-                        <button
-                          type="button"
-                          className="AppHistoryButton AppSymbolButton AppSquareButton"
-                          onClick={() => playback.play()}
-                          disabled={currentMelody.length === 0}
-                          title={
-                            playback.isPlaying ? "Stop melody" : "Play melody"
-                          }
-                        >
-                          {playback.isPlaying ? "■" : "▶"}
-                        </button>
-                      </div>
-
-                      <div className="AppToolbarPlaybackGroup">
-                        <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField">
-                          Tempo
-                          <input
-                            type="number"
-                            min={30}
-                            max={240}
-                            step={1}
-                            value={playback.tempoBpm}
-                            onChange={(e) =>
-                              playback.setTempoBpm(
-                                Math.max(
-                                  30,
-                                  Math.min(240, Number(e.target.value) || 80),
-                                ),
-                              )
-                            }
-                          />
-                        </label>
-                        <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField">
-                          Instrument
-                          <select
-                            value={playback.instrument}
-                            onChange={(e) =>
-                              playback.setInstrument(
-                                e.target.value as OscillatorType,
-                              )
-                            }
-                          >
-                            <option value="sine">SINE</option>
-                            <option value="triangle">TRIANGLE</option>
-                            <option value="square">SQUARE</option>
-                            <option value="sawtooth">SAWTOOTH</option>
-                          </select>
-                        </label>
-                        <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField">
-                          Count-in (1 measure)
-                          <input
-                            type="checkbox"
-                            className="AppLibraryCheckbox AppCountInCheckbox"
-                            checked={playback.countInEnabled}
-                            onChange={(e) =>
-                              playback.setCountInEnabled(e.target.checked)
-                            }
-                          />
-                        </label>
-                        <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField">
-                          Solfege
-                          <select
-                            value={solfege.solfegeMode}
-                            onChange={(e) =>
-                              solfege.setSolfegeMode(
-                                e.target.value as "off" | "movable" | "fixed",
-                              )
-                            }
-                          >
-                            <option value="off">Off</option>
-                            <option value="movable">Movable Do</option>
-                            <option value="fixed">Fixed Do</option>
-                          </select>
-                        </label>
-                        {solfege.solfegeMode !== "off" ? (
-                          <>
-                            <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField">
-                              Accidentals
-                              <select
-                                value={solfege.solfegeAccidentalMode}
-                                onChange={(e) =>
-                                  solfege.setSolfegeAccidentalMode(
-                                    e.target.value as "diatonic" | "chromatic",
-                                  )
-                                }
-                              >
-                                <option value="diatonic">Diatonic only</option>
-                                <option value="chromatic">
-                                  Chromatic syllables
-                                </option>
-                              </select>
-                            </label>
-                            <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField">
-                              Overlay
-                              <select
-                                value={
-                                  solfege.solfegeOverlayMode ? "on" : "off"
-                                }
-                                onChange={(e) =>
-                                  solfege.setSolfegeOverlayMode(
-                                    e.target.value === "on",
-                                  )
-                                }
-                              >
-                                <option value="off">Lyrics only</option>
-                                <option value="on">Color noteheads</option>
-                              </select>
-                            </label>
-                          </>
-                        ) : null}
-                      </div>
-
-                      <button
-                        type="button"
-                        className="AppHistoryButton AppSymbolButton AppSquareButton"
-                        onClick={() => setShowInstructions(true)}
-                        title="Instructions"
-                      >
-                        ?
-                      </button>
-                      <div className="AppToolbarRight">
-                        <button
-                          type="button"
-                          className="AppHistoryButton AppProjectionToggleButton"
-                          onClick={() => void projection.toggle()}
-                          title="Projection mode"
-                        >
-                          Projection Mode
-                        </button>
-                      </div>
-                    </div>
+                    <GeneratorToolbar
+                      mode={mode}
+                      teacherFeaturesDisabled={teacherFeaturesDisabled}
+                      upgradeRequiredTitle="Upgrade required"
+                      folders={teacher.folders}
+                      selectedFolderId={teacher.selectedFolderId}
+                      onSelectFolderId={teacher.setSelectedFolderId}
+                      creatingFolder={teacher.creatingFolder}
+                      studentClassName={student.studentSession?.classroom.name ?? null}
+                      titleValue={spec.title}
+                      titlePlaceholder={currentMelody.length > 0 ? "Exercise title" : "SightLine Melody"}
+                      onTitleChange={updateExerciseTitle}
+                      onGenerate={runWithNewSeed}
+                      onFix={rerunWithCurrentSeed}
+                      fixDisabled={isGuestMode}
+                      showUpdateSave={Boolean(teacher.activeExerciseId)}
+                      saveDisabled={mode !== "teacher" || !exportMusicXml || saveStatus === "saving"}
+                      onSaveNew={() => void handleSaveToSupabase(true)}
+                      onSaveUpdate={() => void handleSaveToSupabase()}
+                      onBatchGenerate={() => {
+                        teacher.openBatchModal(
+                          teacher.selectedFolderId,
+                          teacher.selectedFolder?.name ?? "Class",
+                        );
+                        setShowBatchModal(true);
+                      }}
+                      batchDisabled={mode !== "teacher" || teacher.batchStatus === "running"}
+                      onToggleProjection={() => void projection.toggle()}
+                      onOpenHelp={() => setShowInstructions(true)}
+                      onOpenPreferences={() => setShowMelodyPreferencesModal(true)}
+                      onExportMusicXml={() => {
+                        if (!isGuestMode) handleExport();
+                      }}
+                      onExportPacketPdf={() => {
+                        if (teacher.lastCreatedPacket) {
+                          void handleOpenSavedPacket(teacher.lastCreatedPacket);
+                        }
+                      }}
+                      onExportMusicXmlZip={() => {
+                        if (teacher.lastCreatedPacket) {
+                          void handleExportSavedPacketZip(teacher.lastCreatedPacket);
+                        }
+                      }}
+                      canExportPacket={Boolean(teacher.lastCreatedPacket)}
+                      onOpenDashboard={() => navigate("/dashboard")}
+                      onOpenClassAccess={() => navigate("/class")}
+                      onTogglePitchEdit={() => {
+                        setPitchEditMode((prev) => !prev);
+                        setEditMessage("");
+                      }}
+                      pitchEditEnabled={pitchEditMode}
+                      studentSubmitLabel={
+                        student.studentSubmitStatus === "saving"
+                          ? "Submitting..."
+                          : "Submit to Teacher"
+                      }
+                      onStudentSubmit={() => void handleSubmitToTeacher()}
+                      studentSubmitDisabled={
+                        student.studentSubmitStatus === "saving" ||
+                        !exportMusicXml
+                      }
+                      tempoBpm={playback.tempoBpm}
+                      onTempoBpmChange={playback.setTempoBpm}
+                      instrument={playback.instrument}
+                      onInstrumentChange={playback.setInstrument}
+                      countInEnabled={playback.countInEnabled}
+                      onCountInEnabledChange={playback.setCountInEnabled}
+                      isPlaying={playback.isPlaying}
+                      onPlayToggle={playback.play}
+                      playDisabled={currentMelody.length === 0}
+                      solfegeMode={solfege.solfegeMode}
+                      onSolfegeModeChange={solfege.setSolfegeMode}
+                      solfegeAccidentalMode={solfege.solfegeAccidentalMode}
+                      onSolfegeAccidentalModeChange={solfege.setSolfegeAccidentalMode}
+                      solfegeOverlayMode={solfege.solfegeOverlayMode}
+                      onSolfegeOverlayModeChange={solfege.setSolfegeOverlayMode}
+                    />
                   </div>
 
                   {teacher.foldersError ? (
@@ -2129,6 +1949,7 @@ function AppContent(): JSX.Element {
                                             )
                                           }
                                           disabled={
+                                            teacherFeaturesDisabled ||
                                             teacher.loadingSavedExerciseId !==
                                               null ||
                                             teacher.deletingSavedExerciseId !==
@@ -2149,6 +1970,7 @@ function AppContent(): JSX.Element {
                                             )
                                           }
                                           disabled={
+                                            teacherFeaturesDisabled ||
                                             teacher.loadingSavedExerciseId !==
                                               null ||
                                             teacher.deletingSavedExerciseId !==
@@ -2867,23 +2689,88 @@ function AppContent(): JSX.Element {
               ×
             </button>
             <h3>How To Use SightLine</h3>
-            <ol>
-              <li>Set parameters in the bottom panel.</li>
+            <p className="AppHistoryLabel">
+              SightLine supports teacher, student, and guest workflows. Use
+              Dashboard for account and subscription status, Melody Generator to
+              create/edit material, and Class Access to manage classes.
+            </p>
+            <h4>Melody Generator</h4>
+            <ul>
               <li>
-                Click <strong>Generate Melody</strong>.
+                Use <strong>Melody Preferences</strong> to set key, meter,
+                range, note values, and constraints.
               </li>
               <li>
-                Use <strong>Fix Melody</strong> to regenerate with updated
-                parameters.
+                <strong>Generate</strong> creates a new seed;{" "}
+                <strong>Fix Melody</strong> reruns with the current seed.
               </li>
-              <li>Review notation and refine with pitch edits if needed.</li>
               <li>
-                Toggle <strong>Edit Pitches</strong>, click the score, then use
-                arrow keys.
+                <strong>Pitch Edit</strong>: toggle edit mode, click notation,
+                then use arrow keys to move selected notes.
               </li>
-              <li>Use Play, Tempo, and Instrument to hear your melody.</li>
-              <li>Use Export MusicXML to download.</li>
-            </ol>
+              <li>
+                <strong>Playback</strong>: set tempo/instrument and optionally
+                enable a 1-measure count-in on the starting pitch.
+              </li>
+              <li>
+                <strong>Solfege</strong>: Off, Movable Do, or Fixed Do, with
+                accidental mode and optional notehead color overlay.
+              </li>
+              <li>
+                <strong>Projection Mode</strong> provides large-notation display
+                controls for classroom use.
+              </li>
+              <li>
+                Use <strong>Export</strong> to download MusicXML at any time.
+              </li>
+            </ul>
+            <h4>Teacher Features</h4>
+            <ul>
+              <li>
+                Save exercises to classes, update titles, and filter/load from
+                the saved library.
+              </li>
+              <li>
+                In <strong>Class Access</strong>, manage class code/passcode,
+                publish status, roster, and student login instructions.
+              </li>
+              <li>
+                Review student submissions and add approved work to your
+                library.
+              </li>
+              <li>
+                Build packets from selected exercises or use{" "}
+                <strong>Batch Generate</strong> for full packet creation and ZIP
+                export.
+              </li>
+              <li>
+                Save/clear per-class default settings from Melody Preferences.
+              </li>
+            </ul>
+            <h4>Student Features</h4>
+            <ul>
+              <li>
+                Join with class code, passcode, student ID, and optional PIN.
+              </li>
+              <li>
+                Load assigned exercises, track recent progress, and submit work
+                back to teacher.
+              </li>
+              <li>
+                Apply teacher defaults, then reset back to personal settings.
+              </li>
+            </ul>
+            <h4>Access and Billing</h4>
+            <ul>
+              <li>
+                Teacher class-management actions require allowed billing access
+                (active/trialing, admin, or comped).
+              </li>
+              <li>
+                If access is inactive, use <strong>Upgrade</strong> from
+                Dashboard to start checkout.
+              </li>
+            </ul>
           </div>
         </div>
       ) : null}

@@ -474,6 +474,141 @@ body {
   margin: 0 0 0.55rem;
 }
 
+.GeneratorToolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.ToolbarRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.ToolbarGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.ToolbarGroup--context {
+  flex: 1 1 26rem;
+  flex-wrap: nowrap;
+}
+
+.ToolbarGroup--primary,
+.ToolbarGroup--utilities,
+.ToolbarGroup--notation {
+  border-left: 1px solid #2b3a4f;
+  padding-left: 0.5rem;
+}
+
+.ToolbarGroup--utilities,
+.ToolbarGroup--notation {
+  margin-left: auto;
+}
+
+.ToolbarSpacer {
+  flex: 1 1 0.5rem;
+}
+
+.ToolbarField {
+  flex: 0 1 auto;
+}
+
+.ToolbarClassField {
+  min-width: 14rem;
+  flex: 0 0 auto;
+  justify-content: flex-start !important;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.ToolbarClassField select {
+  width: 14rem;
+}
+
+.ToolbarTitleField {
+  min-width: 0;
+  flex: 1 1 0;
+  max-width: none;
+  justify-content: flex-start;
+}
+
+.AppPlaybackField.ToolbarTitleField {
+  justify-content: flex-start !important;
+  width: 100%;
+}
+
+.ToolbarTitleField .AppExerciseTitleInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100% !important;
+}
+
+.ToolbarStaticText {
+  padding: 0 0.25rem;
+}
+
+.ToolbarMenuField {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #b6c6db;
+  font-size: 0.82rem;
+}
+
+.ToolbarMenuLabel {
+  white-space: nowrap;
+}
+
+.ToolbarMenuField select {
+  height: 2rem;
+  border-radius: 6px;
+  border: 1px solid #3a4b66;
+  background: #172233;
+  color: #e6edf6;
+  padding: 0 0.45rem;
+  font-size: 0.86rem;
+}
+
+.ToolbarMenuField select:focus {
+  outline: none;
+  border-color: #5c7396;
+}
+
+@media (max-width: 900px) {
+  .ToolbarSpacer {
+    display: none;
+  }
+
+  .ToolbarGroup--context {
+    flex-wrap: wrap;
+  }
+
+  .ToolbarGroup--utilities,
+  .ToolbarGroup--notation {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .ToolbarGroup--context,
+  .ToolbarGroup--primary,
+  .ToolbarGroup--utilities,
+  .ToolbarGroup--playback,
+  .ToolbarGroup--notation {
+    width: 100%;
+    border-left: none;
+    padding-left: 0;
+  }
+}
+
 .AppNotationToolbarRow {
   display: flex;
   align-items: center;
@@ -517,6 +652,11 @@ body {
 .AppToolbarCompactField input[type="checkbox"] {
   width: 1rem;
   height: 1rem;
+}
+
+.AppCountInField {
+  justify-content: flex-start;
+  gap: 0.2rem;
 }
 
 .AppToolbarNewFolder {
@@ -829,6 +969,11 @@ body {
   justify-content: flex-start;
 }
 
+.AppPlaybackField.AppCountInField {
+  justify-content: flex-start;
+  gap: 0.2rem;
+}
+
 .AppNotationToolbarRow--top .AppToolbarField {
   flex: 0 1 14rem;
 }
@@ -941,6 +1086,22 @@ body {
 
 .AppThemeLight .AppTitle {
   color: #1f2f44;
+}
+
+.AppThemeLight .ToolbarGroup--primary,
+.AppThemeLight .ToolbarGroup--utilities,
+.AppThemeLight .ToolbarGroup--notation {
+  border-left-color: #c8d4e3;
+}
+
+.AppThemeLight .ToolbarMenuField {
+  color: #4a607d;
+}
+
+.AppThemeLight .ToolbarMenuField select {
+  background: #f8fbff;
+  color: #1f2f44;
+  border-color: #9eb1c8;
 }
 
 .AppThemeLight .AppHistoryLabel {

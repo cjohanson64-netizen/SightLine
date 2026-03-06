@@ -2,8 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@14.25.0";
 import {
-  extractBearerToken,
-  verifyTeacherAuth,
+  requireTeacherAuth,
 } from "../_shared/billing.ts";
 
 const corsHeaders = {
@@ -47,12 +46,16 @@ Deno.serve(async (req: Request) => {
     const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
     const admin = createClient(supabaseUrl, serviceRoleKey);
 
-    const authResult = await verifyTeacherAuth(admin, extractBearerToken(req));
-    if (!authResult.ok) {
-      return jsonResponse({ error: authResult.error }, authResult.status);
+    let teacherId = "";
+    let email: string | null = null;
+    try {
+      const teacher = await requireTeacherAuth(admin, req);
+      teacherId = teacher.teacherId;
+      email = teacher.email;
+    } catch (authError) {
+      const message = authError instanceof Error ? authError.message : "Invalid/expired token";
+      return jsonResponse({ error: message }, 401);
     }
-
-    const { teacherId, email } = authResult;
 
     const { data: subscriptionRow, error: subscriptionError } = await admin
       .from("subscriptions")

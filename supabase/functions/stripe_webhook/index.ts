@@ -1,7 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import Stripe from "npm:stripe@14.25.0";
-import { mapStripeSubscriptionStatus } from "../_shared/billing.ts";
+import {
+  ACTIVE_SUBSCRIPTION_STATUSES,
+  mapStripeSubscriptionStatus,
+} from "../_shared/billing.ts";
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
@@ -27,6 +30,33 @@ async function upsertSubscriptionByUserId(
     current_period_end?: string | null;
   },
 ): Promise<void> {
+  const { data: existing, error: existingError } = await admin
+    .from("subscriptions")
+    .select("status, is_admin, is_comped")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError) {
+    throw new Error(existingError.message);
+  }
+
+  const existingStatus =
+    typeof existing?.status === "string" ? existing.status.toLowerCase() : null;
+  const protectedAccess = existing?.is_admin === true || existing?.is_comped === true;
+
+  let nextStatus =
+    data.status === undefined || data.status === null
+      ? existingStatus
+      : String(data.status).toLowerCase();
+
+  if (
+    protectedAccess &&
+    nextStatus !== null &&
+    !ACTIVE_SUBSCRIPTION_STATUSES.has(nextStatus) &&
+    existingStatus
+  ) {
+    nextStatus = existingStatus;
+  }
+
   const row: Record<string, unknown> = { user_id: userId };
   if (data.stripe_customer_id !== undefined) {
     row.stripe_customer_id = data.stripe_customer_id;
@@ -34,11 +64,17 @@ async function upsertSubscriptionByUserId(
   if (data.stripe_subscription_id !== undefined) {
     row.stripe_subscription_id = data.stripe_subscription_id;
   }
-  if (data.status !== undefined) {
-    row.status = data.status;
+  if (nextStatus !== null) {
+    row.status = nextStatus;
   }
   if (data.current_period_end !== undefined) {
     row.current_period_end = data.current_period_end;
+  }
+  if (existing?.is_admin === true) {
+    row.is_admin = true;
+  }
+  if (existing?.is_comped === true) {
+    row.is_comped = true;
   }
 
   const { error } = await admin.from("subscriptions").upsert(row, {

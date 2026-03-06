@@ -1,6 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { jwtVerify } from "npm:jose@5.9.6";
+import {
+  requireActiveSubscription,
+  requireTeacherAuth,
+} from "../_shared/billing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,37 +29,6 @@ type StudentClaims = {
   student_id?: string;
 };
 
-type TeacherAuthResult =
-  | { ok: true; teacherId: string }
-  | { ok: false; response: Response };
-
-async function verifyTeacherAuth(
-  req: Request,
-  supabaseUrl: string,
-  serviceRoleKey: string,
-  anonKey: string,
-): Promise<TeacherAuthResult> {
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-  if (!token) {
-    return {
-      ok: false,
-      response: jsonResponse({ error: "Missing Bearer token" }, 401),
-    };
-  }
-
-  const admin = createClient(supabaseUrl, serviceRoleKey);
-  const { data, error } = await admin.auth.getUser(token);
-  if (error || !data.user) {
-    return {
-      ok: false,
-      response: jsonResponse({ error: "Invalid/expired token" }, 401),
-    };
-  }
-
-  return { ok: true, teacherId: data.user.id };
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: corsHeaders });
@@ -64,9 +37,8 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const jwtSecret = Deno.env.get("CLASSROOM_JWT_SECRET");
-    if (!supabaseUrl || !serviceRoleKey || !anonKey || !jwtSecret) {
+    if (!supabaseUrl || !serviceRoleKey || !jwtSecret) {
       return jsonResponse({ error: "Server misconfigured" }, 500);
     }
     const admin = createClient(supabaseUrl, serviceRoleKey);
@@ -133,14 +105,17 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Missing token or folder_id" }, 400);
     }
 
-    const teacherAuth = await verifyTeacherAuth(
-      req,
-      supabaseUrl,
-      serviceRoleKey,
-      anonKey,
-    );
-    if (!teacherAuth.ok) {
-      return teacherAuth.response;
+    let teacherId = "";
+    try {
+      teacherId = (await requireTeacherAuth(admin, req)).teacherId;
+    } catch (authError) {
+      const message = authError instanceof Error ? authError.message : "Invalid/expired token";
+      return jsonResponse({ error: message }, 401);
+    }
+
+    const subscriptionResult = await requireActiveSubscription(admin, teacherId);
+    if (!subscriptionResult.ok) {
+      return jsonResponse({ error: subscriptionResult.error }, subscriptionResult.status);
     }
 
     const { data: folder, error: folderError } = await admin
@@ -149,7 +124,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", folder_id)
       .maybeSingle();
     if (folderError) throw folderError;
-    if (!folder || folder.owner_id !== teacherAuth.teacherId) {
+    if (!folder || folder.owner_id !== teacherId) {
       return jsonResponse({ error: "Not allowed" }, 403);
     }
 

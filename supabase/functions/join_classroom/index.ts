@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import bcrypt from "npm:bcryptjs@2.4.3";
 import { SignJWT } from "npm:jose@5.9.6";
-import { ACTIVE_SUBSCRIPTION_STATUSES } from "../_shared/billing.ts";
+import { getSubscriptionAccess } from "../_shared/billing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -102,15 +102,8 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Invalid classroom code" }, 401);
     }
 
-    const { data: ownerSubscription, error: ownerSubscriptionError } = await admin
-      .from("subscriptions")
-      .select("status")
-      .eq("user_id", folder.owner_id)
-      .maybeSingle();
-
-    if (ownerSubscriptionError) throw ownerSubscriptionError;
-    const ownerStatus = String(ownerSubscription?.status ?? "inactive").toLowerCase();
-    if (!ACTIVE_SUBSCRIPTION_STATUSES.has(ownerStatus)) {
+    const ownerAccess = await getSubscriptionAccess(admin, folder.owner_id);
+    if (!ownerAccess.allowed) {
       return jsonResponse({ error: "This class is not active." }, 403);
     }
 

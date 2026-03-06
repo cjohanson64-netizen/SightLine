@@ -110,6 +110,8 @@ export function useTeacherLibrary({
   const [classroomDefaultsMessage, setClassroomDefaultsMessage] = useState("");
   const [subscriptionStatus, setSubscriptionStatus] = useState("inactive");
   const [subscriptionCurrentPeriodEnd, setSubscriptionCurrentPeriodEnd] = useState<string | null>(null);
+  const [subscriptionIsAdmin, setSubscriptionIsAdmin] = useState(false);
+  const [subscriptionIsComped, setSubscriptionIsComped] = useState(false);
   const [subscriptionLoadStatus, setSubscriptionLoadStatus] = useState<"idle" | "loading" | "loaded" | "error">("idle");
   const [subscriptionMessage, setSubscriptionMessage] = useState("");
   const [checkoutStatus, setCheckoutStatus] = useState<"idle" | "starting" | "redirecting" | "error">("idle");
@@ -180,9 +182,16 @@ export function useTeacherLibrary({
     [teacherProgressRows],
   );
   const hasActiveSubscription = useMemo(
-    () => ACTIVE_SUBSCRIPTION_STATUSES.has(subscriptionStatus.toLowerCase()),
-    [subscriptionStatus],
+    () =>
+      subscriptionIsAdmin ||
+      subscriptionIsComped ||
+      ACTIVE_SUBSCRIPTION_STATUSES.has(subscriptionStatus.toLowerCase()),
+    [subscriptionStatus, subscriptionIsAdmin, subscriptionIsComped],
   );
+  const subscriptionBadgeLabel = useMemo(() => {
+    if (subscriptionIsAdmin || subscriptionIsComped) return "Admin/Comped";
+    return hasActiveSubscription ? "Active" : "Inactive";
+  }, [hasActiveSubscription, subscriptionIsAdmin, subscriptionIsComped]);
 
   const filteredSavedExercises = useMemo(() =>
     folderFilterId === "__ALL__" ? savedExercises : savedExercises.filter(e => e.folder_id === folderFilterId),
@@ -278,6 +287,8 @@ export function useTeacherLibrary({
     if (mode !== "teacher" || !authUserId) {
       setSubscriptionStatus("inactive");
       setSubscriptionCurrentPeriodEnd(null);
+      setSubscriptionIsAdmin(false);
+      setSubscriptionIsComped(false);
       setSubscriptionLoadStatus("idle");
       setSubscriptionMessage("");
       return;
@@ -286,13 +297,15 @@ export function useTeacherLibrary({
     setSubscriptionMessage("");
     const { data, error } = await supabase
       .from("subscriptions")
-      .select("status, current_period_end")
+      .select("status, current_period_end, is_admin, is_comped")
       .eq("user_id", authUserId)
       .maybeSingle();
     if (error) {
       setSubscriptionLoadStatus("error");
       setSubscriptionStatus("inactive");
       setSubscriptionCurrentPeriodEnd(null);
+      setSubscriptionIsAdmin(false);
+      setSubscriptionIsComped(false);
       setSubscriptionMessage(error.message);
       return;
     }
@@ -300,6 +313,8 @@ export function useTeacherLibrary({
     setSubscriptionCurrentPeriodEnd(
       typeof data?.current_period_end === "string" ? data.current_period_end : null,
     );
+    setSubscriptionIsAdmin(data?.is_admin === true);
+    setSubscriptionIsComped(data?.is_comped === true);
     setSubscriptionLoadStatus("loaded");
   }, [mode, authUserId]);
 
@@ -307,6 +322,8 @@ export function useTeacherLibrary({
     if (mode !== "teacher" || !authUserId) {
       setSubscriptionStatus("inactive");
       setSubscriptionCurrentPeriodEnd(null);
+      setSubscriptionIsAdmin(false);
+      setSubscriptionIsComped(false);
       setSubscriptionLoadStatus("idle");
       setSubscriptionMessage("");
       return;
@@ -944,7 +961,8 @@ export function useTeacherLibrary({
     classroomPublish, setClassroomPublish, classroomAccessStatus, classroomAccessMessage,
     classroomLastPasscode, classroomDefaultsStatus, classroomDefaultsMessage,
     subscriptionStatus, subscriptionCurrentPeriodEnd, subscriptionLoadStatus,
-    subscriptionMessage, checkoutStatus, hasActiveSubscription,
+    subscriptionMessage, checkoutStatus, hasActiveSubscription, subscriptionIsAdmin,
+    subscriptionIsComped, subscriptionBadgeLabel,
     // Roster
     classroomRoster, classroomRosterStatus, classroomRosterError,
     newRosterStudentId, setNewRosterStudentId, bulkRosterStudentIds, setBulkRosterStudentIds,

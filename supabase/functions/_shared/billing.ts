@@ -2,9 +2,12 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 
-export type TeacherAuthResult =
-  | { ok: true; teacherId: string; email: string | null }
-  | { ok: false; status: number; error: string };
+export type SubscriptionAccess = {
+  allowed: boolean;
+  status: string | null;
+  is_admin: boolean;
+  is_comped: boolean;
+};
 
 export function extractBearerToken(req: Request): string | null {
   const authHeader = req.headers.get("Authorization") ?? "";
@@ -12,34 +15,47 @@ export function extractBearerToken(req: Request): string | null {
   return token || null;
 }
 
-export async function verifyTeacherAuth(
+export async function requireTeacherAuth(
   admin: SupabaseClient,
-  bearerToken: string | null,
-): Promise<TeacherAuthResult> {
+  req: Request,
+): Promise<{ teacherId: string; email: string | null }> {
+  const bearerToken = extractBearerToken(req);
   if (!bearerToken) {
-    return { ok: false, status: 401, error: "Missing Bearer token" };
+    throw new Error("Missing Bearer token");
   }
   const { data, error } = await admin.auth.getUser(bearerToken);
   if (error || !data.user?.id) {
-    return { ok: false, status: 401, error: "Invalid/expired token" };
+    throw new Error("Invalid/expired token");
   }
-  return { ok: true, teacherId: data.user.id, email: data.user.email ?? null };
+  return { teacherId: data.user.id, email: data.user.email ?? null };
 }
 
-export async function requireActiveSubscription(
+export async function getSubscriptionAccess(
   admin: SupabaseClient,
-  userId: string,
-): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  teacherId: string,
+): Promise<SubscriptionAccess> {
   const { data, error } = await admin
     .from("subscriptions")
-    .select("status")
-    .eq("user_id", userId)
+    .select("status, is_admin, is_comped")
+    .eq("user_id", teacherId)
     .maybeSingle();
   if (error) {
     throw new Error(error.message);
   }
-  const status = String(data?.status ?? "inactive").toLowerCase();
-  if (!ACTIVE_SUBSCRIPTION_STATUSES.has(status)) {
+  const status = typeof data?.status === "string" ? data.status.toLowerCase() : null;
+  const is_admin = data?.is_admin === true;
+  const is_comped = data?.is_comped === true;
+  const allowed =
+    is_admin || is_comped || (status !== null && ACTIVE_SUBSCRIPTION_STATUSES.has(status));
+  return { allowed, status, is_admin, is_comped };
+}
+
+export async function requireActiveSubscription(
+  admin: SupabaseClient,
+  teacherId: string,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const access = await getSubscriptionAccess(admin, teacherId);
+  if (!access.allowed) {
     return { ok: false, status: 402, error: "Subscription required" };
   }
   return { ok: true };

@@ -1,9 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
-  extractBearerToken,
   requireActiveSubscription,
-  verifyTeacherAuth,
+  requireTeacherAuth,
 } from "../_shared/billing.ts";
 
 const corsHeaders = {
@@ -41,11 +40,14 @@ Deno.serve(async (req: Request) => {
 
     const admin = createClient(supabaseUrl, serviceRoleKey);
 
-    const authResult = await verifyTeacherAuth(admin, extractBearerToken(req));
-    if (!authResult.ok) {
-      return jsonResponse({ error: authResult.error }, authResult.status);
+    let teacherId = "";
+    try {
+      const teacher = await requireTeacherAuth(admin, req);
+      teacherId = teacher.teacherId;
+    } catch (authError) {
+      const message = authError instanceof Error ? authError.message : "Invalid or expired token.";
+      return jsonResponse({ error: message }, 401);
     }
-    const teacherId = authResult.teacherId;
 
     const subscriptionResult = await requireActiveSubscription(admin, teacherId);
     if (!subscriptionResult.ok) {
