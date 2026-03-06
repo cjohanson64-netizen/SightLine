@@ -1700,6 +1700,7 @@ function AppContent(): JSX.Element {
                           Count-in (1 measure)
                           <input
                             type="checkbox"
+                            className="AppLibraryCheckbox AppCountInCheckbox"
                             checked={playback.countInEnabled}
                             onChange={(e) =>
                               playback.setCountInEnabled(e.target.checked)

@@ -413,6 +413,12 @@ body {
   outline-offset: 1px;
 }
 
+.AppCountInCheckbox {
+  width: 2rem !important;
+  min-width: 2rem !important;
+  height: 2rem !important;
+}
+
 .AppHeader {
   display: flex;
   gap: 20px;
@@ -500,12 +506,17 @@ body {
   flex: 0 1 auto;
 }
 
-.AppToolbarCompactField input {
+.AppToolbarCompactField input:not([type="checkbox"]) {
   width: 4.5rem;
 }
 
 .AppToolbarCompactField select {
   min-width: 7.2rem;
+}
+
+.AppToolbarCompactField input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
 }
 
 .AppToolbarNewFolder {
@@ -863,6 +874,54 @@ body {
   border-color: #5c7396;
 }
 
+.AppPlaybackField input.AppLibraryCheckbox {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  box-sizing: border-box;
+  width: 1rem !important;
+  min-width: 1rem !important;
+  height: 1rem !important;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #5f7699 !important;
+  border-radius: 4px !important;
+  background: #172233 !important;
+  color: inherit;
+  display: inline-grid !important;
+  place-content: center;
+  cursor: pointer;
+}
+
+.AppPlaybackField input.AppLibraryCheckbox.AppCountInCheckbox {
+  width: 2rem !important;
+  min-width: 2rem !important;
+  height: 2rem !important;
+}
+
+.AppPlaybackField input.AppLibraryCheckbox::after {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  transform: scale(0);
+  transition: transform 0.12s ease-in-out;
+  clip-path: polygon(14% 46%, 0 60%, 43% 100%, 100% 20%, 84% 6%, 41% 71%);
+  background: #0e1724;
+}
+
+.AppPlaybackField input.AppLibraryCheckbox:checked {
+  background: #a8c7ea !important;
+  border-color: #a8c7ea !important;
+}
+
+.AppPlaybackField input.AppLibraryCheckbox:checked::after {
+  transform: scale(1);
+}
+
+.AppPlaybackField input.AppLibraryCheckbox:focus-visible {
+  outline: 2px solid #7ca1d4;
+  outline-offset: 1px;
+}
+
 .AppExerciseTitleInput {
   width: 100% !important;
   min-height: 2.4rem;
@@ -914,6 +973,20 @@ body {
 .AppThemeLight .AppPlaybackField input:focus,
 .AppThemeLight .AppPlaybackField select:focus {
   border-color: #6f88a7;
+}
+
+.AppThemeLight .AppPlaybackField input.AppLibraryCheckbox {
+  background: #f8fbff !important;
+  border-color: #9eb1c8 !important;
+}
+
+.AppThemeLight .AppPlaybackField input.AppLibraryCheckbox:checked {
+  background: #2f67a8 !important;
+  border-color: #2f67a8 !important;
+}
+
+.AppThemeLight .AppPlaybackField input.AppLibraryCheckbox::after {
+  background: #ffffff;
 }
 
 .AppThemeLight .AppHistoryLabel input:not([type="checkbox"]):focus,
