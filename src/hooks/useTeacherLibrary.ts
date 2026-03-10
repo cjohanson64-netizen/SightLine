@@ -41,30 +41,6 @@ function getSupabaseEnv() {
   return { supabaseUrl, anonKey };
 }
 
-async function callEdgeFunction(
-  endpoint: string,
-  body: Record<string, unknown>,
-  authToken?: string,
-) {
-  const { supabaseUrl, anonKey } = getSupabaseEnv();
-  if (!supabaseUrl || !anonKey) throw new Error("Missing Supabase environment variables.");
-  const response = await fetch(`${supabaseUrl}/functions/v1/${endpoint}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: anonKey,
-      Authorization: `Bearer ${authToken ?? anonKey}`,
-    },
-    body: JSON.stringify(body),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const message = typeof payload.error === "string" ? payload.error : response.statusText;
-    throw new Error(message);
-  }
-  return payload;
-}
-
 function randomSeed(): number {
   return Math.floor(Math.random() * 1_000_000);
 }
@@ -112,9 +88,11 @@ export function useTeacherLibrary({
   const [subscriptionCurrentPeriodEnd, setSubscriptionCurrentPeriodEnd] = useState<string | null>(null);
   const [subscriptionIsAdmin, setSubscriptionIsAdmin] = useState(false);
   const [subscriptionIsComped, setSubscriptionIsComped] = useState(false);
+  const [subscriptionStripeCustomerId, setSubscriptionStripeCustomerId] = useState<string | null>(null);
   const [subscriptionLoadStatus, setSubscriptionLoadStatus] = useState<"idle" | "loading" | "loaded" | "error">("idle");
   const [subscriptionMessage, setSubscriptionMessage] = useState("");
   const [checkoutStatus, setCheckoutStatus] = useState<"idle" | "starting" | "redirecting" | "error">("idle");
+  const [portalStatus, setPortalStatus] = useState<"idle" | "starting" | "redirecting" | "error">("idle");
 
   // Roster
   const [classroomRoster, setClassroomRoster] = useState<ClassroomStudentItem[]>([]);
@@ -289,6 +267,7 @@ export function useTeacherLibrary({
       setSubscriptionCurrentPeriodEnd(null);
       setSubscriptionIsAdmin(false);
       setSubscriptionIsComped(false);
+      setSubscriptionStripeCustomerId(null);
       setSubscriptionLoadStatus("idle");
       setSubscriptionMessage("");
       return;
@@ -297,7 +276,7 @@ export function useTeacherLibrary({
     setSubscriptionMessage("");
     const { data, error } = await supabase
       .from("subscriptions")
-      .select("status, current_period_end, is_admin, is_comped")
+      .select("status, current_period_end, is_admin, is_comped, stripe_customer_id")
       .eq("user_id", authUserId)
       .maybeSingle();
     if (error) {
@@ -306,6 +285,7 @@ export function useTeacherLibrary({
       setSubscriptionCurrentPeriodEnd(null);
       setSubscriptionIsAdmin(false);
       setSubscriptionIsComped(false);
+      setSubscriptionStripeCustomerId(null);
       setSubscriptionMessage(error.message);
       return;
     }
@@ -315,6 +295,12 @@ export function useTeacherLibrary({
     );
     setSubscriptionIsAdmin(data?.is_admin === true);
     setSubscriptionIsComped(data?.is_comped === true);
+    setSubscriptionStripeCustomerId(
+      typeof data?.stripe_customer_id === "string" &&
+        data.stripe_customer_id.trim().length > 0
+        ? data.stripe_customer_id.trim()
+        : null,
+    );
     setSubscriptionLoadStatus("loaded");
   }, [mode, authUserId]);
 
@@ -324,8 +310,11 @@ export function useTeacherLibrary({
       setSubscriptionCurrentPeriodEnd(null);
       setSubscriptionIsAdmin(false);
       setSubscriptionIsComped(false);
+      setSubscriptionStripeCustomerId(null);
       setSubscriptionLoadStatus("idle");
       setSubscriptionMessage("");
+      setCheckoutStatus("idle");
+      setPortalStatus("idle");
       return;
     }
     void refreshSubscriptionStatus();
@@ -610,11 +599,16 @@ export function useTeacherLibrary({
   const startCheckout = useCallback(async () => {
     if (mode !== "teacher" || !authUserId) return false;
     setCheckoutStatus("starting");
+    setPortalStatus((prev) => (prev === "redirecting" ? prev : "idle"));
     setSubscriptionMessage("");
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("Sign in again.");
-      const payload = await callEdgeFunction("create_checkout_session", {}, session.access_token) as { url?: unknown };
+      const { data: payload, error } = await supabase.functions.invoke(
+        "create_checkout_session",
+        { body: {} },
+      );
+      if (error) throw new Error(error.message);
       if (typeof payload.url !== "string" || payload.url.length === 0) {
         throw new Error("Checkout URL missing from response.");
       }
@@ -624,6 +618,34 @@ export function useTeacherLibrary({
     } catch (error) {
       setCheckoutStatus("error");
       setSubscriptionMessage(error instanceof Error ? error.message : "Unable to start checkout.");
+      return false;
+    }
+  }, [mode, authUserId]);
+
+  const startPortalSession = useCallback(async () => {
+    if (mode !== "teacher" || !authUserId) return false;
+    setPortalStatus("starting");
+    setCheckoutStatus((prev) => (prev === "redirecting" ? prev : "idle"));
+    setSubscriptionMessage("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Sign in again.");
+      const { data: payload, error } = await supabase.functions.invoke(
+        "create_portal_session",
+        { body: {} },
+      );
+      if (error) throw new Error(error.message);
+      if (typeof payload.url !== "string" || payload.url.length === 0) {
+        throw new Error("Portal URL missing from response.");
+      }
+      setPortalStatus("redirecting");
+      window.location.assign(payload.url);
+      return true;
+    } catch (error) {
+      setPortalStatus("error");
+      setSubscriptionMessage(
+        error instanceof Error ? error.message : "Unable to open billing portal.",
+      );
       return false;
     }
   }, [mode, authUserId]);
@@ -962,7 +984,7 @@ export function useTeacherLibrary({
     classroomLastPasscode, classroomDefaultsStatus, classroomDefaultsMessage,
     subscriptionStatus, subscriptionCurrentPeriodEnd, subscriptionLoadStatus,
     subscriptionMessage, checkoutStatus, hasActiveSubscription, subscriptionIsAdmin,
-    subscriptionIsComped, subscriptionBadgeLabel,
+    subscriptionIsComped, subscriptionStripeCustomerId, subscriptionBadgeLabel, portalStatus,
     // Roster
     classroomRoster, classroomRosterStatus, classroomRosterError,
     newRosterStudentId, setNewRosterStudentId, bulkRosterStudentIds, setBulkRosterStudentIds,
@@ -996,7 +1018,7 @@ export function useTeacherLibrary({
     // Actions
     saveToSupabase, loadSavedExercise, deleteSavedExercise, createFolder,
     saveClassDefaults, clearClassDefaults, setClassroomAccess,
-    refreshSubscriptionStatus, startCheckout,
+    refreshSubscriptionStatus, startCheckout, startPortalSession,
     addRosterStudent, bulkAddRosterStudents, toggleRosterStudent, deleteRosterStudent,
     approveSubmission, rejectSubmission,
     fetchPacketRenderItems, batchGenerate, openBatchModal, deletePacket,

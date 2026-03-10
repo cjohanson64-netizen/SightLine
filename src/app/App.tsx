@@ -3,7 +3,7 @@ import type {
   FormEvent as ReactFormEvent,
   MouseEvent as ReactMouseEvent,
 } from "react";
-import Logo from "../assets/TAT Logo.svg";
+import Logo from "../assets/SightLine Logo.svg";
 import {
   BrowserRouter,
   Link,
@@ -20,6 +20,7 @@ import StudentJoinForm from "../components/StudentJoinForm/StudentJoinForm";
 import ErrorBanner from "../components/ErrorBanner/ErrorBanner";
 import AppNavbar from "../components/AppNavbar";
 import GeneratorToolbar from "../components/GeneratorToolbar";
+import SightLineLandingPage from "../components/SightLineLandingPage";
 
 import { generateExercise } from "../core/engine";
 import { buildPacketHtml } from "../core/packet/renderPacketHtml";
@@ -732,7 +733,8 @@ function AppContent(): JSX.Element {
 
   const handleTeacherSignIn = async () => {
     setShowAuthChoiceModal(false);
-    await auth.signInWithGoogle();
+    const redirectPath = location.pathname === "/" ? "/dashboard" : location.pathname;
+    await auth.signInWithGoogle(redirectPath);
   };
 
   const handleStudentSignIn = () => {
@@ -746,7 +748,10 @@ function AppContent(): JSX.Element {
 
   const handleJoinClassroom = async () => {
     const result = await student.join();
-    if (result) navigate("/generator");
+    if (result) {
+      const nextPath = location.pathname === "/" ? "/dashboard" : "/generator";
+      navigate(nextPath);
+    }
   };
 
   const handleLeaveClassroom = () => {
@@ -783,7 +788,7 @@ function AppContent(): JSX.Element {
       `Previewing submission from ${submission.student_id}.`,
     );
     setPitchEditMode(false);
-    navigate("/");
+    navigate("/generator");
   };
 
   // ── Teacher: load saved exercise ──────────────────────────────────────────
@@ -907,6 +912,24 @@ function AppContent(): JSX.Element {
     }
     void handleAuthClick();
   };
+  const subscriptionStatusNormalized = teacher.subscriptionStatus.toLowerCase();
+  const subscriptionAllowed = teacher.hasActiveSubscription;
+  const hasStripeCustomer = Boolean(teacher.subscriptionStripeCustomerId);
+  const hasActiveOrTrialingSubscription =
+    subscriptionStatusNormalized === "active" ||
+    subscriptionStatusNormalized === "trialing";
+  const canManageSubscription =
+    subscriptionAllowed &&
+    (hasActiveOrTrialingSubscription || hasStripeCustomer);
+  const manageDisabledMissingCustomer =
+    subscriptionAllowed &&
+    !canManageSubscription &&
+    (teacher.subscriptionIsAdmin || teacher.subscriptionIsComped);
+  const subscriptionActionLoading =
+    teacher.checkoutStatus === "starting" ||
+    teacher.checkoutStatus === "redirecting" ||
+    teacher.portalStatus === "starting" ||
+    teacher.portalStatus === "redirecting";
 
   // ── Dashboard view ────────────────────────────────────────────────────────
   const dashboardView = (
@@ -934,15 +957,38 @@ function AppContent(): JSX.Element {
                   Renews: {formatSavedDate(teacher.subscriptionCurrentPeriodEnd)}
                 </p>
               ) : null}
-              {!teacher.hasActiveSubscription ? (
+              {teacher.subscriptionIsAdmin || teacher.subscriptionIsComped ? (
+                <p className="AppHistoryLabel">Admin/Comped bypass enabled.</p>
+              ) : null}
+              {!subscriptionAllowed ? (
                 <button
                   type="button"
                   className="AppHistoryButton AppProjectionToggleButton"
                   onClick={() => void teacher.startCheckout()}
-                  disabled={teacher.checkoutStatus === "starting" || teacher.checkoutStatus === "redirecting"}
+                  disabled={subscriptionActionLoading}
                 >
                   {teacher.checkoutStatus === "starting" ? "Starting..." : "Upgrade"}
                 </button>
+              ) : null}
+              {subscriptionAllowed ? (
+                <button
+                  type="button"
+                  className="AppHistoryButton AppProjectionToggleButton"
+                  onClick={() => void teacher.startPortalSession()}
+                  disabled={subscriptionActionLoading || manageDisabledMissingCustomer}
+                  title={
+                    manageDisabledMissingCustomer
+                      ? "No Stripe customer record for this account"
+                      : "Open Stripe billing portal"
+                  }
+                >
+                  {teacher.portalStatus === "starting"
+                    ? "Opening..."
+                    : "Manage Subscription"}
+                </button>
+              ) : null}
+              {mode === "teacher" && teacher.subscriptionMessage ? (
+                <p className="AppHistoryLabel">{teacher.subscriptionMessage}</p>
               ) : null}
             </>
           ) : (
@@ -979,9 +1025,6 @@ function AppContent(): JSX.Element {
         </div>
       </div>
       {billingNotice ? <p className="AppHistoryLabel">{billingNotice}</p> : null}
-      {mode === "teacher" && teacher.subscriptionMessage ? (
-        <p className="AppHistoryLabel">{teacher.subscriptionMessage}</p>
-      ) : null}
       <div className="AppDashboardActions">
         <Link className="AppHistoryButton" to="/generator">
           Open Melody Generator
@@ -1531,22 +1574,23 @@ function AppContent(): JSX.Element {
       onClickCapture={handleStudentInteractionClickCapture}
       onChangeCapture={handleStudentInteractionChangeCapture}
     >
-      <AppNavbar
-        modeLabel={modeLabel}
-        authLabel={navAuthLabel}
-        onAuthClick={handleNavAuthClick}
-        isProjectionMode={projection.isProjectionMode}
-        canAccessClass={mode === "teacher"}
-        theme={theme}
-        onThemeChange={setTheme}
-      />
+      {location.pathname !== "/" ? (
+        <AppNavbar
+          modeLabel={modeLabel}
+          authLabel={navAuthLabel}
+          onAuthClick={handleNavAuthClick}
+          isProjectionMode={projection.isProjectionMode}
+          canAccessClass={mode === "teacher"}
+          theme={theme}
+          onThemeChange={setTheme}
+        />
+      ) : null}
 
       {!projection.isProjectionMode && location.pathname === "/dashboard" ? (
         <div className="AppIntro">
           <div className="AppBrand">
-            <img src={Logo} alt="TAT Logo" className="logo" />
+            <img src={Logo} alt="SightLine Logo" className="logo" />
             <div>
-              <h1 className="AppTitle">SightLine</h1>
               <p className="AppSubtitle">Create sightreading materials in seconds.</p>
               <p className="AppSubtitle">Powered by TryAngleTree</p>
             </div>
@@ -1564,11 +1608,19 @@ function AppContent(): JSX.Element {
       ) : null}
 
       <Routes>
-        <Route path="/generator" element={<Navigate to="/" replace />} />
+        <Route
+          path="/"
+          element={
+            <SightLineLandingPage
+              onPrimaryCta={() => navigate("/generator")}
+              onSecondaryCta={() => navigate("/dashboard")}
+            />
+          }
+        />
         <Route path="/dashboard" element={dashboardView} />
 
         <Route
-          path="/"
+          path="/generator"
           element={
             <div
               className={`AppMain ${projection.isProjectionMode ? "AppMainProjection" : ""}`}
@@ -2010,7 +2062,7 @@ function AppContent(): JSX.Element {
         <Route
           path="/class"
           element={
-            mode === "teacher" ? classAccessView : <Navigate to="/" replace />
+            mode === "teacher" ? classAccessView : <Navigate to="/generator" replace />
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />

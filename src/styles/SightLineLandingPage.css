@@ -1,0 +1,299 @@
+.LandingPage {
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 500px at 10% -10%, rgba(29, 78, 216, 0.28), transparent 60%),
+    radial-gradient(900px 500px at 90% 0%, rgba(20, 184, 166, 0.2), transparent 58%),
+    linear-gradient(180deg, #020617 0%, #0b1120 100%);
+  color: #e2e8f0;
+}
+
+.LandingContainer {
+  width: min(1120px, calc(100% - 3rem));
+  margin: 0 auto;
+}
+
+.LandingNav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(12px);
+  background: rgba(2, 6, 23, 0.78);
+  border-bottom: 1px solid rgba(100, 116, 139, 0.35);
+}
+
+.LandingNavRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 72px;
+}
+
+.LandingBrand {
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #f8fafc;
+  font-size: 1.1rem;
+}
+
+.LandingNavLinks {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.LandingNavLinks a {
+  text-decoration: none;
+  color: #cbd5e1;
+  font-size: 0.93rem;
+  font-weight: 600;
+}
+
+.LandingNavLinks a:hover {
+  color: #f8fafc;
+}
+
+.LandingHero {
+  padding: 5.5rem 0 4rem;
+}
+
+.LandingHeroGrid {
+  display: grid;
+  grid-template-columns: 1.25fr 0.95fr;
+  gap: 2rem;
+  align-items: stretch;
+}
+
+.LandingKicker {
+  margin: 0 0 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #67e8f9;
+}
+
+.LandingHero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4.5vw, 3.4rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.LandingLead {
+  margin: 1rem 0 0;
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: #cbd5e1;
+  max-width: 48ch;
+}
+
+.LandingBuilderNote {
+  margin-top: 1.2rem;
+  font-size: 0.95rem;
+  color: #5eead4;
+  font-weight: 600;
+}
+
+.LandingActions {
+  margin-top: 1.45rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.LandingButton {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.78rem 1.2rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  background: linear-gradient(135deg, #14b8a6 0%, #0ea5e9 100%);
+  color: #02131f;
+}
+
+.LandingButton:hover {
+  filter: brightness(1.03);
+}
+
+.LandingButtonGhost {
+  background: rgba(15, 23, 42, 0.74);
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+.LandingHeroPanel {
+  border-radius: 20px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(15, 23, 42, 0.82);
+  box-shadow: 0 10px 35px rgba(2, 6, 23, 0.45);
+  padding: 1.5rem;
+}
+
+.LandingHeroPanel h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.LandingHeroPanel ul {
+  margin: 0.8rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.8rem;
+  color: #cbd5e1;
+}
+
+.LandingSection {
+  padding: 2.5rem 0;
+}
+
+.LandingSectionAlt {
+  background: rgba(15, 23, 42, 0.5);
+  border-top: 1px solid rgba(100, 116, 139, 0.28);
+  border-bottom: 1px solid rgba(100, 116, 139, 0.28);
+}
+
+.LandingSection h2 {
+  margin: 0;
+  font-size: clamp(1.45rem, 3vw, 2rem);
+}
+
+.LandingSectionLead {
+  margin: 0.65rem 0 0;
+  color: #94a3b8;
+  max-width: 72ch;
+}
+
+.LandingCardGrid {
+  margin-top: 1.35rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.LandingCardGridSingleCol {
+  grid-template-columns: 1fr;
+}
+
+.LandingCard {
+  padding: 1.05rem;
+  border-radius: 14px;
+  border: 1px solid rgba(100, 116, 139, 0.35);
+  background: rgba(15, 23, 42, 0.84);
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.35);
+}
+
+.LandingCard h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.LandingCard p {
+  margin: 0.45rem 0 0;
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.LandingChipGrid {
+  margin-top: 1.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.LandingChip {
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(45, 212, 191, 0.38);
+  background: rgba(13, 30, 44, 0.78);
+  color: #99f6e4;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.LandingQuote {
+  font-style: italic;
+}
+
+.LandingQuoteAuthor {
+  margin-top: 0.7rem;
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.LandingFinalCta {
+  padding-bottom: 4rem;
+}
+
+.LandingFinalCtaBox {
+  border-radius: 18px;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(7, 36, 53, 0.95));
+  padding: 1.5rem;
+  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.4);
+}
+
+.LandingFinalCtaBox h2 {
+  margin: 0;
+}
+
+.LandingFinalCtaBox p {
+  margin: 0.7rem 0 0;
+  color: #cbd5e1;
+}
+
+.LandingFooter {
+  border-top: 1px solid rgba(100, 116, 139, 0.35);
+  background: #020617;
+  padding: 1.2rem 0;
+}
+
+.LandingFooterRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.LandingFooterRow p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 1024px) {
+  .LandingHeroGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .LandingContainer {
+    width: min(1120px, calc(100% - 1.6rem));
+  }
+
+  .LandingNavRow {
+    min-height: 64px;
+  }
+
+  .LandingNavLinks {
+    display: none;
+  }
+
+  .LandingHero {
+    padding-top: 4.2rem;
+  }
+
+  .LandingCardGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .LandingFooterRow {
+    justify-content: flex-start;
+  }
+}

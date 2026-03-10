@@ -472,6 +472,12 @@ verify_jwt = false
 import_map = "./functions/create_checkout_session/deno.json"
 entrypoint = "./functions/create_checkout_session/index.ts"
 
+[functions.create_portal_session]
+enabled = true
+verify_jwt = false
+import_map = "./functions/create_portal_session/deno.json"
+entrypoint = "./functions/create_portal_session/index.ts"
+
 [functions.stripe_webhook]
 enabled = true
 verify_jwt = false

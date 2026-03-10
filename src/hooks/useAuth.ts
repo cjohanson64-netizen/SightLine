@@ -62,10 +62,10 @@ export function useAuth() {
     await supabase.auth.signOut();
   };
 
-  const signInWithGoogle = async () => {
-  const redirectTo = import.meta.env.DEV
-    ? "http://localhost:5174"
-    : "https://sight-line-topaz.vercel.app";
+  const signInWithGoogle = async (redirectPath = "/"): Promise<void> => {
+  const redirectTo = new URL(redirectPath, window.location.origin).toString();
+  console.log("[AUTH] origin:", window.location.origin);
+  console.log("[AUTH] redirectTo:", redirectTo);
 
   await supabase.auth.signInWithOAuth({
     provider: "google",

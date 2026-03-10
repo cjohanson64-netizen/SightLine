@@ -27,6 +27,15 @@ export default function AppNavbar({
     <header className="AppNavBar">
       <nav className="AppNavLinks" aria-label="Main navigation">
         <NavLink
+          to="/"
+          className={({ isActive }) =>
+            `AppNavLink${isActive ? " AppNavLinkActive" : ""}`
+          }
+          end
+        >
+          Home
+        </NavLink>
+        <NavLink
           to="/dashboard"
           className={({ isActive }) =>
             `AppNavLink${isActive ? " AppNavLinkActive" : ""}`
@@ -35,11 +44,10 @@ export default function AppNavbar({
           Dashboard
         </NavLink>
         <NavLink
-          to="/"
+          to="/generator"
           className={({ isActive }) =>
             `AppNavLink${isActive ? " AppNavLinkActive" : ""}`
           }
-          end
         >
           Melody Generator
         </NavLink>
