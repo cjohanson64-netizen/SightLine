@@ -23,6 +23,7 @@ import GeneratorToolbar from "../components/GeneratorToolbar";
 import SightLineLandingPage from "../components/SightLineLandingPage";
 
 import { generateExercise } from "../core/engine";
+import { generateMelodyTetrachord } from "../features/melodyGenerator/generators/generateMelodyTetrachord.js";
 import { buildPacketHtml } from "../core/packet/renderPacketHtml";
 import { toMusicXmlFromMelody } from "../core/projection/toMusicXml";
 import {
@@ -61,6 +62,8 @@ interface AttackView {
   midi: number;
   noteId: string;
 }
+
+type GenerationStrategyName = "tonnetz" | "tetrachord";
 
 // ---------------------------------------------------------------------------
 // Pure helpers (kept local because they depend on domain types)
@@ -318,6 +321,8 @@ function AppContent(): JSX.Element {
   const [currentMelody, setCurrentMelody] = useState<MelodyEvent[]>([]);
   const [currentBeatsPerMeasure, setCurrentBeatsPerMeasure] =
     useState<number>(4);
+  const [currentGenerationStrategy, setCurrentGenerationStrategy] =
+    useState<GenerationStrategyName>("tonnetz");
   const [currentSpecSnapshot, setCurrentSpecSnapshot] =
     useState<ExerciseSpec | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
@@ -566,6 +571,7 @@ function AppContent(): JSX.Element {
       setError(output.error);
       setRelaxationNotice("");
       setLogs(output.logs);
+      setCurrentGenerationStrategy("tonnetz");
       return false;
     }
     const nextSpecSnapshot = normalizeUserConstraintsInSpec(specForRun);
@@ -580,10 +586,36 @@ function AppContent(): JSX.Element {
     setLogs(output.logs);
     setError(null);
     setRelaxationNotice(relaxationMessage(output.relaxationTier));
+    setCurrentGenerationStrategy("tonnetz");
     setSelectionIndex(0);
     setSelectedNoteId(null);
     setEditMessage("");
     return true;
+  };
+
+  const applyGeneratedMelody = (input: {
+    melody: MelodyEvent[];
+    musicXml: string;
+    logs: string[];
+    specForRun: ExerciseSpec;
+    strategy: GenerationStrategyName;
+  }) => {
+    playback.stop();
+    setMusicXml(input.musicXml);
+    setCurrentMelody(input.melody);
+    setCurrentSpecSnapshot(normalizeUserConstraintsInSpec(input.specForRun));
+    setCurrentBeatsPerMeasure(
+      Math.max(1, Number(input.specForRun.timeSig.split("/")[0]) || 4),
+    );
+    if (isGuestMode) setSpec(input.specForRun);
+    setPitchPatch({});
+    setLogs(input.logs);
+    setError(null);
+    setRelaxationNotice("");
+    setCurrentGenerationStrategy(input.strategy);
+    setSelectionIndex(0);
+    setSelectedNoteId(null);
+    setEditMessage("");
   };
 
   const runWithNewSeed = () => {
@@ -607,6 +639,45 @@ function AppContent(): JSX.Element {
     );
   };
 
+  const runTetrachordWithNewSeed = () => {
+    if (mode === "student" && student.studentSession?.token) {
+      student.markActivity("generate");
+      void student.trackProgress({ event_type: "attempt", exercise_id: null });
+    }
+    const specForRun = isGuestMode ? toGuestSpec(spec) : spec;
+    const noteValuesError = validateAllowedNoteValues(specForRun);
+    if (noteValuesError) {
+      setError(noteValuesError);
+      setMusicXml("");
+      return;
+    }
+    const nextSeed = randomSeed();
+    setSeed(nextSeed);
+    setCurrentGenerationStrategy("tetrachord");
+    teacher.setActiveExerciseId?.(null);
+    const result = generateMelodyTetrachord({
+      spec: specForRun,
+      seed: nextSeed,
+    }) as {
+      status?: string;
+      strategy?: string;
+      melody?: MelodyEvent[];
+      logs?: string[];
+    };
+    const generatedMelody = Array.isArray(result.melody) ? result.melody : [];
+    const generatedMusicXml = toMusicXmlFromMelody(
+      specForRun as unknown as Record<string, unknown>,
+      generatedMelody,
+    );
+    applyGeneratedMelody({
+      melody: generatedMelody,
+      musicXml: generatedMusicXml,
+      logs: Array.isArray(result.logs) ? result.logs : [],
+      specForRun,
+      strategy: "tetrachord",
+    });
+  };
+
   const rerunWithCurrentSeed = () => {
     const specForRun = isGuestMode ? toGuestSpec(spec) : spec;
     const noteValuesError = validateAllowedNoteValues(specForRun);
@@ -616,10 +687,28 @@ function AppContent(): JSX.Element {
       return;
     }
     teacher.setActiveExerciseId?.(null);
-    applyGenerationOutput(
-      generateExercise({ spec: specForRun, seed }),
-      specForRun,
-    );
+    if (currentGenerationStrategy === "tetrachord") {
+      const result = generateMelodyTetrachord({
+        spec: specForRun,
+        seed,
+      }) as {
+        melody?: MelodyEvent[];
+        logs?: string[];
+      };
+      const generatedMelody = Array.isArray(result.melody) ? result.melody : [];
+      applyGeneratedMelody({
+        melody: generatedMelody,
+        musicXml: toMusicXmlFromMelody(
+          specForRun as unknown as Record<string, unknown>,
+          generatedMelody,
+        ),
+        logs: Array.isArray(result.logs) ? result.logs : [],
+        specForRun,
+        strategy: "tetrachord",
+      });
+      return;
+    }
+    applyGenerationOutput(generateExercise({ spec: specForRun, seed }), specForRun);
   };
 
   // ── Load helpers (shared between teacher and student) ─────────────────────
@@ -652,6 +741,7 @@ function AppContent(): JSX.Element {
     setLogs([]);
     setRelaxationNotice("");
     setError(null);
+    setCurrentGenerationStrategy("tonnetz");
     setSelectionIndex(0);
     setSelectedNoteId(null);
     setEditMessage(editMessageText ?? "");
@@ -1072,6 +1162,30 @@ function AppContent(): JSX.Element {
             >
               Edit Class
             </button>
+            <button
+              type="button"
+              className="AppHistoryButton AppProjectionToggleButton"
+              onClick={() => {
+                if (teacher.lastCreatedPacket) {
+                  void handleOpenSavedPacket(teacher.lastCreatedPacket);
+                }
+              }}
+              disabled={!teacher.lastCreatedPacket}
+            >
+              Export Packet PDF
+            </button>
+            <button
+              type="button"
+              className="AppHistoryButton AppProjectionToggleButton"
+              onClick={() => {
+                if (teacher.lastCreatedPacket) {
+                  void handleExportSavedPacketZip(teacher.lastCreatedPacket);
+                }
+              }}
+              disabled={!teacher.lastCreatedPacket}
+            >
+              Export MusicXML ZIP
+            </button>
             <div className="AppToolbarNewFolder">
               <input
                 className="AppExerciseTitleInput"
@@ -1412,6 +1526,25 @@ function AppContent(): JSX.Element {
               <div className="AppClassAccessColumn AppClassAccessColumn--stack">
                 <div className="AppDashboardCard">
                   <h3>Packets</h3>
+                  <div
+                    className="AppRosterRowActions"
+                    style={{ marginBottom: "0.45rem" }}
+                  >
+                    <button
+                      type="button"
+                      className="AppHistoryButton AppProjectionToggleButton"
+                      onClick={() => {
+                        teacher.openBatchModal(
+                          teacher.selectedFolderId,
+                          teacher.selectedFolder?.name ?? "Class",
+                        );
+                        setShowBatchModal(true);
+                      }}
+                      disabled={teacher.batchStatus === "running"}
+                    >
+                      Batch Generate
+                    </button>
+                  </div>
                   {teacher.classPacketsStatus === "loading" ? (
                     <p className="AppHistoryLabel">Loading packets...</p>
                   ) : teacher.classPackets.length === 0 ? (
@@ -1641,39 +1774,21 @@ function AppContent(): JSX.Element {
                       titlePlaceholder={currentMelody.length > 0 ? "Exercise title" : "SightLine Melody"}
                       onTitleChange={updateExerciseTitle}
                       onGenerate={runWithNewSeed}
+                      onGenerateTetrachord={runTetrachordWithNewSeed}
                       onFix={rerunWithCurrentSeed}
                       fixDisabled={isGuestMode}
                       showUpdateSave={Boolean(teacher.activeExerciseId)}
                       saveDisabled={mode !== "teacher" || !exportMusicXml || saveStatus === "saving"}
                       onSaveNew={() => void handleSaveToSupabase(true)}
                       onSaveUpdate={() => void handleSaveToSupabase()}
-                      onBatchGenerate={() => {
-                        teacher.openBatchModal(
-                          teacher.selectedFolderId,
-                          teacher.selectedFolder?.name ?? "Class",
-                        );
-                        setShowBatchModal(true);
-                      }}
-                      batchDisabled={mode !== "teacher" || teacher.batchStatus === "running"}
                       onToggleProjection={() => void projection.toggle()}
                       onOpenHelp={() => setShowInstructions(true)}
                       onOpenPreferences={() => setShowMelodyPreferencesModal(true)}
                       onExportMusicXml={() => {
-                        if (!isGuestMode) handleExport();
-                      }}
-                      onExportPacketPdf={() => {
-                        if (teacher.lastCreatedPacket) {
-                          void handleOpenSavedPacket(teacher.lastCreatedPacket);
+                        if (!isGuestMode && !teacherFeaturesDisabled) {
+                          handleExport();
                         }
                       }}
-                      onExportMusicXmlZip={() => {
-                        if (teacher.lastCreatedPacket) {
-                          void handleExportSavedPacketZip(teacher.lastCreatedPacket);
-                        }
-                      }}
-                      canExportPacket={Boolean(teacher.lastCreatedPacket)}
-                      onOpenDashboard={() => navigate("/dashboard")}
-                      onOpenClassAccess={() => navigate("/class")}
                       onTogglePitchEdit={() => {
                         setPitchEditMode((prev) => !prev);
                         setEditMessage("");
@@ -1700,8 +1815,6 @@ function AppContent(): JSX.Element {
                       playDisabled={currentMelody.length === 0}
                       solfegeMode={solfege.solfegeMode}
                       onSolfegeModeChange={solfege.setSolfegeMode}
-                      solfegeAccidentalMode={solfege.solfegeAccidentalMode}
-                      onSolfegeAccidentalModeChange={solfege.setSolfegeAccidentalMode}
                       solfegeOverlayMode={solfege.solfegeOverlayMode}
                       onSolfegeOverlayModeChange={solfege.setSolfegeOverlayMode}
                     />
@@ -1781,9 +1894,17 @@ function AppContent(): JSX.Element {
                         <div className="AppHistoryControls">
                           <div className="AppHistoryNav">
                             {!projection.isProjectionMode ? (
-                              <span className="AppHistoryLabel">
-                                {spec.title}
-                              </span>
+                              <div>
+                                <span className="AppHistoryLabel">
+                                  {spec.title}
+                                </span>
+                                {currentGenerationStrategy === "tetrachord" &&
+                                currentMelody.length > 0 ? (
+                                  <p className="AppHistoryLabel">
+                                    Generated with: tetrachord
+                                  </p>
+                                ) : null}
+                              </div>
                             ) : (
                               <div
                                 className={`AppProjectionHeaderRow ${projection.showProjectionControls ? "" : "AppProjectionControlsHidden"}`}
@@ -1802,6 +1923,50 @@ function AppContent(): JSX.Element {
                               </div>
                             )}
                           </div>
+                          {!projection.isProjectionMode ? (
+                            <div className="AppPlaybackControls">
+                              <button
+                                type="button"
+                                className="AppHistoryButton AppProjectionToggleButton"
+                                onClick={() => {
+                                  setPitchEditMode((prev) => !prev);
+                                  setEditMessage("");
+                                }}
+                              >
+                                {pitchEditMode
+                                  ? "Disable Pitch Edit"
+                                  : "Enable Pitch Edit"}
+                              </button>
+                              <button
+                                type="button"
+                                className="AppHistoryButton AppProjectionToggleButton"
+                                onClick={() => {
+                                  if (!isGuestMode && !teacherFeaturesDisabled) {
+                                    handleExport();
+                                  }
+                                }}
+                                disabled={
+                                  isGuestMode ||
+                                  teacherFeaturesDisabled ||
+                                  !exportMusicXml
+                                }
+                                title={
+                                  teacherFeaturesDisabled
+                                    ? "Upgrade required"
+                                    : undefined
+                                }
+                              >
+                                Export MusicXML
+                                {teacherFeaturesDisabled ? (
+                                  <span
+                                    className="UpgradeFeatureMarker"
+                                    aria-label="Upgrade To Enable Feature"
+                                    title="Upgrade To Enable Feature"
+                                  />
+                                ) : null}
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                       }
                     />
@@ -2000,6 +2165,11 @@ function AppContent(): JSX.Element {
                                               exercise.id,
                                             )
                                           }
+                                          title={
+                                            teacherFeaturesDisabled
+                                              ? "Upgrade To Enable Feature"
+                                              : undefined
+                                          }
                                           disabled={
                                             teacherFeaturesDisabled ||
                                             teacher.loadingSavedExerciseId !==
@@ -2011,7 +2181,18 @@ function AppContent(): JSX.Element {
                                           {teacher.loadingSavedExerciseId ===
                                           exercise.id
                                             ? "Loading..."
-                                            : "↥"}
+                                            : teacherFeaturesDisabled
+                                              ? (
+                                                <>
+                                                  ↥
+                                                  <span
+                                                    className="UpgradeFeatureMarker"
+                                                    aria-label="Upgrade To Enable Feature"
+                                                    title="Upgrade To Enable Feature"
+                                                  />
+                                                </>
+                                              )
+                                              : "↥"}
                                         </button>
                                         <button
                                           type="button"
@@ -2020,6 +2201,11 @@ function AppContent(): JSX.Element {
                                             void teacher.deleteSavedExercise(
                                               exercise.id,
                                             )
+                                          }
+                                          title={
+                                            teacherFeaturesDisabled
+                                              ? "Upgrade To Enable Feature"
+                                              : undefined
                                           }
                                           disabled={
                                             teacherFeaturesDisabled ||
@@ -2032,7 +2218,18 @@ function AppContent(): JSX.Element {
                                           {teacher.deletingSavedExerciseId ===
                                           exercise.id
                                             ? "Deleting..."
-                                            : "✕"}
+                                            : teacherFeaturesDisabled
+                                              ? (
+                                                <>
+                                                  ✕
+                                                  <span
+                                                    className="UpgradeFeatureMarker"
+                                                    aria-label="Upgrade To Enable Feature"
+                                                    title="Upgrade To Enable Feature"
+                                                  />
+                                                </>
+                                              )
+                                              : "✕"}
                                         </button>
                                       </div>
                                     </div>

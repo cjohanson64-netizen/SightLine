@@ -3,7 +3,6 @@ import type { FolderItem } from "../hooks/useTeacherLibrary";
 
 type Mode = "teacher" | "student" | "guest";
 type SolfegeMode = "off" | "movable" | "fixed";
-type SolfegeAccidentalMode = "diatonic" | "chromatic";
 
 type SaveMenuProps = {
   showUpdate: boolean;
@@ -12,6 +11,16 @@ type SaveMenuProps = {
   onSaveNew: () => void;
   onUpdate: () => void;
 };
+
+function UpgradeMarker(): JSX.Element {
+  return (
+    <span
+      className="UpgradeFeatureMarker"
+      aria-label="Upgrade To Enable Feature"
+      title="Upgrade To Enable Feature"
+    />
+  );
+}
 
 function SaveMenu({
   showUpdate,
@@ -24,7 +33,10 @@ function SaveMenu({
 
   return (
     <label className="ToolbarMenuField" title={disabled ? disabledTitle : ""}>
-      <span className="ToolbarMenuLabel">Save</span>
+      <span className="ToolbarMenuLabel">
+        Save
+        {disabled ? <UpgradeMarker /> : null}
+      </span>
       <select
         value={value}
         disabled={disabled}
@@ -43,67 +55,6 @@ function SaveMenu({
   );
 }
 
-type MoreMenuProps = {
-  onOpenPreferences: () => void;
-  onExportMusicXml: () => void;
-  onExportPacketPdf: () => void;
-  onExportMusicXmlZip: () => void;
-  canExportPacket: boolean;
-  onOpenDashboard: () => void;
-  onOpenClassAccess: () => void;
-  onTogglePitchEdit: () => void;
-  pitchEditEnabled: boolean;
-};
-
-function MoreMenu({
-  onOpenPreferences,
-  onExportMusicXml,
-  onExportPacketPdf,
-  onExportMusicXmlZip,
-  canExportPacket,
-  onOpenDashboard,
-  onOpenClassAccess,
-  onTogglePitchEdit,
-  pitchEditEnabled,
-}: MoreMenuProps): JSX.Element {
-  const [value, setValue] = useState("more");
-
-  return (
-    <label className="ToolbarMenuField">
-      <span className="ToolbarMenuLabel">More</span>
-      <select
-        value={value}
-        onChange={(event) => {
-          const next = event.target.value;
-          setValue("more");
-          if (next === "preferences") onOpenPreferences();
-          if (next === "export-xml") onExportMusicXml();
-          if (next === "export-packet-pdf") onExportPacketPdf();
-          if (next === "export-packet-zip") onExportMusicXmlZip();
-          if (next === "dashboard") onOpenDashboard();
-          if (next === "class-access") onOpenClassAccess();
-          if (next === "pitch-edit") onTogglePitchEdit();
-        }}
-      >
-        <option value="more">...</option>
-        <option value="preferences">Melody Preferences</option>
-        <option value="pitch-edit">
-          {pitchEditEnabled ? "Disable Pitch Edit" : "Enable Pitch Edit"}
-        </option>
-        <option value="export-xml">Export MusicXML</option>
-        <option value="export-packet-pdf" disabled={!canExportPacket}>
-          Export Packet PDF
-        </option>
-        <option value="export-packet-zip" disabled={!canExportPacket}>
-          Export MusicXML ZIP
-        </option>
-        <option value="dashboard">Open Dashboard</option>
-        <option value="class-access">Open Class Access</option>
-      </select>
-    </label>
-  );
-}
-
 type GeneratorToolbarProps = {
   mode: Mode;
   teacherFeaturesDisabled: boolean;
@@ -117,23 +68,17 @@ type GeneratorToolbarProps = {
   titlePlaceholder: string;
   onTitleChange: (value: string) => void;
   onGenerate: () => void;
+  onGenerateTetrachord: () => void;
   onFix: () => void;
   fixDisabled: boolean;
   showUpdateSave: boolean;
   saveDisabled: boolean;
   onSaveNew: () => void;
   onSaveUpdate: () => void;
-  onBatchGenerate: () => void;
-  batchDisabled: boolean;
   onToggleProjection: () => void;
   onOpenHelp: () => void;
   onOpenPreferences: () => void;
   onExportMusicXml: () => void;
-  onExportPacketPdf: () => void;
-  onExportMusicXmlZip: () => void;
-  canExportPacket: boolean;
-  onOpenDashboard: () => void;
-  onOpenClassAccess: () => void;
   onTogglePitchEdit: () => void;
   pitchEditEnabled: boolean;
   studentSubmitLabel?: string;
@@ -150,8 +95,6 @@ type GeneratorToolbarProps = {
   playDisabled: boolean;
   solfegeMode: SolfegeMode;
   onSolfegeModeChange: (value: SolfegeMode) => void;
-  solfegeAccidentalMode: SolfegeAccidentalMode;
-  onSolfegeAccidentalModeChange: (value: SolfegeAccidentalMode) => void;
   solfegeOverlayMode: boolean;
   onSolfegeOverlayModeChange: (value: boolean) => void;
 };
@@ -169,23 +112,17 @@ export default function GeneratorToolbar({
   titlePlaceholder,
   onTitleChange,
   onGenerate,
+  onGenerateTetrachord,
   onFix,
   fixDisabled,
   showUpdateSave,
   saveDisabled,
   onSaveNew,
   onSaveUpdate,
-  onBatchGenerate,
-  batchDisabled,
   onToggleProjection,
   onOpenHelp,
   onOpenPreferences,
   onExportMusicXml,
-  onExportPacketPdf,
-  onExportMusicXmlZip,
-  canExportPacket,
-  onOpenDashboard,
-  onOpenClassAccess,
   onTogglePitchEdit,
   pitchEditEnabled,
   studentSubmitLabel,
@@ -202,8 +139,6 @@ export default function GeneratorToolbar({
   playDisabled,
   solfegeMode,
   onSolfegeModeChange,
-  solfegeAccidentalMode,
-  onSolfegeAccidentalModeChange,
   solfegeOverlayMode,
   onSolfegeOverlayModeChange,
 }: GeneratorToolbarProps): JSX.Element {
@@ -213,13 +148,16 @@ export default function GeneratorToolbar({
   return (
     <div className="GeneratorToolbar">
       <div className="ToolbarRow">
-        <div className="ToolbarGroup ToolbarGroup--context">
+        <div className="ToolbarGroup ToolbarGroup--class">
           {mode === "teacher" ? (
             <label
               className="AppHistoryLabel AppPlaybackField ToolbarField ToolbarClassField"
               title={teacherFeaturesDisabled ? upgradeRequiredTitle : ""}
             >
-              Class
+              <span className="ToolbarInlineLabel">
+                Class
+                {teacherFeaturesDisabled ? <UpgradeMarker /> : null}
+              </span>
               <select
                 value={selectedFolderId}
                 onChange={(event) => onSelectFolderId(event.target.value)}
@@ -238,6 +176,11 @@ export default function GeneratorToolbar({
               Class: {studentClassName}
             </span>
           ) : null}
+        </div>
+      </div>
+
+      <div className="ToolbarRow">
+        <div className="ToolbarGroup ToolbarGroup--context">
           <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField ToolbarTitleField">
             Title
             <input
@@ -248,6 +191,13 @@ export default function GeneratorToolbar({
               placeholder={titlePlaceholder}
             />
           </label>
+          <button
+            type="button"
+            className="AppHistoryButton AppProjectionToggleButton ToolbarWideButton"
+            onClick={onOpenPreferences}
+          >
+            Melody Preferences
+          </button>
         </div>
 
         <div className="ToolbarGroup ToolbarGroup--primary">
@@ -285,17 +235,6 @@ export default function GeneratorToolbar({
               onUpdate={onSaveUpdate}
             />
           ) : null}
-          {mode === "teacher" ? (
-            <button
-              type="button"
-              className="AppHistoryButton AppProjectionToggleButton"
-              onClick={onBatchGenerate}
-              disabled={batchDisabled || teacherFeaturesDisabled}
-              title={teacherFeaturesDisabled ? upgradeRequiredTitle : ""}
-            >
-              Batch Generate
-            </button>
-          ) : null}
         </div>
 
         <div className="ToolbarSpacer" />
@@ -315,17 +254,6 @@ export default function GeneratorToolbar({
           >
             Help
           </button>
-          <MoreMenu
-            onOpenPreferences={onOpenPreferences}
-            onExportMusicXml={onExportMusicXml}
-            onExportPacketPdf={onExportPacketPdf}
-            onExportMusicXmlZip={onExportMusicXmlZip}
-            canExportPacket={canExportPacket}
-            onOpenDashboard={onOpenDashboard}
-            onOpenClassAccess={onOpenClassAccess}
-            onTogglePitchEdit={onTogglePitchEdit}
-            pitchEditEnabled={pitchEditEnabled}
-          />
         </div>
       </div>
 
@@ -358,6 +286,14 @@ export default function GeneratorToolbar({
               <option value="sawtooth">SAWTOOTH</option>
             </select>
           </label>
+          <button
+            type="button"
+            className="AppHistoryButton AppProjectionToggleButton"
+            onClick={onPlayToggle}
+            disabled={playDisabled}
+          >
+            {isPlaying ? "Stop" : "Play"}
+          </button>
           <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField AppCountInField ToolbarField">
             Count-in
             <input
@@ -367,47 +303,24 @@ export default function GeneratorToolbar({
               onChange={(event) => onCountInEnabledChange(event.target.checked)}
             />
           </label>
-          <button
-            type="button"
-            className="AppHistoryButton AppProjectionToggleButton"
-            onClick={onPlayToggle}
-            disabled={playDisabled}
-          >
-            {isPlaying ? "Stop" : "Play"}
-          </button>
         </div>
 
         <div className="ToolbarSpacer" />
 
         <div className="ToolbarGroup ToolbarGroup--notation">
-          <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField ToolbarField">
-            Solfege
-            <select
-              value={solfegeMode}
-              onChange={(event) => onSolfegeModeChange(event.target.value as SolfegeMode)}
-            >
-              <option value="off">Off</option>
-              <option value="movable">Movable Do</option>
-              <option value="fixed">Fixed Do</option>
-            </select>
-          </label>
-          <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField ToolbarField">
-            Accidentals
-            <select
-              value={solfegeAccidentalMode}
+          <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField AppCountInField ToolbarField">
+            Movable Do
+            <input
+              type="checkbox"
+              className="AppLibraryCheckbox AppCountInCheckbox"
+              checked={solfegeMode !== "off"}
               onChange={(event) =>
-                onSolfegeAccidentalModeChange(
-                  event.target.value as SolfegeAccidentalMode,
-                )
+                onSolfegeModeChange(event.target.checked ? "movable" : "off")
               }
-              disabled={solfegeMode === "off"}
-            >
-              <option value="diatonic">Diatonic only</option>
-              <option value="chromatic">Chromatic</option>
-            </select>
+            />
           </label>
           <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField ToolbarField">
-            Overlay
+            Colorize
             <select
               value={overlayValue}
               onChange={(event) => {

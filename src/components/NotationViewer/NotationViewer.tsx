@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { KeyboardEvent, ReactNode } from 'react';
+import type { KeyboardEvent, MutableRefObject, ReactNode } from 'react';
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 import '../../styles/NotationViewer.css';
 
@@ -235,6 +235,38 @@ function applySolfegeNoteheadColors(container: HTMLElement): void {
   }
 }
 
+function applyNotationDecorations(
+  container: HTMLElement,
+  solfegeOverlayNoteheads: boolean
+): void {
+  applySolfegeLyricColors(container);
+  applyHighlightedNoteheadShadows(container);
+  if (solfegeOverlayNoteheads) {
+    applySolfegeNoteheadColors(container);
+  }
+}
+
+function scheduleNotationDecorations(
+  container: HTMLElement,
+  renderSeqRef: MutableRefObject<number>,
+  solfegeOverlayNoteheads: boolean
+): void {
+  const seq = renderSeqRef.current;
+  applyNotationDecorations(container, solfegeOverlayNoteheads);
+  requestAnimationFrame(() => {
+    if (seq !== renderSeqRef.current || !container.isConnected) {
+      return;
+    }
+    applyNotationDecorations(container, solfegeOverlayNoteheads);
+    requestAnimationFrame(() => {
+      if (seq !== renderSeqRef.current || !container.isConnected) {
+        return;
+      }
+      applyNotationDecorations(container, solfegeOverlayNoteheads);
+    });
+  });
+}
+
 export default function NotationViewer({
   musicXml,
   headerControls,
@@ -298,11 +330,11 @@ export default function NotationViewer({
         // Apply zoom immediately before render so staff scaling is reflected.
         osmd.Zoom = Math.max(0.1, zoom);
         osmd.render();
-        applySolfegeLyricColors(container);
-        applyHighlightedNoteheadShadows(container);
-        if (solfegeOverlayNoteheads) {
-          applySolfegeNoteheadColors(container);
-        }
+        scheduleNotationDecorations(
+          container,
+          renderSeqRef,
+          solfegeOverlayNoteheads
+        );
       })
       .catch(() => {
         if (seq !== renderSeqRef.current) {
@@ -314,6 +346,19 @@ export default function NotationViewer({
         }
       });
   }, [musicXml, zoom, solfegeOverlayNoteheads]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !musicXml) {
+      return;
+    }
+
+    scheduleNotationDecorations(
+      container,
+      renderSeqRef,
+      solfegeOverlayNoteheads
+    );
+  }, [musicXml, solfegeActive, solfegeOverlayNoteheads, projectionMode, headerControls]);
 
   return (
     <section className={`NotationViewer ${projectionMode ? 'NotationViewer--projection' : ''} ${solfegeActive ? 'NotationViewer--solfege' : ''}`}>
