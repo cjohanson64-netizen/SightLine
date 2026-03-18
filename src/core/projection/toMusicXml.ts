@@ -105,11 +105,17 @@ function buildMusicXmlFromSpecAndMelody(
       }
 
       if (end > start) {
-        notesByMeasure[measure][start].beam = 'begin';
-        for (let k = start + 1; k < end; k += 1) {
-          notesByMeasure[measure][k].beam = 'continue';
+        for (let groupStart = start; groupStart <= end; groupStart += 4) {
+          const groupEnd = Math.min(end, groupStart + 3);
+          if (groupEnd === groupStart) {
+            continue;
+          }
+          notesByMeasure[measure][groupStart].beam = 'begin';
+          for (let k = groupStart + 1; k < groupEnd; k += 1) {
+            notesByMeasure[measure][k].beam = 'continue';
+          }
+          notesByMeasure[measure][groupEnd].beam = 'end';
         }
-        notesByMeasure[measure][end].beam = 'end';
       }
 
       i = Math.max(i + 1, end + 1);
