@@ -1,0 +1,12 @@
+import { character_root } from "./root.tat"
+import { identityGraph } from "./identity.tat"
+import { abilityGraph } from "./abilities.tat"
+
+prunedEdgeGraph := @compose([
+  identityGraph,
+  abilityGraph
+], merge: character_root)
+  -> @prune.edges(@where(rel == "offers"))
+  <> @project(format: "graph")
+
+export { prunedEdgeGraph }

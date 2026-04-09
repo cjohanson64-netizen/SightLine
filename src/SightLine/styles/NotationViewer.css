@@ -1,0 +1,162 @@
+.NotationViewer {
+  background: #151f2d;
+  border: 1px solid #2b3a4f;
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.NotationViewer h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+  color: #c8d5e6;
+}
+
+.NotationViewer-controls {
+  margin: 0 0 0.75rem;
+}
+
+.NotationViewer-canvas {
+  flex: 0 0 auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid #2f3e56;
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: #ffffff;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  position: relative;
+}
+
+.NotationViewer-canvasMount {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.NotationViewer-canvas--empty {
+  min-height: 180px;
+  justify-content: center;
+  align-items: center;
+}
+
+.NotationViewer-canvas--empty .NotationViewer-canvasMount {
+  display: none;
+}
+
+.NotationViewer--projection {
+  height: 100%;
+  min-height: 100%;
+  padding: 0.6rem 0.75rem;
+}
+
+.NotationViewer--projection .NotationViewer-controls {
+  margin: 0 0 0.35rem;
+}
+
+.NotationViewer--projection .NotationViewer-canvas {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.2rem;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.NotationViewer--projection .NotationViewer-canvas svg {
+  width: auto !important;
+  max-width: none !important;
+}
+
+.NotationViewer-canvas:focus-visible {
+  outline: 2px solid #7ca1d4;
+  outline-offset: 2px;
+}
+
+.NotationViewer-canvas svg {
+  filter: none;
+  background: #ffffff;
+  border-radius: 6px;
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  width: auto !important;
+  height: auto !important;
+}
+
+.NotationViewer-canvas #osmdSvgPage1 {
+  background: #ffffff !important;
+  border-radius: 6px;
+}
+
+.NotationViewer--solfege .NotationViewer-canvas svg {
+  filter: none;
+  background: #ffffff;
+  border-radius: 6px;
+}
+
+.AppThemeLight .NotationViewer--solfege .NotationViewer-canvas {
+  background: #ffffff;
+}
+
+.AppThemeLight .NotationViewer--solfege .NotationViewer-canvas svg {
+  filter: none;
+}
+
+.NotationViewer-error {
+  color: #ff7f7f;
+}
+
+.NotationViewer-empty {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #617892;
+  text-align: center;
+}
+
+.AppThemeLight .NotationViewer {
+  background: #f2f6fc;
+  border-color: #b5c3d6;
+}
+
+.AppThemeLight .NotationViewer h2 {
+  color: #1f2f44;
+}
+
+.AppThemeLight .NotationViewer-canvas {
+  background: #ffffff;
+  border-color: #9eb1c8;
+}
+
+.AppThemeLight .NotationViewer-canvas svg {
+  filter: none;
+  color: #1f2f44;
+}
+
+.AppThemeLight .NotationViewer-canvas svg text {
+  fill: #1f2f44;
+}
+
+.NotationViewer-notehead--selectable {
+  cursor: pointer;
+}
+
+.NotationViewer-notehead--selectable:hover {
+  filter: drop-shadow(0 0 4px rgba(34, 60, 95, 0.35));
+}
+
+.NotationViewer-notehead--selected {
+  filter: drop-shadow(0 0 4px rgba(17, 23, 34, 0.55)) drop-shadow(0 0 8px rgba(70, 110, 170, 0.5));
+}
+
+.NotationViewer-notehead--correct path,
+.NotationViewer-notehead--correct ellipse,
+.NotationViewer-notehead--correct circle,
+.NotationViewer-notehead--correct polygon {
+  fill: #1ecf87 !important;
+  stroke: #1ecf87 !important;
+}

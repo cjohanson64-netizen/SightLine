@@ -1,0 +1,12 @@
+import { character_root } from "./root.tat"
+import { identityGraph } from "./identity.tat"
+import { abilityGraph } from "./abilities.tat"
+
+prunedNodeGraph := @compose([
+  identityGraph,
+  abilityGraph
+], merge: character_root)
+  -> @prune.nodes(@where(type == "option" && state.selected == false))
+  <> @project(format: "graph")
+
+export { prunedNodeGraph }

@@ -1,0 +1,23 @@
+melodyRoot = <{ id: "melody_root", type: "melody", label: "Demo Melody" }>
+noteOne = <{ id: "note_1", type: "note", pitch: "C4", degree: 1 }>
+noteTwo = <{ id: "note_2", type: "note", pitch: "D4", degree: 2 }>
+noteThree = <{ id: "note_3", type: "note", pitch: "E4", degree: 3 }>
+
+@seed:
+  nodes: [melodyRoot, noteOne, noteTwo, noteThree]
+  edges: [
+    [melodyRoot : "contains" : noteOne],
+    [melodyRoot : "contains" : noteTwo],
+    [melodyRoot : "contains" : noteThree]
+  ]
+  state: {}
+  meta: {}
+  root: melodyRoot
+
+demoMelody := @seed
+  -> @graft.progress(noteOne, "precedes", noteTwo)
+  -> @graft.progress(noteTwo, "precedes", noteThree)
+  -> @graft.meta(noteOne, "function", "anchor")
+  -> @graft.meta(noteTwo, "function", "passing")
+  -> @graft.meta(noteThree, "function", "arrival")
+  <> @project(format: "graph")

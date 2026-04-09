@@ -1,0 +1,27 @@
+artifactRoot = <{ id: "artifact-root", type: "artifact-root", label: "Exercise Artifact Root" }>
+metadataNode = <{ id: "artifact-metadata", type: "artifact-metadata", label: "Exercise Metadata" }>
+
+@seed:
+  nodes: [artifactRoot, metadataNode]
+  edges: [
+    [artifactRoot : "contains" : metadataNode]
+  ]
+  state: {}
+  meta: {}
+  root: artifactRoot
+
+baseArtifact := @seed
+  -> @graft.meta(metadataNode, "source", "SightLine")
+  -> @graft.meta(metadataNode, "stage", assessmentStage)
+  -> @graft.meta(metadataNode, "seed", exerciseSeed)
+  -> @graft.meta(metadataNode, "phraseCount", phraseCount)
+  -> @graft.meta(metadataNode, "melodyNoteCount", melodyNoteCount)
+
+exerciseArtifact := @compose([
+  baseArtifact,
+  specGraph,
+  harmonyGraph,
+  melodyGraph,
+  analysisGraph
+], merge: artifactRoot)
+  <> @project(format: "graph")

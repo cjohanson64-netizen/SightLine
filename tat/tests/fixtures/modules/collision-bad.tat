@@ -1,0 +1,19 @@
+import { character_root } from "./root.tat"
+
+abilities_domain = <{id: "identity_domain", type: "domain", key: "bad-duplicate"}>
+
+@seed:
+  nodes: [
+    character_root,
+    abilities_domain
+  ]
+  edges: [
+    [character_root : "contains" : abilities_domain]
+  ]
+  state: {}
+  meta: {}
+  root: character_root
+
+badGraph := @seed <> @project(format: "graph")
+
+export { badGraph }

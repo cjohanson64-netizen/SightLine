@@ -1,0 +1,25 @@
+import { character_root } from "./root.tat"
+
+identity_domain = <{id: "identity_domain", type: "domain", key: "identity"}>
+character_name = <{id: "character_name", type: "field", key: "name", value: "Aric"}>
+
+@seed:
+  nodes: [
+    character_root,
+    identity_domain,
+    character_name
+  ]
+  edges: [
+    [character_root : "contains" : identity_domain],
+    [identity_domain : "has" : character_name]
+  ]
+  state: {}
+  meta: {}
+  root: character_root
+
+identityGraph := @seed
+  -> @graft.meta(identity_domain, "label", "Identity")
+  -> @graft.meta(character_name, "label", "Character Name")
+  <> @project(format: "graph")
+
+export { identityGraph }

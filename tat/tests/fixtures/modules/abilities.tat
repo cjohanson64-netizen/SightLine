@@ -1,0 +1,34 @@
+import { character_root } from "./root.tat"
+
+abilities_domain = <{id: "abilities_domain", type: "domain", key: "abilities"}>
+ability_strength = <{id: "ability_strength", type: "ability", key: "STR"}>
+option_unused = <{id: "option_unused", type: "option", key: "unused"}>
+option_selected = <{id: "option_selected", type: "option", key: "selected"}>
+
+@seed:
+  nodes: [
+    character_root,
+    abilities_domain,
+    ability_strength,
+    option_unused,
+    option_selected
+  ]
+  edges: [
+    [character_root : "contains" : abilities_domain],
+    [abilities_domain : "has" : ability_strength],
+    [abilities_domain : "offers" : option_unused],
+    [abilities_domain : "offers" : option_selected]
+  ]
+  state: {}
+  meta: {}
+  root: character_root
+
+abilityGraph := @seed
+  -> @graft.state(option_unused, "selected", false)
+  -> @graft.state(option_selected, "selected", true)
+  -> @graft.meta(abilities_domain, "label", "Abilities")
+  -> @graft.meta(option_unused, "category", "debug")
+  -> @graft.meta(option_selected, "category", "kept")
+  <> @project(format: "graph")
+
+export { abilityGraph }

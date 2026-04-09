@@ -12,8 +12,13 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@tat/*": ["./tat/*"]
+    }
   },
-  "include": ["src"],
+  "include": ["src/SightLine", "tat/**/*.ts"],
+  "exclude": ["tat/tests"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

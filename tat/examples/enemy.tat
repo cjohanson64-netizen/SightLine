@@ -1,0 +1,14 @@
+enemy = <{ id: "enemy", type: "character", name: "Enemy" }>
+
+@seed:
+  nodes: [enemy]
+  edges: []
+  state: {}
+  meta: {}
+  root: enemy
+
+enemyGraph := @seed
+  -> @graft.state(enemy, "hp", 12)
+  <> @project(format: "graph")
+
+export { enemy, enemyGraph }

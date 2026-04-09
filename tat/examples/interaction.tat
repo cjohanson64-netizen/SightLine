@@ -1,0 +1,10 @@
+attack := @graph(heroGraph) : "attacks" : @graph(enemyGraph)
+  -> @effect(
+    target: root,
+    ops: [
+      @derive.state("hp", current - 1),
+      @derive.state("has", current + "bleeding")
+    ]
+  )
+
+export { attack }

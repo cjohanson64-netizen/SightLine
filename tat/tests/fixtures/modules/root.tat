@@ -1,0 +1,3 @@
+character_root = <{id: "character_root", type: "character", key: "pc"}>
+
+export { character_root }

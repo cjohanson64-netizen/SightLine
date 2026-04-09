@@ -1,0 +1,11 @@
+import { character_root } from "./root.tat"
+import { identityGraph } from "./identity.tat"
+import { abilityGraph } from "./abilities.tat"
+
+composedGraph := @compose([
+  identityGraph,
+  abilityGraph
+], merge: character_root)
+  <> @project(format: "graph")
+
+export { composedGraph }

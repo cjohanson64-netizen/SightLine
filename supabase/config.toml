@@ -466,6 +466,12 @@ verify_jwt = false
 import_map = "./functions/approve_submission/deno.json"
 entrypoint = "./functions/approve_submission/index.ts"
 
+[functions.save_assessment_log]
+enabled = true
+verify_jwt = false
+import_map = "./functions/submit_exercise/deno.json"
+entrypoint = "./functions/save_assessment_log/index.ts"
+
 [functions.create_checkout_session]
 enabled = true
 verify_jwt = false
