@@ -4,6 +4,11 @@ type AppNavbarProps = {
   modeLabel: "Teacher" | "Student" | "Guest";
   authLabel: string;
   onAuthClick: () => void;
+  onBillingAction?: () => void;
+  showBillingAction?: boolean;
+  billingActionDisabled?: boolean;
+  billingActionLabel?: string;
+  billingActionTitle?: string;
   isProjectionMode: boolean;
   canAccessClass: boolean;
   theme: "dark" | "light";
@@ -15,6 +20,11 @@ export default function AppNavbar({
   modeLabel,
   authLabel,
   onAuthClick,
+  onBillingAction,
+  showBillingAction = false,
+  billingActionDisabled = false,
+  billingActionLabel = "Subscription",
+  billingActionTitle,
   isProjectionMode,
   canAccessClass,
   theme,
@@ -35,23 +45,15 @@ export default function AppNavbar({
           }
           end
         >
-          Home
+          Generator
         </NavLink>
         <NavLink
-          to="/dashboard"
+          to="/guide"
           className={({ isActive }) =>
             `AppNavLink${isActive ? " AppNavLinkActive" : ""}`
           }
         >
-          Dashboard
-        </NavLink>
-        <NavLink
-          to="/generator"
-          className={({ isActive }) =>
-            `AppNavLink${isActive ? " AppNavLinkActive" : ""}`
-          }
-        >
-          Melody Generator
+          Guide
         </NavLink>
         {canAccessClass ? (
           <NavLink
@@ -74,6 +76,17 @@ export default function AppNavbar({
       </nav>
       <div className="AppNavActions">
         <span className="AppNavMode">{modeLabel} Mode</span>
+        {showBillingAction ? (
+          <button
+            type="button"
+            className="AppHistoryButton"
+            onClick={onBillingAction}
+            disabled={interactionDisabled || billingActionDisabled}
+            title={billingActionTitle}
+          >
+            {billingActionLabel}
+          </button>
+        ) : null}
         <label className="AppNavThemeField">
           Theme
           <select

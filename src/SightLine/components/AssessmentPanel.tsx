@@ -1,7 +1,6 @@
 import type { PitchAssessmentNote } from '@/SightLine/domain/assessment';
 import type { MicAssessmentStatus } from '@/SightLine/hooks/useMicAssessment';
 import type { MicAssessmentRunResult, SegmentedPerformedNote } from '@/SightLine/core/audio/types';
-import { buildCoachingFeedback } from '@/SightLine/core/assessment/coaching';
 import { classifyMastery } from '@/SightLine/core/assessment/mastery';
 import {
   buildWeightedAssessmentSummary,
@@ -13,6 +12,7 @@ interface AssessmentPanelProps {
   result: MicAssessmentRunResult | null;
   errorMessage: string | null;
   selectedNoteIndex: number | null;
+  showDeveloperDebug: boolean;
   onSelectNote: (index: number | null) => void;
   onClear: () => void;
 }
@@ -141,56 +141,12 @@ function describeNote(
   return 'You sang the wrong pitch on this note.';
 }
 
-function summarizeSignalQuality(result: MicAssessmentRunResult): string {
-  if (result.signalQuality.level === 'high') {
-    return 'Good';
-  }
-  if (result.signalQuality.level === 'medium') {
-    return 'Fair';
-  }
-  return 'Noisy';
-}
-
-function buildSummaryMessage(result: MicAssessmentRunResult): string {
-  const { summary, firstDivergence, recovery, tonalState } = result.assessment;
-  const total = summary.targetNoteCount;
-  const correct = summary.pitchCorrectCount;
-
-  if (total > 0 && correct === total) {
-    return 'You matched the full melody pattern correctly.';
-  }
-
-  if (
-    tonalState.kind === 'recentered_new_tonic' &&
-    tonalState.structuralConsistency.stronglyConsistent
-  ) {
-    return 'You shifted into a new key center but stayed structurally consistent.';
-  }
-
-  if (firstDivergence) {
-    const start = `You started correctly, but went off on note ${firstDivergence.noteIndex + 1}.`;
-    if (recovery.kind && recovery.kind !== 'no_recovery') {
-      return `${start} You recovered later in the phrase.`;
-    }
-    return start;
-  }
-
-  if (correct === 0) {
-    return 'The phrase did not match clearly enough to score as correct yet.';
-  }
-
-  if (recovery.kind && recovery.kind !== 'no_recovery') {
-    return 'Part of the phrase went off track, but you recovered later.';
-  }
-
-  return 'Some notes were correct, but parts of the phrase still need work.';
-}
-
 export default function AssessmentPanel({
   status,
   result,
   errorMessage,
   selectedNoteIndex,
+  showDeveloperDebug,
   onSelectNote,
   onClear,
 }: AssessmentPanelProps): JSX.Element | null {
@@ -210,7 +166,6 @@ export default function AssessmentPanel({
     selectedNoteIndex !== null ? noteOutcome(selectedNote, selectedSegmentedNote) : null;
   const weightedSummary = result ? buildWeightedAssessmentSummary(result) : null;
   const mastery = result ? classifyMastery(result.assessment) : null;
-  const coaching = result ? buildCoachingFeedback(result) : null;
 
   return (
     <section className="AppAssessmentPanel">
@@ -252,45 +207,6 @@ export default function AssessmentPanel({
             </p>
             <p className="AppHistoryLabel">
               <strong>Rhythm: {result.assessment.scores.rhythmScore}%</strong>
-            </p>
-            <p className="AppHistoryLabel">
-              Pitch detail: {weightedSummary ? weightedSummary.totalScore.toFixed(1) : '0.0'} / {weightedSummary?.totalPossible ?? 0} ({weightedSummary?.percentage ?? 0}%)
-            </p>
-            <p className="AppHistoryLabel">
-              {buildSummaryMessage(result)}
-            </p>
-            <p className="AppHistoryLabel">
-              Rhythm: {result.assessment.rhythm.accuracy.summary}
-            </p>
-            <p className="AppHistoryLabel">
-              Flow: {result.assessment.rhythm.flow.summary}
-            </p>
-            <p className="AppHistoryLabel">
-              Recording quality: {summarizeSignalQuality(result)}
-            </p>
-            {!result.assessment.validity.isValid ? (
-              <p className="AppHistoryLabel">
-                {result.assessment.validity.reason} Try singing the full phrase clearly and steadily.
-              </p>
-            ) : null}
-            {weightedSummary && weightedSummary.counts.transposed_consistent > 0 ? (
-              <p className="AppHistoryLabel">
-                Consistent key-shift notes: {weightedSummary.counts.transposed_consistent}
-              </p>
-            ) : null}
-            {result.assessment.globalOffsetCorrection.applied &&
-            result.assessment.globalOffsetCorrection.candidateOffset !== null ? (
-              <p className="AppHistoryLabel">
-                Phrase correction: {result.assessment.globalOffsetCorrection.candidateOffset > 0 ? '+' : ''}
-                {result.assessment.globalOffsetCorrection.candidateOffset} semitone
-                {Math.abs(result.assessment.globalOffsetCorrection.candidateOffset) === 1 ? '' : 's'}
-              </p>
-            ) : null}
-            <p className="AppHistoryLabel">
-              Correct: {weightedSummary?.counts.correct ?? 0} | Slightly off: {weightedSummary?.counts.near ?? 0}
-            </p>
-            <p className="AppHistoryLabel">
-              Ambiguous: {weightedSummary?.counts.ambiguous ?? 0} | Low-confidence: {weightedSummary?.counts.low_confidence ?? 0} | Incorrect: {weightedSummary?.counts.incorrect ?? 0}
             </p>
             {result.warnings.map((warning) => (
               <p key={warning} className="AppAssessmentWarning">
@@ -344,21 +260,6 @@ export default function AssessmentPanel({
             )}
           </div>
 
-          {coaching ? (
-            <div className="AppAssessmentCard">
-              <h4>Coach</h4>
-              <p className="AppHistoryLabel">
-                <strong>What went well:</strong> {coaching.whatWentWell}
-              </p>
-              <p className="AppHistoryLabel">
-                <strong>What to improve:</strong> {coaching.whatToImprove}
-              </p>
-              <p className="AppHistoryLabel">
-                <strong>Try this next:</strong> {coaching.tryNext}
-              </p>
-            </div>
-          ) : null}
-
           <div className="AppAssessmentCard">
             <h4>Legend</h4>
             <p className="AppHistoryLabel"><span className="AppAssessmentLegendSwatch AppAssessmentLegendSwatch--correct" /> Correct note</p>
@@ -368,9 +269,10 @@ export default function AssessmentPanel({
             <p className="AppHistoryLabel">Click any colored note on the staff to inspect it.</p>
           </div>
 
-          <details className="AppAssessmentDebug">
-            <summary>Developer Debug</summary>
-            <div className="AppAssessmentGrid">
+          {showDeveloperDebug ? (
+            <details className="AppAssessmentDebug">
+              <summary>Developer Debug</summary>
+              <div className="AppAssessmentGrid">
               <div className="AppAssessmentCard">
                 <h4>Target Windows</h4>
                 <ul className="AppAssessmentList">
@@ -550,8 +452,9 @@ export default function AssessmentPanel({
                   Reason: {result.assessment.validity.reason}
                 </p>
               </div>
-            </div>
-          </details>
+              </div>
+            </details>
+          ) : null}
         </div>
       ) : null}
     </section>

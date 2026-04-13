@@ -87,6 +87,17 @@ body {
   color: #546f8f;
 }
 
+.AppThemeLight .AppGuideEyebrow,
+.AppThemeLight .AppGuideSummaryLabel,
+.AppThemeLight .AppSubtitle {
+  color: #5a7492;
+}
+
+.AppThemeLight .AppGuideLead,
+.AppThemeLight .AppGuideSummaryValue {
+  color: #1f344d;
+}
+
 .AppThemeLight .AppNavThemeField {
   color: #32455e;
 }
@@ -245,6 +256,91 @@ body {
   display: flex;
   gap: 0.55rem;
   flex-wrap: wrap;
+}
+
+.AppGuidePage {
+  gap: 1rem;
+}
+
+.AppGuideHero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.AppGuideEyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8ea4be;
+}
+
+.AppGuideLead {
+  margin: 0;
+  max-width: 58rem;
+  color: #c6d4e8;
+}
+
+.AppGuideGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.7rem;
+}
+
+.AppGuideList {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.AppGuideListNumbered {
+  padding-left: 1.35rem;
+}
+
+.AppGuideFeatureGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.7rem;
+}
+
+.AppGuideFeature h4,
+.AppGuideHero h2 {
+  margin: 0 0 0.4rem;
+}
+
+.AppGuideFeature p {
+  margin: 0;
+}
+
+.AppGuideSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.7rem;
+}
+
+.AppGuideSummaryItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.AppGuideSummaryLabel,
+.AppGuideSummaryValue {
+  margin: 0;
+}
+
+.AppGuideSummaryLabel {
+  font-size: 0.82rem;
+  color: #8ea4be;
+}
+
+.AppGuideSummaryValue {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #e9f2ff;
 }
 
 .AppClassControls {
@@ -470,6 +566,7 @@ body {
 
 .AppNotationPane {
   width: 100%;
+  position: relative;
 }
 
 .AppNotationToolbar {
@@ -1170,6 +1267,22 @@ body {
   font-size: 0.85rem;
 }
 
+.ToolbarGenerateButton {
+  background: #27b36a;
+  border-color: #2fc979;
+  color: #f4fff8;
+}
+
+.ToolbarGenerateButton:not(:disabled):hover {
+  border-color: #54de93;
+}
+
+.AppThemeLight .ToolbarGenerateButton {
+  background: #1fa55f;
+  border-color: #188a4f;
+  color: #f7fff9;
+}
+
 .ToolbarWideButton {
   min-width: 10.5rem;
   white-space: nowrap;
@@ -1718,6 +1831,10 @@ body {
 @media (max-width: 1050px) {
   .AppClassAccessColumns {
     grid-template-columns: 1fr;
+  }
+
+  .AppGuideHero {
+    flex-direction: column;
   }
 
   .AppTopRow {

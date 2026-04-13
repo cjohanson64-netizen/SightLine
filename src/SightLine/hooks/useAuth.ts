@@ -63,15 +63,18 @@ export function useAuth() {
   };
 
   const signInWithGoogle = async (redirectPath = "/"): Promise<void> => {
-  const redirectTo = new URL(redirectPath, window.location.origin).toString();
-  console.log("[AUTH] origin:", window.location.origin);
-  console.log("[AUTH] redirectTo:", redirectTo);
+    const redirectTo = new URL(redirectPath, window.location.origin).toString();
 
-  await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo },
-  });
-};
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo,
+        queryParams: {
+          prompt: "select_account",
+        },
+      },
+    });
+  };
 
   return {
     authUser,

@@ -1,7 +1,6 @@
 //GeneratorPage.tsx
 
 import type React from "react";
-import type { ReactNode } from "react";
 import type { MicAssessmentRunResult } from "@/SightLine/core/audio/types";
 import type { ExerciseSpec, MelodyEvent } from "@/SightLine/domain/music";
 import AssessmentPanel from "../components/AssessmentPanel";
@@ -26,7 +25,6 @@ interface GeneratorPageProps {
   currentMelody: MelodyEvent[];
   calibrationStatus: "idle" | "requesting_permission" | "recording" | "processing" | "complete" | "error";
   calibrationReady: boolean;
-  calibrationMessage: ReactNode;
   assessmentError: string | null;
   assessmentAccessMessage: string | null;
   assessmentAccessBlocked: boolean;
@@ -50,7 +48,6 @@ interface GeneratorPageProps {
   mode: "teacher" | "student" | "guest";
   notationContainerRef: React.RefObject<HTMLDivElement | null>;
   onExport: () => void;
-  onOpenInstructions: () => void;
   onOpenMelodyPreferences: () => void;
   onAssessmentNoteSelect: (index: number | null) => void;
   onAssessmentUpgrade: () => void;
@@ -80,7 +77,6 @@ export default function GeneratorPage({
   currentMelody,
   calibrationStatus,
   calibrationReady,
-  calibrationMessage,
   assessmentError,
   assessmentAccessMessage,
   assessmentAccessBlocked,
@@ -104,7 +100,6 @@ export default function GeneratorPage({
   mode,
   notationContainerRef,
   onExport,
-  onOpenInstructions,
   onOpenMelodyPreferences,
   onAssessmentNoteSelect,
   onAssessmentUpgrade,
@@ -155,7 +150,6 @@ export default function GeneratorPage({
               onRunAssessment={onRunAssessment}
               calibrationStatus={calibrationStatus}
               calibrationReady={calibrationReady}
-              calibrationMessage={calibrationMessage}
               assessmentAccessMessage={assessmentAccessMessage}
               assessmentAccessBlocked={assessmentAccessBlocked}
               onAssessmentUpgrade={onAssessmentUpgrade}
@@ -179,8 +173,6 @@ export default function GeneratorPage({
               }
               onSaveNew={() => void handleSaveToSupabase(true)}
               onSaveUpdate={() => void handleSaveToSupabase()}
-              onToggleProjection={() => void projection.toggle()}
-              onOpenHelp={onOpenInstructions}
               onOpenPreferences={onOpenMelodyPreferences}
               onExportMusicXml={() => {
                 if (!isGuestMode && !teacherFeaturesDisabled) {
@@ -226,6 +218,7 @@ export default function GeneratorPage({
             result={assessmentResult}
             errorMessage={assessmentError}
             selectedNoteIndex={selectedAssessmentNoteIndex}
+            showDeveloperDebug={teacher.subscriptionIsAdmin}
             onSelectNote={onAssessmentNoteSelect}
             onClear={onClearAssessment}
           />
@@ -424,6 +417,14 @@ export default function GeneratorPage({
                             title="Upgrade To Enable Feature"
                           />
                         ) : null}
+                      </button>
+                      <button
+                        type="button"
+                        className="AppHistoryButton AppProjectionToggleButton"
+                        onClick={() => void projection.toggle()}
+                        disabled={interactionDisabled}
+                      >
+                        Projection
                       </button>
                       {assessmentPlaybackDisabled ? (
                         <span className="AppHistoryLabel AppPlaybackDisabledNotice">

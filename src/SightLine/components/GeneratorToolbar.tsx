@@ -83,7 +83,6 @@ type GeneratorToolbarProps = {
   onRunAssessment: () => void;
   calibrationStatus: CalibrationStatus;
   calibrationReady: boolean;
-  calibrationMessage: ReactNode;
   assessmentAccessMessage: string | null;
   assessmentAccessBlocked: boolean;
   onAssessmentUpgrade: () => void;
@@ -95,8 +94,6 @@ type GeneratorToolbarProps = {
   saveDisabled: boolean;
   onSaveNew: () => void;
   onSaveUpdate: () => void;
-  onToggleProjection: () => void;
-  onOpenHelp: () => void;
   onOpenPreferences: () => void;
   onExportMusicXml: () => void;
   onTogglePitchEdit: () => void;
@@ -123,7 +120,6 @@ export default function GeneratorToolbar({
   onRunAssessment,
   calibrationStatus,
   calibrationReady,
-  calibrationMessage,
   assessmentAccessMessage,
   assessmentAccessBlocked,
   onAssessmentUpgrade,
@@ -135,8 +131,6 @@ export default function GeneratorToolbar({
   saveDisabled,
   onSaveNew,
   onSaveUpdate,
-  onToggleProjection,
-  onOpenHelp,
   onOpenPreferences,
   onExportMusicXml,
   onTogglePitchEdit,
@@ -229,7 +223,7 @@ export default function GeneratorToolbar({
         <div className="ToolbarGroup ToolbarGroup--primary">
           <button
             type="button"
-            className="AppHistoryButton AppProjectionToggleButton"
+            className="AppHistoryButton AppProjectionToggleButton ToolbarGenerateButton"
             onClick={onGenerate}
             disabled={controlsDisabled}
           >
@@ -251,18 +245,6 @@ export default function GeneratorToolbar({
           >
             {runAssessmentLabel}
           </button>
-          {calibrationMessage ? (
-            <div className="ToolbarAssessmentAccess">
-              <div className="ToolbarAssessmentAccessCopy">
-                <span className="ToolbarAssessmentAccessTitle">
-                  {calibrationReady ? "Calibration" : "Before You Begin"}
-                </span>
-                <span className="ToolbarAssessmentAccessText">
-                  {calibrationMessage}
-                </span>
-              </div>
-            </div>
-          ) : null}
           {assessmentAccessMessage ? (
             <div
               className={`ToolbarAssessmentAccess ${assessmentAccessBlocked ? "ToolbarAssessmentAccess--blocked" : ""}`}
@@ -314,26 +296,6 @@ export default function GeneratorToolbar({
           ) : null}
         </div>
 
-        <div className="ToolbarSpacer" />
-
-        <div className="ToolbarGroup ToolbarGroup--utilities">
-          <button
-            type="button"
-            className="AppHistoryButton AppProjectionToggleButton"
-            onClick={onToggleProjection}
-            disabled={controlsDisabled}
-          >
-            Projection
-          </button>
-          <button
-            type="button"
-            className="AppHistoryButton AppProjectionToggleButton"
-            onClick={onOpenHelp}
-            disabled={controlsDisabled}
-          >
-            Help
-          </button>
-        </div>
       </div>
 
     </div>

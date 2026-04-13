@@ -14,13 +14,12 @@ import {
 } from "react-router-dom";
 
 import AppNavbar from "../components/AppNavbar";
-import SightLineLandingPage from "../components/SightLineLandingPage";
 import AddStudentsModal from "../components/modals/AddStudentsModal";
 import AuthChoiceModal from "../components/modals/AuthChoiceModal";
 import BatchGenerateModal from "../components/modals/BatchGenerateModal";
+import CalibrationIntroModal from "../components/modals/CalibrationIntroModal";
 import ClassroomAccessModal from "../components/modals/ClassroomAccessModal";
 import CreatePacketFromSelectedModal from "../components/modals/CreatePacketFromSelectedModal";
-import InstructionsModal from "../components/modals/InstructionsModal";
 import LibraryPreviewModal from "../components/modals/LibraryPreviewModal";
 import MelodyPreferencesModal from "../components/modals/MelodyPreferencesModal";
 import StudentSignInModal from "../components/modals/StudentSignInModal";
@@ -52,7 +51,7 @@ import { useMicAssessment } from "../hooks/useMicAssessment";
 import { useAssessmentAccess } from "../hooks/useAssessmentAccess";
 import { useAssessmentCalibration } from "../hooks/useAssessmentCalibration";
 import ClassAccessPage from "../pages/ClassAccessPage";
-import DashboardPage from "../pages/DashboardPage";
+import GuidePage from "../pages/GuidePage";
 import GeneratorPage from "../pages/GeneratorPage";
 
 // ---------------------------------------------------------------------------
@@ -231,7 +230,6 @@ function AppContent(): JSX.Element {
   } | null>(null);
   const [relaxationNotice, setRelaxationNotice] = useState<string>("");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [showInstructions, setShowInstructions] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
@@ -247,7 +245,9 @@ function AppContent(): JSX.Element {
   const [showAddStudentsModal, setShowAddStudentsModal] =
     useState<boolean>(false);
   const [showBatchModal, setShowBatchModal] = useState<boolean>(false);
-  const [billingNotice, setBillingNotice] = useState<string>("");
+  const [showCalibrationIntroModal, setShowCalibrationIntroModal] =
+    useState<boolean>(false);
+  const [, setBillingNotice] = useState<string>("");
   const [selectedAssessmentNoteIndex, setSelectedAssessmentNoteIndex] =
     useState<number | null>(null);
 
@@ -312,6 +312,8 @@ function AppContent(): JSX.Element {
       });
     } catch (logError) {
       console.error("Failed to save assessment log", logError);
+    } finally {
+      calibration.clearCalibration();
     }
   };
 
@@ -515,16 +517,6 @@ function AppContent(): JSX.Element {
     return () => window.clearTimeout(timerId);
   }, [saveStatus]);
 
-  // Instructions keyboard shortcut
-  useEffect(() => {
-    if (!showInstructions) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setShowInstructions(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [showInstructions]);
-
   useEffect(() => {
     if (mode !== "teacher") {
       setBillingNotice("");
@@ -683,8 +675,7 @@ function AppContent(): JSX.Element {
 
   const handleTeacherSignIn = async () => {
     setShowAuthChoiceModal(false);
-    const redirectPath =
-      location.pathname === "/" ? "/dashboard" : location.pathname;
+    const redirectPath = location.pathname;
     await auth.signInWithGoogle(redirectPath);
   };
 
@@ -695,52 +686,6 @@ function AppContent(): JSX.Element {
     }
     setShowAuthChoiceModal(true);
   };
-
-  const calibrationMessage = useMemo(() => {
-    if (currentPatchedMelody.length === 0) {
-      return null;
-    }
-    if (calibration.status === "recording") {
-      return (
-        <>
-          <span>Sing </span>
-          <strong>DO RE MI FA SOL</strong>
-          <br />
-          <span>in the key you will use, then press Stop Calibration.</span>;
-        </>
-      );
-    }
-    if (calibration.status === "processing") {
-      return "Calibration helps SightLine listen more accurately.";
-    }
-    if (calibration.result?.profile.successful) {
-      const quality =
-        calibration.result.profile.signalQuality === "good"
-          ? "Good"
-          : calibration.result.profile.signalQuality === "fair"
-            ? "Fair"
-            : "Poor";
-      return `Calibration complete. ${quality} signal quality.`;
-    }
-    if (calibration.errorMessage) {
-      return calibration.errorMessage;
-    }
-    return (
-      <>
-        <span>Sing </span>
-        <strong>DO RE MI FA SOL</strong>
-        <br />
-        <span>in the key you will use. </span>
-        <br />
-        <span>Calibration helps SightLine listen more accurately.</span>
-      </>
-    );
-  }, [
-    calibration.errorMessage,
-    calibration.result,
-    calibration.status,
-    currentPatchedMelody.length,
-  ]);
 
   const handleStudentSignIn = () => {
     setShowAuthChoiceModal(false);
@@ -754,8 +699,7 @@ function AppContent(): JSX.Element {
   const handleJoinClassroom = async () => {
     const result = await student.join();
     if (result) {
-      const nextPath = location.pathname === "/" ? "/dashboard" : "/generator";
-      navigate(nextPath);
+      navigate("/");
     }
   };
 
@@ -768,6 +712,39 @@ function AppContent(): JSX.Element {
     mode === "teacher" ? "Teacher" : mode === "student" ? "Student" : "Guest";
   const teacherFeaturesDisabled =
     mode === "teacher" && !teacher.hasActiveSubscription;
+  const subscriptionStatusNormalized = teacher.subscriptionStatus.toLowerCase();
+  const hasStripeCustomer = Boolean(teacher.subscriptionStripeCustomerId);
+  const hasActiveOrTrialingSubscription =
+    subscriptionStatusNormalized === "active" ||
+    subscriptionStatusNormalized === "trialing";
+  const canManageSubscription =
+    teacher.hasActiveSubscription &&
+    (hasActiveOrTrialingSubscription || hasStripeCustomer);
+  const manageDisabledMissingCustomer =
+    teacher.hasActiveSubscription &&
+    !canManageSubscription &&
+    (teacher.subscriptionIsAdmin || teacher.subscriptionIsComped);
+  const subscriptionActionLoading =
+    teacher.checkoutStatus === "starting" ||
+    teacher.checkoutStatus === "redirecting" ||
+    teacher.portalStatus === "starting" ||
+    teacher.portalStatus === "redirecting";
+  const showBillingAction = mode === "teacher";
+  const billingActionLabel = teacher.hasActiveSubscription
+    ? teacher.portalStatus === "starting"
+      ? "Opening..."
+      : "Subscription"
+    : teacher.checkoutStatus === "starting"
+      ? "Starting..."
+      : "Upgrade";
+  const billingActionTitle = teacher.hasActiveSubscription
+    ? manageDisabledMissingCustomer
+      ? "No Stripe customer record for this account"
+      : "Open Stripe billing portal"
+    : "Start premium access";
+  const billingActionDisabled = teacher.hasActiveSubscription
+    ? subscriptionActionLoading || manageDisabledMissingCustomer
+    : subscriptionActionLoading;
   const navAuthLabel =
     mode === "student" || auth.authUser ? "Sign out" : "Sign In";
   const handleNavAuthClick = () => {
@@ -777,11 +754,9 @@ function AppContent(): JSX.Element {
     }
     void handleAuthClick();
   };
-  const dashboardView = (
-    <DashboardPage
+  const guideView = (
+    <GuidePage
       auth={auth}
-      billingNotice={billingNotice}
-      formatSavedDate={formatSavedDate}
       mode={mode}
       modeLabel={modeLabel}
       student={student}
@@ -819,28 +794,39 @@ function AppContent(): JSX.Element {
       onClickCapture={handleStudentInteractionClickCapture}
       onChangeCapture={handleStudentInteractionChangeCapture}
     >
-      {location.pathname !== "/" ? (
         <AppNavbar
           modeLabel={modeLabel}
           authLabel={navAuthLabel}
           onAuthClick={handleNavAuthClick}
+          onBillingAction={() =>
+            void (
+              teacher.hasActiveSubscription
+                ? teacher.startPortalSession()
+                : teacher.startCheckout()
+            )
+          }
+          showBillingAction={showBillingAction}
+          billingActionDisabled={billingActionDisabled}
+          billingActionLabel={billingActionLabel}
+          billingActionTitle={billingActionTitle}
           isProjectionMode={projection.isProjectionMode}
           canAccessClass={mode === "teacher"}
           theme={theme}
-          onThemeChange={setTheme}
-          interactionDisabled={interactionDisabled}
-        />
-      ) : null}
+        onThemeChange={setTheme}
+        interactionDisabled={interactionDisabled}
+      />
 
-      {!projection.isProjectionMode && location.pathname === "/dashboard" ? (
+      {!projection.isProjectionMode && location.pathname === "/guide" ? (
         <div className="AppIntro">
           <div className="AppBrand">
             <img src={Logo} alt="SightLine Logo" className="logo" />
             <div>
               <p className="AppSubtitle">
-                Create sightreading materials in seconds.
+                SightLine Guide
               </p>
-              <p className="AppSubtitle">Powered by TryAngleTree</p>
+              <p className="AppSubtitle">
+                Practical setup help for teachers and students.
+              </p>
             </div>
           </div>
         </div>
@@ -859,22 +845,10 @@ function AppContent(): JSX.Element {
         <Route
           path="/"
           element={
-            <SightLineLandingPage
-              onPrimaryCta={() => navigate("/generator")}
-              onSecondaryCta={() => navigate("/dashboard")}
-            />
-          }
-        />
-        <Route path="/dashboard" element={dashboardView} />
-
-        <Route
-          path="/generator"
-          element={
             <GeneratorPage
               currentMelody={currentMelody}
               calibrationStatus={calibration.status}
               calibrationReady={calibration.isReady}
-              calibrationMessage={calibrationMessage}
               assessmentError={micAssessment.errorMessage}
               assessmentNoteOutcomeByIndex={assessmentOutcomeByIndex}
               assessmentResult={micAssessment.result}
@@ -898,7 +872,6 @@ function AppContent(): JSX.Element {
               mode={mode}
               notationContainerRef={notationContainerRef}
               onExport={handleExport}
-              onOpenInstructions={() => setShowInstructions(true)}
               onOpenMelodyPreferences={() =>
                 setShowMelodyPreferencesModal(true)
               }
@@ -910,7 +883,7 @@ function AppContent(): JSX.Element {
                   return;
                 }
                 if (!calibration.isReady) {
-                  void calibration.startCalibration();
+                  setShowCalibrationIntroModal(true);
                   return;
                 }
                 if (micAssessment.status === "recording") {
@@ -941,6 +914,9 @@ function AppContent(): JSX.Element {
             />
           }
         />
+        <Route path="/guide" element={guideView} />
+        <Route path="/dashboard" element={<Navigate to="/guide" replace />} />
+        <Route path="/generator" element={<Navigate to="/" replace />} />
 
         <Route
           path="/class"
@@ -948,7 +924,7 @@ function AppContent(): JSX.Element {
             mode === "teacher" ? (
               classAccessView
             ) : (
-              <Navigate to="/generator" replace />
+              <Navigate to="/" replace />
             )
           }
         />
@@ -1032,6 +1008,16 @@ function AppContent(): JSX.Element {
         teacher={teacher}
       />
 
+      <CalibrationIntroModal
+        isOpen={showCalibrationIntroModal}
+        onClose={() => setShowCalibrationIntroModal(false)}
+        onStartCalibration={() => {
+          setShowCalibrationIntroModal(false);
+          void calibration.startCalibration();
+        }}
+        disabled={calibration.status === "requesting_permission"}
+      />
+
       <MelodyPreferencesModal
         isGuestMode={isGuestMode}
         isOpen={showMelodyPreferencesModal}
@@ -1045,11 +1031,6 @@ function AppContent(): JSX.Element {
         spec={spec}
         teacher={teacher}
         interactionDisabled={interactionDisabled}
-      />
-
-      <InstructionsModal
-        isOpen={showInstructions}
-        onClose={() => setShowInstructions(false)}
       />
     </div>
   );
