@@ -5,6 +5,7 @@ import {
   midiToPc,
   midiToPitch,
   noteKey,
+  pitchOctaveForMidi,
   prefersFlatsForKey,
   toOctave,
 } from "../core/midi";
@@ -15,6 +16,7 @@ type StepMode = "diatonic" | "octave" | "chromatic";
 export interface PitchPatchEntry {
   midi: number;
   pitch: string;
+  octave?: number;
 }
 
 interface RenderableAttack {
@@ -36,7 +38,7 @@ function applyPitchPatch(melody: MelodyEvent[], patch: Record<string, PitchPatch
     if (event.isAttack === false) return event;
     const override = patch[noteKey(event, index)];
     if (!override) return event;
-    return { ...event, midi: override.midi, pitch: override.pitch, octave: toOctave(override.midi), isEdited: true };
+    return { ...event, midi: override.midi, pitch: override.pitch, octave: override.octave ?? pitchOctaveForMidi(override.midi), isEdited: true };
   });
 }
 
@@ -230,12 +232,22 @@ export function usePitchEdit(params: {
       selected.noteId,
       isUnchanged
         ? null
-        : {
-            midi: validated,
-            pitch: midiToPitch(validated, {
+        : (() => {
+            const pitch = midiToPitch(validated, {
               preferFlats: prefersFlatsForKey(currentSpecSnapshot.key, currentSpecSnapshot.mode),
+              key: currentSpecSnapshot.key,
+              mode: currentSpecSnapshot.mode,
+            });
+            return {
+            midi: validated,
+            pitch,
+            octave: pitchOctaveForMidi(validated, {
+              preferFlats: prefersFlatsForKey(currentSpecSnapshot.key, currentSpecSnapshot.mode),
+              key: currentSpecSnapshot.key,
+              mode: currentSpecSnapshot.mode,
             }),
-          },
+          };
+        })(),
     );
   };
 

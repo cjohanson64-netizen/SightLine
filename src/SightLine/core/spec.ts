@@ -44,6 +44,7 @@ export const normalizeUserConstraintsInSpec = (nextSpec: ExerciseSpec): Exercise
     })();
   return {
     ...nextSpec,
+    mode: "major",
     userConstraints: {
       startDegreeLocked: nextSpec.userConstraints?.startDegreeLocked === true,
       hardStartDo: nextSpec.userConstraints?.hardStartDo === true,

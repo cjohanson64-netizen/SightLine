@@ -801,7 +801,11 @@ export function segmentPerformedMelody(
     ) {
       return {
         ...note,
-        expectedPitch: midiToPitch(note.expectedMidi, { preferFlats }),
+        expectedPitch: midiToPitch(note.expectedMidi, {
+          preferFlats,
+          key: referenceKey,
+          mode: referenceModeRaw === 'minor' ? 'minor' : 'major',
+        }),
         debugReason: `${note.debugReason} Expected note retained for debug, but not forced into performance.`,
       };
     }
@@ -809,7 +813,13 @@ export function segmentPerformedMelody(
     return {
       ...note,
       expectedPitch:
-        note.expectedMidi !== null ? midiToPitch(note.expectedMidi, { preferFlats }) : note.expectedPitch,
+        note.expectedMidi !== null
+          ? midiToPitch(note.expectedMidi, {
+              preferFlats,
+              key: referenceKey,
+              mode: referenceModeRaw === 'minor' ? 'minor' : 'major',
+            })
+          : note.expectedPitch,
     };
   });
 

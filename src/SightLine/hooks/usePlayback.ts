@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { midiToFrequency, toOctave } from "../core/midi";
 import type { MelodyEvent } from "@/SightLine/domain/music";
 
-type PitchPatchEntry = { midi: number; pitch: string };
+type PitchPatchEntry = { midi: number; pitch: string; octave?: number };
 
 function scheduleBeep(
   audioContext: AudioContext,
@@ -47,7 +47,7 @@ function applyPitchPatch(
       ...event,
       midi: override.midi,
       pitch: override.pitch,
-      octave: toOctave(override.midi),
+      octave: override.octave ?? toOctave(override.midi),
       isEdited: true,
       editedMidi: override.midi,
       editedPitch: override.pitch,

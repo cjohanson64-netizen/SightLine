@@ -17,6 +17,7 @@ interface ExerciseFormProps {
 
 const MAX_PHRASES = 4;
 const LABEL_ORDER: PhraseSpec['label'][] = ['A', 'B', 'C', 'D'];
+const MAJOR_KEY_OPTIONS = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#', 'F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb'] as const;
 
 function clampLabelToAllowed(label: PhraseSpec['label'], maxAllowedIndex: number): PhraseSpec['label'] {
   const currentIndex = LABEL_ORDER.indexOf(label);
@@ -262,19 +263,11 @@ export default function ExerciseForm({
             <small>Select up to 3.</small>
           </div>
 
-          <div className="ExerciseForm-row ExerciseForm-row--four">
-            <label>
-              Mode
-              <select value={spec.mode} onChange={(event) => update('mode', event.target.value as ExerciseSpec['mode'])}>
-                <option value="major">Major</option>
-                <option value="minor">Minor</option>
-              </select>
-            </label>
-
+          <div className="ExerciseForm-row ExerciseForm-row--three">
             <label>
               Key
               <select value={spec.key} onChange={(event) => update('key', event.target.value)}>
-                {['C', 'G', 'D', 'A', 'E', 'F', 'Bb', 'Eb', 'Ab'].map((key) => (
+                {MAJOR_KEY_OPTIONS.map((key) => (
                   <option key={key} value={key}>
                     {key}
                   </option>

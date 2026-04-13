@@ -1,14 +1,21 @@
 import type { HarmonyEvent } from '@/SightLine/domain/music';
-import { toOctave } from '../../midi';
-export { toOctave } from '../../midi';
+import { midiToPitch, pitchOctaveForMidi, toOctave } from '../../midi';
+export { pitchOctaveForMidi, toOctave } from '../../midi';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
-export function toPitchName(pc: number): string {
-  return NOTE_NAMES[((pc % 12) + 12) % 12];
+export function toPitchName(pc: number, key?: string, mode: 'major' | 'minor' = 'major'): string {
+  const normalizedPc = ((pc % 12) + 12) % 12;
+  if (key) {
+    return midiToPitch(60 + normalizedPc, { key, mode }).replace(/\d+$/, '');
+  }
+  return NOTE_NAMES[normalizedPc];
 }
 
-export function toPitchString(midi: number): string {
+export function toPitchString(midi: number, key?: string, mode: 'major' | 'minor' = 'major'): string {
+  if (key) {
+    return midiToPitch(midi, { key, mode });
+  }
   const pc = ((midi % 12) + 12) % 12;
   return `${toPitchName(pc)}${toOctave(midi)}`;
 }

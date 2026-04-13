@@ -36,6 +36,7 @@ import {
   nearestMidiWithPcInRange,
   nearestPcWithinLeapCap,
   nextScaleStepMidi,
+  pitchOctaveForMidi,
   toOctave,
   toPitchName,
   toPitchString
@@ -388,11 +389,13 @@ function choosePass3ClimaxIndex(
 }
 
 function retuneEventMidi(event: MelodyEvent, midi: number): MelodyEvent {
+  const [key = 'C', modeRaw = 'major'] = String(event.keyId ?? 'C-major').split('-');
+  const mode = modeRaw === 'minor' ? 'minor' : 'major';
   const pc = ((midi % 12) + 12) % 12;
-  const octave = toOctave(midi);
+  const octave = pitchOctaveForMidi(midi, { key, mode });
   return {
     ...event,
-    pitch: `${toPitchName(pc)}${octave}`,
+    pitch: `${toPitchName(pc, key, mode)}${octave}`,
     octave,
     midi,
     role: 'ChordTone',
@@ -686,8 +689,8 @@ export function generateStructuralSkeleton(input: {
     }
 
     const event: MelodyEvent = {
-      pitch: toPitchString(safeChosenMidi),
-      octave: toOctave(safeChosenMidi),
+      pitch: toPitchString(safeChosenMidi, input.spec.key, input.spec.mode),
+      octave: pitchOctaveForMidi(safeChosenMidi, { key: input.spec.key, mode: input.spec.mode }),
       midi: safeChosenMidi,
       duration: 'quarter',
       measure: slot.globalMeasure,
@@ -708,7 +711,7 @@ export function generateStructuralSkeleton(input: {
         {
           step: 'structuralSelect',
           remainingCandidateCount: candidates.length,
-          chosenPitch: toPitchString(safeChosenMidi),
+          chosenPitch: toPitchString(safeChosenMidi, input.spec.key, input.spec.mode),
           reason: `envelopeTarget=${slot.envelopeTargetMidi.toFixed(2)} climaxIndex=${climaxIndex}`
         }
       ]
@@ -1005,8 +1008,8 @@ export function embellishSkeleton(input: EmbellishInput): { melody: MelodyEvent[
       }
 
       const weakEvent: MelodyEvent = {
-        pitch: toPitchString(weakMidi),
-        octave: toOctave(weakMidi),
+        pitch: toPitchString(weakMidi, input.spec.key, input.spec.mode),
+        octave: pitchOctaveForMidi(weakMidi, { key: input.spec.key, mode: input.spec.mode }),
         midi: weakMidi,
         duration: 'quarter',
         measure: globalMeasure,
@@ -1027,7 +1030,7 @@ export function embellishSkeleton(input: EmbellishInput): { melody: MelodyEvent[
           {
             step: 'embellish',
             remainingCandidateCount: 1,
-            chosenPitch: toPitchString(weakMidi),
+            chosenPitch: toPitchString(weakMidi, input.spec.key, input.spec.mode),
             reason
           }
         ]
@@ -1852,8 +1855,8 @@ function realizePhraseGridPitches(input: {
         tags.push('connective_nht');
       }
       const event: MelodyEvent = {
-        pitch: toPitchString(midi),
-        octave: toOctave(midi),
+        pitch: toPitchString(midi, input.spec.key, input.spec.mode),
+        octave: pitchOctaveForMidi(midi, { key: input.spec.key, mode: input.spec.mode }),
         midi,
         duration: 'quarter',
         measure: slot.measure,
@@ -1899,8 +1902,8 @@ function realizePhraseGridPitches(input: {
     );
     const fallbackMidi = nearestChordToneMidi(harmonyEvent, input.skeleton.notes[0]?.midi ?? 60, input.rangeMin, input.rangeMax);
     eventBySlot.set(slotKey(slot.measure, slot.onset), {
-      pitch: toPitchString(fallbackMidi),
-      octave: toOctave(fallbackMidi),
+      pitch: toPitchString(fallbackMidi, input.spec.key, input.spec.mode),
+      octave: pitchOctaveForMidi(fallbackMidi, { key: input.spec.key, mode: input.spec.mode }),
       midi: fallbackMidi,
       duration: 'quarter',
       measure: slot.measure,
@@ -2063,11 +2066,13 @@ function normalizeAllowEighthBeats(
 }
 
 function retuneEvent(event: MelodyEvent, midi: number): MelodyEvent {
+  const [key = 'C', modeRaw = 'major'] = String(event.keyId ?? 'C-major').split('-');
+  const mode = modeRaw === 'minor' ? 'minor' : 'major';
   return {
     ...event,
     midi,
-    pitch: toPitchString(midi),
-    octave: toOctave(midi)
+    pitch: toPitchString(midi, key, mode),
+    octave: pitchOctaveForMidi(midi, { key, mode })
   };
 }
 
@@ -3922,13 +3927,13 @@ function enforceEePairMelodicRules(
       const step = nextScaleStepMidi(e1.midi, dir, keyScale, rangeMin, rangeMax);
       if (step !== null) {
         e2.midi = step;
-        e2.pitch = toPitchString(step);
-        e2.octave = toOctave(step);
+        e2.pitch = toPitchString(step, spec.key, spec.mode);
+        e2.octave = pitchOctaveForMidi(step, { key: spec.key, mode: spec.mode });
         e2.reason = `${e2.reason}|eePairHardClamp`;
       } else {
         e2.midi = e1.midi;
-        e2.pitch = toPitchString(e1.midi);
-        e2.octave = toOctave(e1.midi);
+        e2.pitch = toPitchString(e1.midi, spec.key, spec.mode);
+        e2.octave = pitchOctaveForMidi(e1.midi, { key: spec.key, mode: spec.mode });
         e2.reason = `${e2.reason}|eePairHardClamp`;
       }
       console.debug(
@@ -3969,8 +3974,8 @@ function enforceEePairMelodicRules(
           `pairIntervalClamp m${e1.measure} window=${window} from=${e2.midi} to=${rewritten} delta=${pairDelta} target=${target}`
         );
         e2.midi = rewritten;
-        e2.pitch = toPitchString(rewritten);
-        e2.octave = toOctave(rewritten);
+        e2.pitch = toPitchString(rewritten, spec.key, spec.mode);
+        e2.octave = pitchOctaveForMidi(rewritten, { key: spec.key, mode: spec.mode });
         e2.reason = `${e2.reason}|eePairIntervalRepair`;
       }
     }
@@ -3987,8 +3992,8 @@ function enforceEePairMelodicRules(
               `thirdResolutionNext m${e1.measure} window=${window} nextFrom=${nextAttack.midi} nextTo=${resolvedNext} resolution=${resolution}`
             );
             nextAttack.midi = resolvedNext;
-            nextAttack.pitch = toPitchString(resolvedNext);
-            nextAttack.octave = toOctave(resolvedNext);
+            nextAttack.pitch = toPitchString(resolvedNext, spec.key, spec.mode);
+            nextAttack.octave = pitchOctaveForMidi(resolvedNext, { key: spec.key, mode: spec.mode });
             nextAttack.reason = `${nextAttack.reason}|eeThirdResolutionRepair`;
           }
         } else {
@@ -4000,8 +4005,8 @@ function enforceEePairMelodicRules(
               `thirdForbiddenLockedNext m${e1.measure} window=${window} from=${e2.midi} to=${stepwise} lockedNext=${nextAttack.midi}`
             );
             e2.midi = stepwise;
-            e2.pitch = toPitchString(stepwise);
-            e2.octave = toOctave(stepwise);
+            e2.pitch = toPitchString(stepwise, spec.key, spec.mode);
+            e2.octave = pitchOctaveForMidi(stepwise, { key: spec.key, mode: spec.mode });
             e2.reason = `${e2.reason}|eeThirdToStepRepair`;
           }
         }
@@ -4255,10 +4260,11 @@ export function insertSmoothingEighthFill(
     }
 
     const stepPc = ((stepMidi % 12) + 12) % 12;
-    const octave = toOctave(stepMidi);
+    const [key = 'C', modeRaw = 'major'] = String(current.keyId ?? 'C-major').split('-');
+    const octave = pitchOctaveForMidi(stepMidi, { key, mode: modeRaw === 'minor' ? 'minor' : 'major' });
     output.push({
       ...current,
-      pitch: `${toPitchName(stepPc)}${octave}`,
+      pitch: `${toPitchName(stepPc, key, modeRaw === 'minor' ? 'minor' : 'major')}${octave}`,
       octave,
       midi: stepMidi,
       beat: current.beat + 0.5,

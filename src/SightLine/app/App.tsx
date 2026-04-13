@@ -29,6 +29,7 @@ import {
   midiToPc,
   midiToPitch,
   noteKey,
+  pitchOctaveForMidi,
   prefersFlatsForKey,
   toOctave,
 } from "../core/midi";
@@ -61,6 +62,7 @@ import GeneratorPage from "../pages/GeneratorPage";
 interface PitchPatchEntry {
   midi: number;
   pitch: string;
+  octave?: number;
 }
 
 type AssessmentNoteOutcome =
@@ -94,7 +96,7 @@ function applyPitchPatch(
       ...event,
       midi: override.midi,
       pitch: override.pitch,
-      octave: toOctave(override.midi),
+      octave: override.octave ?? pitchOctaveForMidi(override.midi),
       isEdited: true,
     };
   });
@@ -282,7 +284,7 @@ function AppContent(): JSX.Element {
     return patched.map((event) =>
       event.isAttack === false
         ? event
-        : { ...event, pitch: midiToPitch(event.midi, { preferFlats }) },
+        : { ...event, pitch: midiToPitch(event.midi, { preferFlats, key: activeSpec.key, mode: activeSpec.mode }) },
     );
   }, [currentMelody, pitchPatch, currentSpecSnapshot, spec]);
 

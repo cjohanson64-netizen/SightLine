@@ -1,4 +1,4 @@
-import { KEY_TO_PC, midiToPc, midiToPitch, prefersFlatsForKey } from '@/SightLine/core/midi';
+import { KEY_TO_PC, midiToPc, midiToPitch, pitchOctaveForMidi, prefersFlatsForKey } from '@/SightLine/core/midi';
 import { detectPitchFrames } from '@/SightLine/core/audio/detectPitchFrames';
 import { segmentPerformedMelody } from '@/SightLine/core/audio/segmentPerformedMelody';
 import type { MelodyEvent } from '@/SightLine/domain/music';
@@ -66,8 +66,8 @@ function buildCalibrationTarget(targetMelody: MelodyEvent[]): MelodyEvent[] {
   return degreeOffsets.map((offset, index) => {
     const midi = tonicMidi + offset;
     return {
-      pitch: midiToPitch(midi, { preferFlats }),
-      octave: Math.floor(midi / 12) - 1,
+      pitch: midiToPitch(midi, { preferFlats, key: keyRaw, mode }),
+      octave: pitchOctaveForMidi(midi, { preferFlats, key: keyRaw, mode }),
       midi,
       duration: 'quarter',
       durationBeats: 1,

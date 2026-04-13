@@ -1,4 +1,4 @@
-import { midiToPitch, prefersFlatsForKey, toOctave } from '@/SightLine/core/midi';
+import { midiToPitch, pitchOctaveForMidi, prefersFlatsForKey } from '@/SightLine/core/midi';
 import type { MelodyEvent } from '@/SightLine/domain/music';
 import type { PerformedAlignment, SegmentedPerformedNote } from './types';
 
@@ -28,11 +28,22 @@ export function alignPerformedToTarget(
 
   const alignedMelody = performedWindows.map((note) => {
     const target = activeTarget[note.targetIndex] ?? referenceTarget;
-    const pitch = midiToPitch(note.midi as number, { preferFlats });
+    const [targetKey = referenceKey, targetModeRaw = referenceModeRaw] = String(
+      target?.keyId ?? `${referenceKey}-${referenceModeRaw}`
+    ).split('-');
+    const pitch = midiToPitch(note.midi as number, {
+      preferFlats,
+      key: targetKey,
+      mode: targetModeRaw === 'minor' ? 'minor' : 'major',
+    });
 
     return {
       pitch,
-      octave: toOctave(note.midi as number),
+      octave: pitchOctaveForMidi(note.midi as number, {
+        preferFlats,
+        key: targetKey,
+        mode: targetModeRaw === 'minor' ? 'minor' : 'major',
+      }),
       midi: note.midi as number,
       duration: target?.duration ?? 'quarter',
       measure: target?.measure ?? 1,
