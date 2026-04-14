@@ -44,6 +44,7 @@ export type MelodyGenerationOutput =
     };
 
 export interface RewriteAttackOptions {
+  allowedNoteValues?: Array<'EE' | 'Q' | 'H' | 'W'>;
   beatsPerMeasure?: number;
   eeWindowBeat?: 1 | 2 | 3 | 4;
   templatesByMeasure?: Map<number, MeasureTemplateId>;

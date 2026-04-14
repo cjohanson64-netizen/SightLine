@@ -566,18 +566,14 @@ function AppContent(): JSX.Element {
     nextSpec: ExerciseSpec,
   ): { title: string; message: string; suggestions: string[] } | null => {
     const allowed = nextSpec.userConstraints?.allowedNoteValues ?? [];
-    if (allowed.length > 0 && allowed.length <= 3) return null;
+    if (allowed.length > 0) return null;
     if (allowed.length === 0)
       return {
         title: "Invalid Note Values",
         message: "Choose at least one allowed note value.",
-        suggestions: ["Select 1 to 3 note values from EE, Q, H, W."],
+        suggestions: ["Select at least one note value from EE, Q, H, W."],
       };
-    return {
-      title: "Invalid Note Values",
-      message: `You selected ${allowed.length} note values. Select at most 3.`,
-      suggestions: ["Deselect one note value so only 1-3 remain."],
-    };
+    return null;
   };
 
   const {

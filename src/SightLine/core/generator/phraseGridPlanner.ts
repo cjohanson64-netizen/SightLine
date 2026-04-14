@@ -1,5 +1,11 @@
 import type { PhraseSpec, RhythmWeights } from '@/SightLine/domain/music';
 import { createRng } from '../../utils/rng';
+import {
+  chooseHarmonicRhythmPattern,
+  harmonicRhythmBeats,
+  isSemanticCadentialWholeNoteEligible,
+  type HarmonicRhythmPattern,
+} from "./harmonicRhythm";
 import type { PhrasePlan } from './phrasePlanner';
 
 export type MeasureTemplateId =
@@ -18,9 +24,11 @@ export interface PhraseGridMeasurePlan {
   templateId: MeasureTemplateId;
   onsets: number[];
   anchorOnsets: number[];
+  harmonicRhythmPattern: HarmonicRhythmPattern;
   isCadenceMeasure: boolean;
   isClimaxMeasure: boolean;
   eeWindowBeat?: 1 | 2 | 3 | 4;
+  wholeNoteRole?: "cadence";
 }
 
 export interface PhraseGridPlan {
@@ -161,7 +169,7 @@ function templateUsesOnlyAllowed(templateId: MeasureTemplateId, allowed: Set<Not
 
 function pickCadenceTemplate(cadence: PhraseSpec['cadence'], rhythmDist?: { W: number; H: number }): MeasureTemplateId {
   if (cadence === 'half') {
-    return (rhythmDist?.W ?? 0) >= (rhythmDist?.H ?? 0) ? 'CADENCE_W' : 'CADENCE_HH';
+    return 'CADENCE_HH';
   }
   return (rhythmDist?.W ?? 0) >= (rhythmDist?.H ?? 0) ? 'CADENCE_W' : 'CADENCE_HH';
 }
@@ -195,9 +203,6 @@ export function generatePhraseGrid(input: {
 
   const lockRhythmConstraints = input.lockRhythmConstraints !== false;
   const allowedNoteValues = Array.from(new Set(input.allowedNoteValues ?? (['EE', 'Q', 'H'] as NoteValue[])));
-  if (allowedNoteValues.length === 4) {
-    throw new Error('input_invalid_allowed_note_values_max_three');
-  }
   if (allowedNoteValues.length === 0) {
     throw new Error('input_invalid_allowed_note_values_empty');
   }
@@ -241,11 +246,34 @@ export function generatePhraseGrid(input: {
 
   for (let measure = input.phraseStartMeasure; measure <= finalMeasure; measure += 1) {
     let templateId: MeasureTemplateId = defaultTemplate;
+    let wholeNoteRole: PhraseGridMeasurePlan["wholeNoteRole"];
     if (measure === finalMeasure) {
-      templateId = pickCadenceTemplate(input.phraseSpec.cadence, input.rhythmDist ? { W: input.rhythmDist.W, H: input.rhythmDist.H } : undefined);
+      const cadenceWholeEligible = isSemanticCadentialWholeNoteEligible({
+        allowedNoteValues,
+        beatsPerMeasure: input.beatsPerMeasure,
+        cadence: input.phraseSpec.cadence,
+        isPhraseFinalMeasure: true,
+      });
+      templateId = cadenceWholeEligible
+        ? 'CADENCE_W'
+        : pickCadenceTemplate(input.phraseSpec.cadence, input.rhythmDist ? { W: input.rhythmDist.W, H: input.rhythmDist.H } : undefined);
       if (!templateUsesOnlyAllowed(templateId, allowedSet, input.beatsPerMeasure)) {
-        templateId = chooseFallbackTemplate(['CADENCE_W', 'CADENCE_HH']);
+        templateId = chooseFallbackTemplate(
+          input.phraseSpec.cadence === 'half'
+            ? ['CADENCE_HH']
+            : ['CADENCE_W', 'CADENCE_HH']
+        );
       }
+      wholeNoteRole =
+        templateId === 'CADENCE_W' &&
+        isSemanticCadentialWholeNoteEligible({
+          allowedNoteValues,
+          beatsPerMeasure: input.beatsPerMeasure,
+          cadence: input.phraseSpec.cadence,
+          isPhraseFinalMeasure: true,
+        })
+          ? 'cadence'
+          : undefined;
     } else if (measure === climaxMeasure) {
       templateId = templateUsesOnlyAllowed('CLIMAX_SIMPLE', allowedSet, input.beatsPerMeasure)
         ? 'CLIMAX_SIMPLE'
@@ -272,14 +300,24 @@ export function generatePhraseGrid(input: {
       ]);
     }
     const baseOnsets = templateOnsetsForMeter(templateId, input.beatsPerMeasure);
+    const harmonicRhythmPattern = chooseHarmonicRhythmPattern({
+      beatsPerMeasure: input.beatsPerMeasure,
+      cadence: input.phraseSpec.cadence,
+      isClimaxMeasure: measure === climaxMeasure,
+      isPhraseFinalMeasure: measure === finalMeasure,
+      rng,
+      wholeNoteRole,
+    });
     measures.push({
       measure,
       templateId,
       onsets: [...baseOnsets],
       anchorOnsets: anchorOnsetsForTemplate(baseOnsets),
+      harmonicRhythmPattern,
       isCadenceMeasure: measure === finalMeasure,
       isClimaxMeasure: measure === climaxMeasure,
-      eeWindowBeat: eeWindowBeatForTemplateInMeter(templateId, input.beatsPerMeasure)
+      eeWindowBeat: eeWindowBeatForTemplateInMeter(templateId, input.beatsPerMeasure),
+      wholeNoteRole
     });
   }
 

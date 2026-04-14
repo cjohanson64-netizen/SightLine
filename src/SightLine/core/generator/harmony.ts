@@ -4,6 +4,12 @@ import { createRng } from '../../utils/rng';
 import type { Rng } from '../../utils/rng';
 import type { TonnetzGraph } from '../tonnetz/buildTonnetz';
 import { buildTonnetz } from '../tonnetz/buildTonnetz';
+import {
+  chooseHarmonicRhythmPattern,
+  harmonicRhythmBeats,
+  isSemanticCadentialWholeNoteEligible,
+  type HarmonicRhythmPattern,
+} from "./harmonicRhythm";
 
 function modeScale(mode: ExerciseSpec['mode']): number[] {
   return mode === 'major' ? [0, 2, 4, 5, 7, 9, 11] : [0, 2, 3, 5, 7, 8, 10];
@@ -187,12 +193,8 @@ function weightedPick<T>(items: Array<{ item: T; weight: number }>, rng: Rng): T
 
 export function buildHarmonySpine(spec: ExerciseSpec, tonnetz: TonnetzGraph, rng: Rng): HarmonyEvent[] {
   const beatsPerMeasure = Math.max(1, Number(spec.timeSig.split('/')[0]) || 4);
-  const slotBeats = beatsPerMeasure === 2 ? [1, 2] : [1, 1 + beatsPerMeasure / 2];
-  const slotsPerMeasure = slotBeats.length;
   const phraseCount = Math.max(1, spec.phrases.length);
   const totalMeasures = Math.max(1, spec.phraseLengthMeasures * phraseCount);
-  const totalSlots = Math.max(2, totalMeasures * slotsPerMeasure);
-  const slotsPerPhrase = Math.max(2, spec.phraseLengthMeasures * slotsPerMeasure);
   const tonicPc = KEY_TO_PC[spec.key] ?? 0;
 
   const degreeToRootPc = new Map<number, number>();
@@ -259,14 +261,72 @@ export function buildHarmonySpine(spec: ExerciseSpec, tonnetz: TonnetzGraph, rng
     return targets[0];
   };
 
+  const measurePlans: Array<{
+    measure: number;
+    phraseIndex: number;
+    localMeasure: number;
+    pattern: HarmonicRhythmPattern;
+    beats: number[];
+  }> = [];
+  for (let phraseIndex = 0; phraseIndex < phraseCount; phraseIndex += 1) {
+    const cadenceType: CadenceType = spec.phrases[phraseIndex]?.cadence ?? 'authentic';
+    for (let localMeasure = 1; localMeasure <= spec.phraseLengthMeasures; localMeasure += 1) {
+      const measure = phraseIndex * spec.phraseLengthMeasures + localMeasure;
+      const wholeNoteRole = isSemanticCadentialWholeNoteEligible({
+        allowedNoteValues: spec.userConstraints?.allowedNoteValues,
+        beatsPerMeasure,
+        cadence: cadenceType,
+        isPhraseFinalMeasure: localMeasure === spec.phraseLengthMeasures,
+      })
+        ? "cadence"
+        : undefined;
+      const pattern = chooseHarmonicRhythmPattern({
+        beatsPerMeasure,
+        cadence: cadenceType,
+        isClimaxMeasure: false,
+        isPhraseFinalMeasure: localMeasure === spec.phraseLengthMeasures,
+        rng,
+        wholeNoteRole,
+      });
+      measurePlans.push({
+        measure,
+        phraseIndex,
+        localMeasure,
+        pattern,
+        beats: harmonicRhythmBeats(pattern),
+      });
+    }
+  }
+
+  const slotPlans = measurePlans.flatMap((measurePlan) =>
+    measurePlan.beats.map((beat) => ({
+      measure: measurePlan.measure,
+      phraseIndex: measurePlan.phraseIndex,
+      pattern: measurePlan.pattern,
+      beat,
+    })),
+  );
+  const phraseSlotOffsets: number[] = [];
+  let slotCursor = 0;
+  for (let phraseIndex = 0; phraseIndex < phraseCount; phraseIndex += 1) {
+    phraseSlotOffsets.push(slotCursor);
+    slotCursor += slotPlans.filter((slot) => slot.phraseIndex === phraseIndex).length;
+  }
+
   const rootPath: number[] = [tonicPc];
-  for (let slot = 1; slot < totalSlots; slot += 1) {
+  for (let slot = 1; slot < slotPlans.length; slot += 1) {
     const prevRoot = rootPath[slot - 1];
     const prevDegree = degreeByRoot(prevRoot);
     const prevRole = degreeToRole(spec.mode, prevDegree);
-    const phraseIndex = Math.min(phraseCount - 1, Math.floor(slot / slotsPerPhrase));
+    const slotPlan = slotPlans[slot];
+    const phraseIndex = slotPlan.phraseIndex;
     const cadenceType = spec.phrases[phraseIndex]?.cadence ?? 'authentic';
-    const localSlot = slot % slotsPerPhrase;
+    const phraseStartSlot = phraseSlotOffsets[phraseIndex] ?? 0;
+    const phraseEndSlot = phraseIndex + 1 < phraseSlotOffsets.length
+      ? phraseSlotOffsets[phraseIndex + 1]
+      : slotPlans.length;
+    const slotsPerPhrase = Math.max(1, phraseEndSlot - phraseStartSlot);
+    const localSlot = slot - phraseStartSlot;
     const stage = phraseStageForSlot(cadenceType, localSlot, slotsPerPhrase);
     const requiredRole = cadenceRoleRequirement(cadenceType, localSlot, slotsPerPhrase);
     const strictWindow = stage === 'preCadence' || stage === 'cadence';
@@ -328,12 +388,10 @@ export function buildHarmonySpine(spec: ExerciseSpec, tonnetz: TonnetzGraph, rng
     }
     rootPath.push(chosenRoot);
 
-    const globalMeasure = Math.floor(slot / slotsPerMeasure) + 1;
-    const beat = slotBeats[slot % slotsPerMeasure];
     const chosenDegree = degreeByRoot(chosenRoot);
     const chosenRole = degreeToRole(spec.mode, chosenDegree);
     console.debug(
-      `[harmony] phrase=${phraseIndex + 1} slot=${localSlot + 1}/${slotsPerPhrase} m=${globalMeasure} b=${beat} stage=${stage} degree=${chosenDegree} role=${chosenRole} candidates=${rawCandidates.length}->${afterFunctional} forcedFallback=${String(
+      `[harmony] phrase=${phraseIndex + 1} slot=${localSlot + 1}/${slotsPerPhrase} m=${slotPlan.measure} b=${slotPlan.beat} pattern=${slotPlan.pattern} stage=${stage} degree=${chosenDegree} role=${chosenRole} candidates=${rawCandidates.length}->${afterFunctional} forcedFallback=${String(
         forcedFallback
       )}`
     );
@@ -342,12 +400,16 @@ export function buildHarmonySpine(spec: ExerciseSpec, tonnetz: TonnetzGraph, rng
   for (let phraseIndex = 0; phraseIndex < phraseCount; phraseIndex += 1) {
     const cadenceType: CadenceType = spec.phrases[phraseIndex]?.cadence ?? 'authentic';
     const patterns = CADENCE_TAIL_PATTERNS[cadenceType];
+    const phraseStartSlot = phraseSlotOffsets[phraseIndex] ?? 0;
+    const phraseEndSlot = phraseIndex + 1 < phraseSlotOffsets.length
+      ? phraseSlotOffsets[phraseIndex + 1]
+      : slotPlans.length;
+    const slotsPerPhrase = phraseEndSlot - phraseStartSlot;
     if (!patterns || patterns.length === 0 || slotsPerPhrase < 3) {
       continue;
     }
     const patternPick = (rng.int(0, Number.MAX_SAFE_INTEGER) + phraseIndex * 17) % patterns.length;
     const chosenPattern = patterns[patternPick];
-    const phraseStartSlot = phraseIndex * slotsPerPhrase;
     const cadenceStartSlot = phraseStartSlot + slotsPerPhrase - 3;
     const overriddenSlots: string[] = [];
 
@@ -358,9 +420,8 @@ export function buildHarmonySpine(spec: ExerciseSpec, tonnetz: TonnetzGraph, rng
       }
       const degree = chosenPattern[i] ?? chosenPattern[chosenPattern.length - 1] ?? 1;
       rootPath[slot] = degreeToRootPc.get(degree) ?? tonicPc;
-      const measure = Math.floor(slot / slotsPerMeasure) + 1;
-      const beat = slotBeats[slot % slotsPerMeasure];
-      overriddenSlots.push(`m${measure}b${beat}->${degree}`);
+      const slotPlan = slotPlans[slot];
+      overriddenSlots.push(`m${slotPlan.measure}b${slotPlan.beat}->${degree}`);
     }
 
     console.debug(
@@ -372,15 +433,15 @@ export function buildHarmonySpine(spec: ExerciseSpec, tonnetz: TonnetzGraph, rng
 
   return rootPath.map((rootPc, index) => {
     const degree = rootPcToDegree.get(rootPc) ?? 1;
-    const measure = Math.floor(index / slotsPerMeasure) + 1;
-    const beat = slotBeats[index % slotsPerMeasure];
+    const slotPlan = slotPlans[index];
     return {
-      measure,
-      beat,
+      measure: slotPlan.measure,
+      beat: slotPlan.beat,
       degree,
       rootPc,
       chordPcs: chordByRootPc.get(rootPc) ?? chordForDegree(tonicPc, spec.mode, degree),
-      quality: degreeQuality(spec.mode, degree)
+      quality: degreeQuality(spec.mode, degree),
+      harmonicRhythmPattern: slotPlan.pattern,
     };
   });
 }

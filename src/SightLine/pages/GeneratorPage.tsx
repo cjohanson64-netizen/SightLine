@@ -4,9 +4,11 @@ import type React from "react";
 import type { MicAssessmentRunResult } from "@/SightLine/core/audio/types";
 import type { ExerciseSpec, MelodyEvent } from "@/SightLine/domain/music";
 import AssessmentPanel from "../components/AssessmentPanel";
+import GeneratorNotationControls from "../components/GeneratorNotationControls";
+import GeneratorStudentSidebar from "../components/GeneratorStudentSidebar";
+import GeneratorTeacherSidebar from "../components/GeneratorTeacherSidebar";
 import GeneratorToolbar from "../components/GeneratorToolbar";
 import NotationViewer from "../components/NotationViewer/NotationViewer";
-import StudentJoinForm from "../components/StudentJoinForm/StudentJoinForm";
 import ErrorBanner from "../components/ErrorBanner/ErrorBanner";
 import { usePlayback } from "../hooks/usePlayback";
 import { useProjection } from "../hooks/useProjection";
@@ -270,9 +272,9 @@ export default function GeneratorPage({
               }
               headerControls={
                 <div className="AppHistoryControls">
-                  <div className="AppHistoryNav">
-                    {!projection.isProjectionMode ? (
-                      <div />
+                <div className="AppHistoryNav">
+                  {!projection.isProjectionMode ? (
+                    <div />
                     ) : (
                       <div
                         className={`AppProjectionHeaderRow ${projection.showProjectionControls ? "" : "AppProjectionControlsHidden"}`}
@@ -291,150 +293,21 @@ export default function GeneratorPage({
                     )}
                   </div>
                   {!projection.isProjectionMode ? (
-                    <div className="AppPlaybackControls">
-                      {(() => {
-                        const overlayValue =
-                          solfege.solfegeMode === "off"
-                            ? "off"
-                            : solfege.solfegeColorizeMode;
-
-                        return (
-                          <>
-                      <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField AppPlaybackControlsField">
-                        Tempo
-                        <input
-                          type="number"
-                          min={30}
-                          max={240}
-                          step={1}
-                          value={playback.tempoBpm}
-                          onChange={(event) =>
-                            playback.setTempoBpm(
-                              Math.max(30, Math.min(240, Number(event.target.value) || 80)),
-                            )
-                          }
-                          disabled={interactionDisabled || assessmentPlaybackDisabled}
-                        />
-                      </label>
-                      <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField AppPlaybackControlsField">
-                        Instrument
-                        <select
-                          value={playback.instrument}
-                          onChange={(event) =>
-                            playback.setInstrument(event.target.value as OscillatorType)
-                          }
-                          disabled={interactionDisabled || assessmentPlaybackDisabled}
-                        >
-                          <option value="sine">SINE</option>
-                          <option value="triangle">TRIANGLE</option>
-                          <option value="square">SQUARE</option>
-                          <option value="sawtooth">SAWTOOTH</option>
-                        </select>
-                      </label>
-                      <button
-                        type="button"
-                        className="AppHistoryButton AppProjectionToggleButton"
-                        onClick={() => playback.play()}
-                        disabled={currentMelody.length === 0 || assessmentPlaybackDisabled}
-                        data-allow-while-playing="true"
-                      >
-                        {playback.isPlaying ? "Stop" : "Play"}
-                      </button>
-                      <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField AppCountInField AppPlaybackControlsField">
-                        Count-in
-                        <input
-                          type="checkbox"
-                          className="AppLibraryCheckbox AppCountInCheckbox"
-                          checked={playback.countInEnabled}
-                          onChange={(event) => playback.setCountInEnabled(event.target.checked)}
-                          disabled={interactionDisabled || assessmentPlaybackDisabled}
-                        />
-                      </label>
-                      <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField AppCountInField AppPlaybackControlsField">
-                        Show Solfege
-                        <input
-                          type="checkbox"
-                          className="AppLibraryCheckbox AppCountInCheckbox"
-                          checked={solfege.solfegeMode !== "off"}
-                          onChange={(event) =>
-                            solfege.setSolfegeMode(event.target.checked ? "movable" : "off")
-                          }
-                          disabled={interactionDisabled}
-                        />
-                      </label>
-                      <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField AppPlaybackControlsField">
-                        Colorize
-                        <select
-                          value={overlayValue}
-                          onChange={(event) => {
-                            const next = event.target.value;
-                            if (solfege.solfegeMode === "off") {
-                              solfege.setSolfegeMode("movable");
-                            }
-                            solfege.setSolfegeColorizeMode(
-                              next as "off" | "lyrics" | "full"
-                            );
-                          }}
-                          disabled={interactionDisabled}
-                        >
-                          <option value="off">Off</option>
-                          <option value="lyrics">Lyrics only</option>
-                          <option value="full">Full</option>
-                        </select>
-                      </label>
-                      <button
-                        type="button"
-                        className="AppHistoryButton AppProjectionToggleButton"
-                        onClick={() => {
-                          setPitchEditMode((prev) => !prev);
-                          setEditMessage("");
-                        }}
-                        disabled={interactionDisabled}
-                      >
-                        {pitchEditMode ? "Disable Pitch Edit" : "Enable Pitch Edit"}
-                      </button>
-                      <button
-                        type="button"
-                        className="AppHistoryButton AppProjectionToggleButton"
-                        onClick={() => {
-                          if (!isGuestMode && !teacherFeaturesDisabled) {
-                            onExport();
-                          }
-                        }}
-                        disabled={
-                          interactionDisabled ||
-                          isGuestMode || teacherFeaturesDisabled || !exportMusicXml
-                        }
-                        title={
-                          teacherFeaturesDisabled ? "Upgrade required" : undefined
-                        }
-                      >
-                        Export MusicXML
-                        {teacherFeaturesDisabled ? (
-                          <span
-                            className="UpgradeFeatureMarker"
-                            aria-label="Upgrade To Enable Feature"
-                            title="Upgrade To Enable Feature"
-                          />
-                        ) : null}
-                      </button>
-                      <button
-                        type="button"
-                        className="AppHistoryButton AppProjectionToggleButton"
-                        onClick={() => void projection.toggle()}
-                        disabled={interactionDisabled}
-                      >
-                        Projection
-                      </button>
-                      {assessmentPlaybackDisabled ? (
-                        <span className="AppHistoryLabel AppPlaybackDisabledNotice">
-                          Playback is disabled while SightLine is listening.
-                        </span>
-                      ) : null}
-                          </>
-                        );
-                      })()}
-                    </div>
+                    <GeneratorNotationControls
+                      assessmentPlaybackDisabled={assessmentPlaybackDisabled}
+                      currentMelodyCount={currentMelody.length}
+                      exportMusicXml={exportMusicXml}
+                      interactionDisabled={interactionDisabled}
+                      isGuestMode={isGuestMode}
+                      onExport={onExport}
+                      pitchEditMode={pitchEditMode}
+                      playback={playback}
+                      projection={projection}
+                      setEditMessage={setEditMessage}
+                      setPitchEditMode={setPitchEditMode}
+                      solfege={solfege}
+                      teacherFeaturesDisabled={teacherFeaturesDisabled}
+                    />
                   ) : null}
                 </div>
               }
@@ -468,207 +341,29 @@ export default function GeneratorPage({
 
         {!projection.isProjectionMode ? (
           <aside className="AppMelodyPanel">
-            <fieldset className="AppInteractionFieldset" disabled={interactionDisabled}>
             {mode !== "teacher" ? (
-              <>
-                <h3>Student Mode</h3>
-                <div className="AppPanelButtons">
-                  <StudentJoinForm
-                    studentSession={student.studentSession}
-                    studentJoinCode={student.studentJoinCode}
-                    onJoinCodeChange={student.setStudentJoinCode}
-                    studentPasscode={student.studentPasscode}
-                    onPasscodeChange={student.setStudentPasscode}
-                    studentId={student.studentId}
-                    onStudentIdChange={student.setStudentId}
-                    studentPin={student.studentPin}
-                    onPinChange={student.setStudentPin}
-                    studentDisplayName={student.studentDisplayName}
-                    onDisplayNameChange={student.setStudentDisplayName}
-                    studentJoinStatus={student.studentJoinStatus}
-                    studentJoinMessage={student.studentJoinMessage}
-                    studentProgress={student.studentProgress}
-                    studentProgressStatus={student.studentProgressStatus}
-                    studentProgressError={student.studentProgressError}
-                    classroomDefaultsStatus={student.classroomDefaultsStatus}
-                    classroomDefaultsMessage={student.classroomDefaultsMessage}
-                    studentSpecBeforeDefaults={student.studentSpecBeforeDefaults}
-                    onJoin={() => void handleJoinClassroom()}
-                    onLeave={handleLeaveClassroom}
-                    onUseTeacherSettings={() => {
-                      const next = student.applyTeacherSettings(
-                        spec,
-                        normalizeUserConstraintsInSpec(spec),
-                      );
-                      if (next) setSpec(normalizeUserConstraintsInSpec(next));
-                    }}
-                    onResetToMySettings={() => {
-                      const prev = student.resetToMySettings();
-                      if (prev) setSpec(normalizeUserConstraintsInSpec(prev));
-                    }}
-                  />
-                </div>
-                <div className="AppPanelSpacer" aria-hidden="true" />
-                <h3>Classroom Library</h3>
-                <div className="AppPanelButtons AppPanelScrollableSection">
-                  {!student.studentSession ? (
-                    <p className="AppHistoryLabel">
-                      Join a classroom to view assigned exercises.
-                    </p>
-                  ) : student.classroomExercisesStatus === "loading" ? (
-                    <p className="AppHistoryLabel">
-                      Loading classroom exercises...
-                    </p>
-                  ) : student.classroomExercisesStatus === "error" ? (
-                    <p className="AppHistoryLabel">
-                      {student.classroomExercisesError}
-                    </p>
-                  ) : student.classroomExercises.length === 0 ? (
-                    <p className="AppHistoryLabel">No classroom exercises yet.</p>
-                  ) : (
-                    student.classroomExercises.map((exercise) => (
-                      <div key={exercise.id}>
-                        <p className="AppHistoryLabel">{exercise.title}</p>
-                        <p className="AppHistoryLabel">
-                          Seed: {exercise.seed} | Created:{" "}
-                          {formatSavedDate(exercise.created_at)}
-                        </p>
-                        <button
-                          type="button"
-                          className="AppHistoryButton AppProjectionToggleButton"
-                          onClick={() => void handleLoadClassroomExercise(exercise.id)}
-                          disabled={student.loadingClassroomExerciseId !== null}
-                        >
-                          {student.loadingClassroomExerciseId === exercise.id
-                            ? "Loading..."
-                            : "Load"}
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="AppPanelSpacer" aria-hidden="true" />
-              </>
+              <GeneratorStudentSidebar
+                formatSavedDate={formatSavedDate}
+                handleJoinClassroom={handleJoinClassroom}
+                handleLeaveClassroom={handleLeaveClassroom}
+                handleLoadClassroomExercise={handleLoadClassroomExercise}
+                interactionDisabled={interactionDisabled}
+                normalizeSpec={normalizeUserConstraintsInSpec}
+                setSpec={setSpec}
+                spec={spec}
+                student={student}
+              />
             ) : null}
 
             {mode === "teacher" ? (
-              <>
-                <h3>Saved Exercises</h3>
-                <div className="AppPanelButtons AppPanelScrollableSection">
-                  {teacher.savedExercisesStatus === "loading" ? (
-                    <p className="AppHistoryLabel">Loading saved exercises...</p>
-                  ) : teacher.savedExercises.length === 0 ? (
-                    <p className="AppHistoryLabel">No saved exercises yet.</p>
-                  ) : (
-                    <>
-                      <label className="AppHistoryLabel AppPlaybackField">
-                        Filter
-                        <select
-                          value={teacher.folderFilterId}
-                          onChange={(e) => teacher.setFolderFilterId(e.target.value)}
-                        >
-                          <option value="__ALL__">All classes</option>
-                          {teacher.folders.map((f) => (
-                            <option key={f.id} value={f.id}>
-                              {f.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      {teacher.filteredSavedExercises.length === 0 ? (
-                        <p className="AppHistoryLabel">
-                          No saved exercises in this class.
-                        </p>
-                      ) : (
-                        teacher.filteredSavedExercises.map((exercise) => (
-                          <div key={exercise.id}>
-                            <p className="AppHistoryLabel">{exercise.title}</p>
-                            <p className="AppHistoryLabel">
-                              Seed: {exercise.seed} | Class:{" "}
-                              {exercise.folder_id
-                                ? (teacher.folderNameById.get(exercise.folder_id) ??
-                                  "Unknown class")
-                                : "No class"}{" "}
-                              | Created: {formatSavedDate(exercise.created_at)}
-                            </p>
-                            <div style={{ display: "flex", gap: "0.45rem" }}>
-                              <button
-                                type="button"
-                                className="AppHistoryButton AppPanelButtonWide AppSymbolButton"
-                                onClick={() => void handleLoadSavedExercise(exercise.id)}
-                                title={
-                                  teacherFeaturesDisabled
-                                    ? "Upgrade To Enable Feature"
-                                    : undefined
-                                }
-                                disabled={
-                                  teacherFeaturesDisabled ||
-                                  teacher.loadingSavedExerciseId !== null ||
-                                  teacher.deletingSavedExerciseId !== null
-                                }
-                              >
-                                {teacher.loadingSavedExerciseId === exercise.id ? (
-                                  "Loading..."
-                                ) : teacherFeaturesDisabled ? (
-                                  <>
-                                    ↥
-                                    <span
-                                      className="UpgradeFeatureMarker"
-                                      aria-label="Upgrade To Enable Feature"
-                                      title="Upgrade To Enable Feature"
-                                    />
-                                  </>
-                                ) : (
-                                  "↥"
-                                )}
-                              </button>
-                              <button
-                                type="button"
-                                className="AppHistoryButton AppPanelButtonWide AppSymbolButton"
-                                onClick={() =>
-                                  void teacher.deleteSavedExercise(exercise.id)
-                                }
-                                title={
-                                  teacherFeaturesDisabled
-                                    ? "Upgrade To Enable Feature"
-                                    : undefined
-                                }
-                                disabled={
-                                  teacherFeaturesDisabled ||
-                                  teacher.loadingSavedExerciseId !== null ||
-                                  teacher.deletingSavedExerciseId !== null
-                                }
-                              >
-                                {teacher.deletingSavedExerciseId === exercise.id ? (
-                                  "Deleting..."
-                                ) : teacherFeaturesDisabled ? (
-                                  <>
-                                    ✕
-                                    <span
-                                      className="UpgradeFeatureMarker"
-                                      aria-label="Upgrade To Enable Feature"
-                                      title="Upgrade To Enable Feature"
-                                    />
-                                  </>
-                                ) : (
-                                  "✕"
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </>
-                  )}
-                  {teacher.savedExercisesNotice ? (
-                    <p className="AppHistoryLabel" style={{ opacity: 0.9 }}>
-                      {teacher.savedExercisesNotice}
-                    </p>
-                  ) : null}
-                </div>
-              </>
+              <GeneratorTeacherSidebar
+                formatSavedDate={formatSavedDate}
+                handleLoadSavedExercise={handleLoadSavedExercise}
+                interactionDisabled={interactionDisabled}
+                teacher={teacher}
+                teacherFeaturesDisabled={teacherFeaturesDisabled}
+              />
             ) : null}
-            </fieldset>
           </aside>
         ) : null}
       </div>

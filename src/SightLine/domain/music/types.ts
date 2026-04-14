@@ -61,6 +61,7 @@ export interface HarmonyEvent {
   rootPc: number;
   chordPcs: number[];
   quality: 'major' | 'minor' | 'diminished';
+  harmonicRhythmPattern?: string;
 }
 
 export interface MelodyEvent {
