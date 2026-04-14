@@ -155,7 +155,6 @@ export default function GeneratorPage({
               assessmentAccessMessage={assessmentAccessMessage}
               assessmentAccessBlocked={assessmentAccessBlocked}
               onAssessmentUpgrade={onAssessmentUpgrade}
-              onFix={rerunWithCurrentSeed}
               assessmentStatus={assessmentStatus}
               assessmentDisabled={
                 interactionDisabled ||
@@ -168,7 +167,6 @@ export default function GeneratorPage({
                   calibrationStatus !== "recording" &&
                   assessmentStatus !== "recording")
               }
-              fixDisabled={isGuestMode}
               showUpdateSave={Boolean(teacher.activeExerciseId)}
               saveDisabled={
                 mode !== "teacher" || !exportMusicXml || saveStatus === "saving"

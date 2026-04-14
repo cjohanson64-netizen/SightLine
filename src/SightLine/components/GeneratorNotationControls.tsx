@@ -111,7 +111,7 @@ export default function GeneratorNotationControls({
       </label>
       <button
         type="button"
-        className="AppHistoryButton AppProjectionToggleButton"
+        className="AppHistoryButton AppProjectionToggleButton ToolbarGenerateButton"
         onClick={() => playback.play()}
         disabled={currentMelodyCount === 0 || assessmentPlaybackDisabled}
         data-allow-while-playing="true"

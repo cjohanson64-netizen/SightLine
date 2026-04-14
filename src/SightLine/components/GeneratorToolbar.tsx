@@ -86,10 +86,8 @@ type GeneratorToolbarProps = {
   assessmentAccessMessage: string | null;
   assessmentAccessBlocked: boolean;
   onAssessmentUpgrade: () => void;
-  onFix: () => void;
   assessmentStatus: AssessmentStatus;
   assessmentDisabled: boolean;
-  fixDisabled: boolean;
   showUpdateSave: boolean;
   saveDisabled: boolean;
   onSaveNew: () => void;
@@ -123,10 +121,8 @@ export default function GeneratorToolbar({
   assessmentAccessMessage,
   assessmentAccessBlocked,
   onAssessmentUpgrade,
-  onFix,
   assessmentStatus,
   assessmentDisabled,
-  fixDisabled,
   showUpdateSave,
   saveDisabled,
   onSaveNew,
@@ -228,14 +224,6 @@ export default function GeneratorToolbar({
             disabled={controlsDisabled}
           >
             Generate
-          </button>
-          <button
-            type="button"
-            className="AppHistoryButton AppProjectionToggleButton"
-            onClick={onFix}
-            disabled={controlsDisabled || fixDisabled}
-          >
-            Fix
           </button>
           <button
             type="button"
