@@ -17,6 +17,7 @@ export type MeasureTemplateId =
   | 'RUN_HEEEE'
   | 'CADENCE_W'
   | 'CADENCE_HH'
+  | 'CLIMAX_SUSTAINED'
   | 'CLIMAX_SIMPLE';
 
 export interface PhraseGridMeasurePlan {
@@ -54,6 +55,7 @@ const TEMPLATE_DEFS: Record<MeasureTemplateId, TemplateDef> = {
   RUN_HEEEE: { id: 'RUN_HEEEE', onsets: [1, 3, 3.5, 4, 4.5] },
   CADENCE_W: { id: 'CADENCE_W', onsets: [1] },
   CADENCE_HH: { id: 'CADENCE_HH', onsets: [1, 3] },
+  CLIMAX_SUSTAINED: { id: 'CLIMAX_SUSTAINED', onsets: [1] },
   CLIMAX_SIMPLE: { id: 'CLIMAX_SIMPLE', onsets: [1, 3] }
 };
 
@@ -79,6 +81,7 @@ function templateOnsetsForMeter(templateId: MeasureTemplateId, beatsPerMeasure: 
       case 'CADENCE_W':
         return [1];
       case 'CADENCE_HH':
+      case 'CLIMAX_SUSTAINED':
       case 'CLIMAX_SIMPLE':
         return [1, 2];
       default:
@@ -98,6 +101,7 @@ function templateOnsetsForMeter(templateId: MeasureTemplateId, beatsPerMeasure: 
         return [1, 1.5, 2];
       case 'CADENCE_W':
       case 'CADENCE_HH':
+      case 'CLIMAX_SUSTAINED':
       case 'CLIMAX_SIMPLE':
         return [1];
       default:
@@ -234,6 +238,7 @@ export function generatePhraseGrid(input: {
         'RUN_HEEEE',
         'CADENCE_HH',
         'CADENCE_W',
+        'CLIMAX_SUSTAINED',
         'CLIMAX_SIMPLE'
       ];
       const allFiltered = allCandidates.filter((id) => templateUsesOnlyAllowed(id, allowedSet, input.beatsPerMeasure));
@@ -275,18 +280,49 @@ export function generatePhraseGrid(input: {
           ? 'cadence'
           : undefined;
     } else if (measure === climaxMeasure) {
-      templateId = templateUsesOnlyAllowed('CLIMAX_SIMPLE', allowedSet, input.beatsPerMeasure)
-        ? 'CLIMAX_SIMPLE'
-        : chooseFallbackTemplate([
-            'STABLE',
-            'SMOOTH_BEAT1',
-            'SMOOTH_BEAT2',
-            'SMOOTH_BEAT3',
-            'RUN_EEEEH',
-            'RUN_HEEEE',
-            'CADENCE_HH',
-            'CADENCE_W'
-          ]);
+      if (
+        input.phrasePlan.climaxStyle === 'sustained' &&
+        templateUsesOnlyAllowed('CLIMAX_SUSTAINED', allowedSet, input.beatsPerMeasure)
+      ) {
+        templateId = 'CLIMAX_SUSTAINED';
+      } else if (
+        input.phrasePlan.climaxStyle === 'stepwise' &&
+        templateUsesOnlyAllowed('SMOOTH_BEAT3', allowedSet, input.beatsPerMeasure)
+      ) {
+        templateId = 'SMOOTH_BEAT3';
+      } else {
+        templateId = templateUsesOnlyAllowed('CLIMAX_SIMPLE', allowedSet, input.beatsPerMeasure)
+          ? 'CLIMAX_SIMPLE'
+          : chooseFallbackTemplate([
+              'STABLE',
+              'SMOOTH_BEAT1',
+              'SMOOTH_BEAT2',
+              'SMOOTH_BEAT3',
+              'RUN_EEEEH',
+              'RUN_HEEEE',
+              'CADENCE_HH',
+              'CADENCE_W',
+              'CLIMAX_SUSTAINED'
+            ]);
+      }
+    } else if (
+      input.phrasePlan.climaxStyle === 'stepwise' &&
+      measure === climaxMeasure - 1 &&
+      templateUsesOnlyAllowed('SMOOTH_BEAT3', allowedSet, input.beatsPerMeasure)
+    ) {
+      templateId = 'SMOOTH_BEAT3';
+    } else if (
+      input.phrasePlan.climaxStyle === 'leap' &&
+      measure === climaxMeasure - 1 &&
+      templateUsesOnlyAllowed('STABLE', allowedSet, input.beatsPerMeasure)
+    ) {
+      templateId = 'STABLE';
+    } else if (
+      input.phrasePlan.climaxStyle === 'delayed' &&
+      measure === climaxMeasure - 1 &&
+      templateUsesOnlyAllowed('RUN_HEEEE', allowedSet, input.beatsPerMeasure)
+    ) {
+      templateId = 'RUN_HEEEE';
     } else if (!templateUsesOnlyAllowed(templateId, allowedSet, input.beatsPerMeasure)) {
       templateId = chooseFallbackTemplate([
         'STABLE',
@@ -296,7 +332,8 @@ export function generatePhraseGrid(input: {
         'SMOOTH_BEAT2',
         'SMOOTH_BEAT3',
         'RUN_EEEEH',
-        'RUN_HEEEE'
+        'RUN_HEEEE',
+        'CLIMAX_SUSTAINED'
       ]);
     }
     const baseOnsets = templateOnsetsForMeter(templateId, input.beatsPerMeasure);
@@ -452,7 +489,11 @@ export function generatePhraseGrid(input: {
 
   const climaxMeasurePlan = measures.find((m) => m.measure === climaxMeasure);
   const climaxOnset = climaxMeasurePlan
-    ? (climaxMeasurePlan.onsets.includes(3) ? 3 : climaxMeasurePlan.onsets[Math.max(0, climaxMeasurePlan.onsets.length - 1)] ?? 1)
+    ? input.phrasePlan.climaxStyle === 'delayed'
+      ? climaxMeasurePlan.onsets[Math.max(0, climaxMeasurePlan.onsets.length - 1)] ?? 1
+      : climaxMeasurePlan.onsets.includes(3)
+        ? 3
+        : climaxMeasurePlan.onsets[Math.max(0, climaxMeasurePlan.onsets.length - 1)] ?? 1
     : 1;
 
   const noteValueCounts = measures.reduce(

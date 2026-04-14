@@ -11,8 +11,6 @@ type AppNavbarProps = {
   billingActionTitle?: string;
   isProjectionMode: boolean;
   canAccessClass: boolean;
-  theme: "dark" | "light";
-  onThemeChange: (next: "dark" | "light") => void;
   interactionDisabled: boolean;
 };
 
@@ -27,8 +25,6 @@ export default function AppNavbar({
   billingActionTitle,
   isProjectionMode,
   canAccessClass,
-  theme,
-  onThemeChange,
   interactionDisabled,
 }: AppNavbarProps): JSX.Element | null {
   if (isProjectionMode) {
@@ -87,18 +83,6 @@ export default function AppNavbar({
             {billingActionLabel}
           </button>
         ) : null}
-        <label className="AppNavThemeField">
-          Theme
-          <select
-            value={theme}
-            onChange={(event) => onThemeChange(event.target.value as "dark" | "light")}
-            aria-label="Theme mode"
-            disabled={interactionDisabled}
-          >
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>
-        </label>
         <button
           type="button"
           className="AppHistoryButton"

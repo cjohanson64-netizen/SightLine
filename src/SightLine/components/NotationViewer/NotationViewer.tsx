@@ -10,6 +10,8 @@ interface NotationViewerProps {
   focusTitle?: string;
   zoom?: number;
   projectionMode?: boolean;
+  timeSig?: string;
+  phraseLengthMeasures?: number;
   solfegeActive?: boolean;
   solfegeColorizeLyrics?: boolean;
   solfegeOverlayNoteheads?: boolean;
@@ -108,8 +110,19 @@ function clamp(value: number, min: number, max: number): number {
 function getMeasuresPerSystem(
   measureCount: number,
   availableWidth: number,
-  projectionMode: boolean
+  projectionMode: boolean,
+  timeSig?: string,
+  phraseLengthMeasures?: number
 ): number {
+  if (typeof phraseLengthMeasures === 'number' && phraseLengthMeasures > 0) {
+    if (timeSig === '2/4') {
+      return clamp(phraseLengthMeasures * 2, 1, measureCount);
+    }
+    if (timeSig === '3/4' || timeSig === '4/4') {
+      return clamp(phraseLengthMeasures, 1, measureCount);
+    }
+  }
+
   if (measureCount <= 2) {
     return measureCount;
   }
@@ -169,10 +182,18 @@ function configureResponsiveLayout(
   osmd: OpenSheetMusicDisplay,
   availableWidth: number,
   measureCount: number,
-  projectionMode: boolean
+  projectionMode: boolean,
+  timeSig?: string,
+  phraseLengthMeasures?: number
 ): void {
   const rules = osmd.EngravingRules;
-  const measuresPerSystem = getMeasuresPerSystem(measureCount, availableWidth, projectionMode);
+  const measuresPerSystem = getMeasuresPerSystem(
+    measureCount,
+    availableWidth,
+    projectionMode,
+    timeSig,
+    phraseLengthMeasures
+  );
 
   rules.PageLeftMargin = projectionMode ? 8 : 6;
   rules.PageRightMargin = projectionMode ? 8 : 6;
@@ -493,6 +514,8 @@ export default function NotationViewer({
   focusTitle,
   zoom = 1,
   projectionMode = false,
+  timeSig,
+  phraseLengthMeasures,
   solfegeActive = false,
   solfegeColorizeLyrics = false,
   solfegeOverlayNoteheads = false,
@@ -592,7 +615,14 @@ export default function NotationViewer({
         if (seq !== renderSeqRef.current) {
           return;
         }
-        configureResponsiveLayout(osmd, containerWidth, measureCount, projectionMode);
+        configureResponsiveLayout(
+          osmd,
+          containerWidth,
+          measureCount,
+          projectionMode,
+          timeSig,
+          phraseLengthMeasures
+        );
         osmd.Zoom = Math.max(
           0.1,
           getResponsiveZoom(zoom, measureCount, containerWidth, projectionMode)
@@ -622,6 +652,8 @@ export default function NotationViewer({
     musicXml,
     zoom,
     projectionMode,
+    timeSig,
+    phraseLengthMeasures,
     containerWidth,
     solfegeColorizeLyrics,
     solfegeOverlayNoteheads

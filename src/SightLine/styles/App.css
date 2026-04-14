@@ -1,7 +1,7 @@
 :root {
   font-family: 'Avenir Next', 'Segoe UI', sans-serif;
   color: #e6edf6;
-  background: radial-gradient(circle at top left, #18202f, #0f1622 55%, #0b111a);
+  background: radial-gradient(circle at top left, #0f1824, #090f18 55%, #05080d);
 }
 
 * {
@@ -26,7 +26,7 @@ body {
 
 .AppShell button:not(:disabled):hover {
   filter: brightness(1.16);
-  border-color: #5c7396;
+  border-color: #445b7d;
 }
 
 .AppShell button:not(:disabled):active {
@@ -54,7 +54,7 @@ body {
 }
 
 .AppThemeDark {
-  background: radial-gradient(circle at top left, #18202f, #0f1622 55%, #0b111a);
+  background: radial-gradient(circle at top left, #0f1824, #090f18 55%, #05080d);
 }
 
 .AppThemeLight {
@@ -155,9 +155,9 @@ body {
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.6rem 0.75rem;
-  border: 1px solid #2b3a4f;
+  border: 1px solid #1f2d41;
   border-radius: 10px;
-  background: #111b2a;
+  background: #0d131d;
 }
 
 .AppNavLinks {
@@ -168,7 +168,7 @@ body {
 }
 
 .AppNavLink {
-  color: #c6d4e8;
+  color: #cfd9e8;
   text-decoration: none;
   padding: 0.35rem 0.6rem;
   border-radius: 8px;
@@ -177,13 +177,13 @@ body {
 }
 
 .AppNavLink:hover {
-  border-color: #4e6485;
-  background: #162235;
+  border-color: #39516f;
+  background: #111a28;
 }
 
 .AppNavLinkActive {
-  border-color: #6f88a7;
-  background: #1e2d43;
+  border-color: #4e6788;
+  background: #162132;
   color: #e9f2ff;
 }
 
@@ -201,30 +201,7 @@ body {
 
 .AppNavMode {
   font-size: 0.82rem;
-  color: #8ea4be;
-}
-
-.AppNavThemeField {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.86rem;
-  color: #9fb0c9;
-}
-
-.AppNavThemeField select {
-  height: 2rem;
-  border-radius: 6px;
-  border: 1px solid #3a4b66;
-  background: #172233;
-  color: #e6edf6;
-  padding: 0 0.45rem;
-  font-size: 0.86rem;
-}
-
-.AppNavThemeField select:focus {
-  outline: none;
-  border-color: #5c7396;
+  color: #879ab2;
 }
 
 .AppRoutePage {
@@ -241,9 +218,9 @@ body {
 }
 
 .AppDashboardCard {
-  border: 1px solid #2b3a4f;
+  border: 1px solid #1f2d41;
   border-radius: 10px;
-  background: #111b2a;
+  background: #0e151f;
   padding: 0.65rem 0.75rem;
 }
 
@@ -274,13 +251,13 @@ body {
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #8ea4be;
+  color: #879ab2;
 }
 
 .AppGuideLead {
   margin: 0;
   max-width: 58rem;
-  color: #c6d4e8;
+  color: #ccd7e6;
 }
 
 .AppGuideGrid {
@@ -1050,9 +1027,9 @@ body {
 .AppClassroomAccessPanel {
   margin: 0 0 0.55rem;
   padding: 0.6rem 0.7rem;
-  border: 1px solid #2b3a4f;
+  border: 1px solid #1f2d41;
   border-radius: 10px;
-  background: #101a28;
+  background: #0d141e;
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
@@ -1129,8 +1106,8 @@ body {
   align-self: stretch;
   height: calc(100dvh - 2rem);
   min-height: 0;
-  background: #151f2d;
-  border: 1px solid #2b3a4f;
+  background: #0f1620;
+  border: 1px solid #1f2d41;
   border-radius: 12px;
   padding: 0.8rem;
   display: flex;
@@ -1141,7 +1118,7 @@ body {
 .AppMelodyPanel h3 {
   margin: 0;
   font-size: 0.98rem;
-  color: #d7e3f2;
+  color: #dbe4ef;
 }
 
 .AppPanelButtons {
@@ -1251,8 +1228,8 @@ body {
   min-width: 2rem;
   height: 2rem;
   border-radius: 6px;
-  border: 1px solid #3a4b66;
-  background: #172233;
+  border: 1px solid #2b3c56;
+  background: #101824;
   color: #e6edf6;
   cursor: pointer;
   font-size: 1rem;
@@ -1281,6 +1258,22 @@ body {
   background: #1fa55f;
   border-color: #188a4f;
   color: #f7fff9;
+}
+
+.ToolbarStopButton {
+  background: #c83b3b;
+  border-color: #de5757;
+  color: #fff6f6;
+}
+
+.ToolbarStopButton:not(:disabled):hover {
+  border-color: #f07a7a;
+}
+
+.AppThemeLight .ToolbarStopButton {
+  background: #b52f2f;
+  border-color: #982727;
+  color: #fff7f7;
 }
 
 .ToolbarWideButton {
@@ -1317,15 +1310,15 @@ body {
 
 .AppHistoryLabel {
   font-size: 0.88rem;
-  color: #9fb0c9;
+  color: #90a4bc;
 }
 
 .AppHistoryLabel input:not([type="checkbox"]),
 .AppHistoryLabel select,
 .AppHistoryLabel textarea {
-  border: 1px solid #3a4b66;
+  border: 1px solid #2b3c56;
   border-radius: 6px;
-  background: #172233;
+  background: #101824;
   color: #e6edf6;
 }
 
@@ -1337,7 +1330,7 @@ body {
 .AppHistoryLabel select:focus,
 .AppHistoryLabel textarea:focus {
   outline: none;
-  border-color: #5c7396;
+  border-color: #4b6487;
 }
 
 .AppPlaybackField {
@@ -1378,8 +1371,8 @@ body {
   width: 64px;
   height: 2rem;
   border-radius: 6px;
-  border: 1px solid #3a4b66;
-  background: #172233;
+  border: 1px solid #2b3c56;
+  background: #101824;
   color: #e6edf6;
   padding: 0 0.45rem;
   font-size: 0.86rem;
@@ -1388,8 +1381,8 @@ body {
 .AppPlaybackField select {
   height: 2rem;
   border-radius: 6px;
-  border: 1px solid #3a4b66;
-  background: #172233;
+  border: 1px solid #2b3c56;
+  background: #101824;
   color: #e6edf6;
   padding: 0 0.45rem;
   font-size: 0.86rem;
@@ -1398,7 +1391,7 @@ body {
 .AppPlaybackField input:focus,
 .AppPlaybackField select:focus {
   outline: none;
-  border-color: #5c7396;
+  border-color: #4b6487;
 }
 
 .AppPlaybackField input.AppLibraryCheckbox {
@@ -1412,7 +1405,7 @@ body {
   padding: 0;
   border: 1px solid #5f7699 !important;
   border-radius: 4px !important;
-  background: #172233 !important;
+  background: #101824 !important;
   color: inherit;
   display: inline-grid !important;
   place-content: center;
@@ -1569,7 +1562,7 @@ body {
 .AppModalBackdrop {
   position: fixed;
   inset: 0;
-  background: rgba(8, 12, 18, 0.6);
+  background: rgba(3, 6, 10, 0.74);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1583,8 +1576,8 @@ body {
   max-height: calc(100vh - 2rem);
   overflow: auto;
   border-radius: 12px;
-  border: 1px solid #33455f;
-  background: #151f2d;
+  border: 1px solid #223247;
+  background: #0f1620;
   color: #dfe9f7;
   padding: 1rem;
   display: flex;

@@ -11,6 +11,7 @@ export type MeasureTemplateId =
   | 'RUN_HEEEE'
   | 'CADENCE_W'
   | 'CADENCE_HH'
+  | 'CLIMAX_SUSTAINED'
   | 'CLIMAX_SIMPLE';
 
 export interface MelodySelectionTrace {

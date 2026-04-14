@@ -1,6 +1,6 @@
 import type { TonnetzGraph } from '../tonnetz/buildTonnetz';
 import { toOctave } from '../midi';
-import type { PhraseDirection, PhraseTarget } from './phrasePlanner';
+import type { ClimaxStyle, PhraseDirection, PhraseTarget } from './phrasePlanner';
 import { applyCadencePolicy, type CadenceOption, type CadenceType } from './cadenceVoiceLeading';
 import type { IllegalTransitionRule } from '@/SightLine/domain/music';
 
@@ -57,6 +57,7 @@ export interface SelectNextPitchInput {
     oppositionStreak?: number;
     peakApproachWindow?: boolean;
     peakTargetDegree?: number;
+    climaxStyle?: ClimaxStyle;
   };
 }
 
@@ -206,6 +207,99 @@ export function nearestTonicInRange(tonicPc: number, prev: PrevPitch, range: Pit
   return best;
 }
 
+function downwardLeapTastePenalty(
+  prevDegree: number,
+  candidateDegree: number,
+  interval: number
+): number {
+  if (interval >= 0) {
+    return 0;
+  }
+
+  const absInterval = Math.abs(interval);
+  if (absInterval <= 4) {
+    return 0;
+  }
+  if (absInterval === 5) {
+    if (
+      (prevDegree === 1 && candidateDegree === 5) ||
+      (prevDegree === 5 && candidateDegree === 2)
+    ) {
+      return -0.3;
+    }
+    if (prevDegree === 4 && candidateDegree === 1) {
+      return 0.5;
+    }
+    return 0.3;
+  }
+  if (absInterval === 7) {
+    if (prevDegree === 5 && candidateDegree === 1) {
+      return 1.0;
+    }
+    if (prevDegree === 1 && candidateDegree === 4) {
+      return 3.0;
+    }
+    return 1.7;
+  }
+  if (absInterval === 8 || absInterval === 9) {
+    return 4.5;
+  }
+  if (absInterval === 10 || absInterval === 11) {
+    return 7.0;
+  }
+  return 9.0;
+}
+
+function tendencyToneMotionPenalty(
+  prevDegree: number,
+  candidateDegree: number,
+  interval: number
+): number {
+  const absInterval = Math.abs(interval);
+  const unstableDegrees = new Set([4, 7]);
+  let penalty = 0;
+  if (unstableDegrees.has(candidateDegree) && absInterval > 2) {
+    penalty += 2.6;
+  }
+  if (unstableDegrees.has(prevDegree) && absInterval > 2) {
+    penalty += 2.9;
+  }
+  return penalty;
+}
+
+function tonicCadencePenalty(
+  prevDegree: number,
+  candidateDegree: number,
+  interval: number,
+  options: {
+    cadenceZone: boolean;
+    prevTessituraProgress: number;
+    strongContext: boolean;
+  }
+): number {
+  if (prevDegree !== 1) {
+    return 0;
+  }
+
+  let penalty = 0;
+  if (candidateDegree === 2 && interval > 0) {
+    penalty += options.cadenceZone ? 4.4 : 1.6;
+    if (options.prevTessituraProgress >= 0.65) {
+      penalty += 1.4;
+    }
+    if (options.strongContext) {
+      penalty += 1;
+    }
+  }
+  if (candidateDegree === 1) {
+    penalty -= options.cadenceZone ? 0.7 : 0.25;
+  }
+  if ((candidateDegree === 7 || candidateDegree === 6) && interval < 0) {
+    penalty -= options.cadenceZone ? 0.8 : 0.3;
+  }
+  return penalty;
+}
+
 export function chooseBest(
   candidates: CandidatePitch[],
   input: SelectNextPitchInput,
@@ -230,6 +324,11 @@ export function chooseBest(
   const degreeForPc = (pc: number): number => {
     const idx = keyScale.indexOf(((pc % 12) + 12) % 12);
     return idx === -1 ? 1 : idx + 1;
+  };
+
+  const tessituraProgress = (midi: number): number => {
+    const span = Math.max(1, input.range.maxMidi - input.range.minMidi);
+    return (midi - input.range.minMidi) / span;
   };
 
   const startDegreeWeight = (degree: number): number => {
@@ -343,6 +442,72 @@ export function chooseBest(
     return 0;
   };
 
+  const peakDegreeProgressBonus = (candidate: CandidatePitch): number => {
+    const peakTarget = input.phrase?.peakTargetDegree;
+    if (!peakTarget) {
+      return 0;
+    }
+    const prevDistance = Math.abs(degreeForPc(prevPitch.pc) - peakTarget);
+    const nextDistance = Math.abs(degreeForPc(candidate.pc) - peakTarget);
+    if (nextDistance >= prevDistance) {
+      return 0;
+    }
+    const styleBonus =
+      input.phrase?.climaxStyle === 'stepwise'
+        ? 1.2
+        : input.phrase?.climaxStyle === 'leap'
+          ? 0.9
+          : 1;
+    return (prevDistance - nextDistance) * styleBonus;
+  };
+
+  const climaxArrivalBonus = (candidate: CandidatePitch): number => {
+    const phrase = input.phrase;
+    if (!phrase || phrase.currentMeasure !== phrase.peakMeasure) {
+      return 0;
+    }
+    const peakTarget = phrase.peakTargetDegree;
+    const degreeBonus = peakTarget
+      ? Math.max(0, 3 - Math.abs(degreeForPc(candidate.pc) - peakTarget))
+      : 0;
+    const interval = Math.abs(candidate.midi - prevPitch.midi);
+    const styleBonus =
+      phrase.climaxStyle === 'leap'
+        ? interval >= 3 && interval <= 9
+          ? 1.6
+          : 0.2
+        : phrase.climaxStyle === 'stepwise'
+          ? interval <= 2
+            ? 1.4
+            : -0.2
+          : phrase.climaxStyle === 'sustained'
+            ? 1.2
+            : 1;
+    return degreeBonus + tessituraProgress(candidate.midi) * 2.2 + styleBonus;
+  };
+
+  const postClimaxReleasePenalty = (candidate: CandidatePitch): number => {
+    const phrase = input.phrase;
+    if (!phrase || phrase.currentMeasure <= phrase.peakMeasure) {
+      return 0;
+    }
+    const interval = candidate.midi - prevPitch.midi;
+    let penalty = 0;
+    if (interval > 0) {
+      penalty += 1 + interval * 0.25;
+    }
+    if (interval < 0 && Math.abs(interval) <= 2) {
+      penalty -= 0.8;
+    }
+    if (phrase.climaxStyle === 'sustained' && interval < 0) {
+      penalty += 0.6;
+    }
+    if (phrase.climaxStyle === 'stepwise' && interval < 0 && Math.abs(interval) <= 2) {
+      penalty -= 0.6;
+    }
+    return penalty;
+  };
+
   const tooStepwisePenalty = (_candidate: CandidatePitch, intervalSemis: number): number => {
     const history = input.phrase?.recentHistory ?? [];
     if (history.length < 7) {
@@ -371,21 +536,30 @@ export function chooseBest(
   const sorted = [...candidates]
     .map((candidate) => {
       const intervalSemis = Math.abs(candidate.midi - prevPitch.midi);
+      const intervalSigned = candidate.midi - prevPitch.midi;
       const isStep = intervalSemis <= 2;
       const isLeap = intervalSemis >= 3;
       const isAllowedLeap = LEAP_INTERVALS.has(intervalSemis);
       const isChordToneNow = chordNowPitchSet.has(candidate.pc);
       const isSharedTone = sharedTones.has(candidate.pc);
       const prevIsChordToneNow = chordNowPitchSet.has(prevPitch.pc);
+      const candidateDegree = degreeForPc(candidate.pc);
+      const prevDegree = degreeForPc(prevPitch.pc);
+      const tritonePenalty = intervalSemis === 6 ? 1 : 0;
 
       let leapReason: BestResult['leapReason'] = null;
       let leapBonus = 0;
 
       if (isAllowedLeap) {
         // Musical skip/leap A: reward arpeggiation in stable harmony.
-        if (!input.harmony.harmonyChangesNext && prevIsChordToneNow && isChordToneNow && (intervalSemis === 3 || intervalSemis === 4 || intervalSemis === 7)) {
-          leapBonus += 3.9;
-          leapReason = 'arpeggiate_same_chord';
+        if (!input.harmony.harmonyChangesNext && prevIsChordToneNow && isChordToneNow) {
+          if (intervalSigned > 0 && (intervalSemis === 3 || intervalSemis === 4 || intervalSemis === 7)) {
+            leapBonus += 3.9;
+            leapReason = 'arpeggiate_same_chord';
+          } else if (intervalSigned < 0 && (intervalSemis === 3 || intervalSemis === 4)) {
+            leapBonus += 1.8;
+            leapReason = 'arpeggiate_same_chord';
+          }
         }
 
         // Musical skip/leap B: reward shared-tone connectivity across harmony changes.
@@ -434,8 +608,15 @@ export function chooseBest(
 
       const targetPriority = input.phrase?.currentPhraseTarget?.priority ?? 'low';
       const priorityWeight = targetPriority === 'high' ? 1.35 : targetPriority === 'medium' ? 1.05 : 0.8;
-      const candidateDegree = degreeForPc(candidate.pc);
       const startBonus = input.isFirstNote ? Math.log(startDegreeWeight(candidateDegree)) * W_START : 0;
+      const downwardLeapPenalty = downwardLeapTastePenalty(prevDegree, candidateDegree, intervalSigned);
+      const tendencyPenalty = tendencyToneMotionPenalty(prevDegree, candidateDegree, intervalSigned);
+      const cadenceZone = input.cadenceContext?.slotTag === 'penultimate' || input.cadenceContext?.slotTag === 'final';
+      const tonicPenalty = tonicCadencePenalty(prevDegree, candidateDegree, intervalSigned, {
+        cadenceZone,
+        prevTessituraProgress: tessituraProgress(prevPitch.midi),
+        strongContext: input.isStrongBeat === true || cadenceZone
+      });
 
       const W_TARGET = 5.2 * priorityWeight;
       const W_DIRECTION = 4.4;
@@ -445,7 +626,17 @@ export function chooseBest(
       const W_STALL = 3.0;
       const W_OPPOSITION = 2.9;
       const W_PEAK_DEADLINE = 7.5;
+      const W_PEAK_PROGRESS = 4.6;
+      const W_CLIMAX_ARRIVAL = 6.8;
+      const W_POST_CLIMAX_RELEASE = 5.1;
+      const W_DOWNWARD_LEAP_TASTE = 4.8;
+      const W_TENDENCY_TONE_MOTION = 4.2;
+      const W_TRITONE_LEAP = 10.5;
+      const W_TONIC_CADENCE_PROTECTION = 5.2;
       const W_UNREPAIRED = 4.7;
+      const W_REPEAT_LEAP_AFTER_LEAP = 7.4;
+      const W_SAME_DIRECTION_LEAP_AFTER_LEAP = 8.8;
+      const W_CLIMAX_JUMP_OUT = 12.5;
       const W_LEAP_NONCHORD = 3.8;
       const W_TOO_STEPWISE = 1.4;
       const W_BIG_LEAP = 5.8;
@@ -459,12 +650,19 @@ export function chooseBest(
         startBonus +
         W_TARGET * targetCloseness(candidate) +
         W_DIRECTION * directionAlignment(candidate) +
+        W_PEAK_PROGRESS * peakDegreeProgressBonus(candidate) +
+        W_CLIMAX_ARRIVAL * climaxArrivalBonus(candidate) +
         leapBonus +
         (input.isStrongBeat && isChordToneNow ? W_STRONG_CHORD : 0) -
         W_BACKTRACK * immediateBacktrackPenalty(candidate) -
         W_STALL * stallPenalty(candidate) -
         W_OPPOSITION * oppositionPenalty(candidate) -
         W_PEAK_DEADLINE * peakDeadlinePenalty(candidate) -
+        W_POST_CLIMAX_RELEASE * postClimaxReleasePenalty(candidate) -
+        W_DOWNWARD_LEAP_TASTE * downwardLeapPenalty -
+        W_TENDENCY_TONE_MOTION * tendencyPenalty -
+        W_TRITONE_LEAP * tritonePenalty -
+        W_TONIC_CADENCE_PROTECTION * tonicPenalty -
         W_UNREPAIRED * unrepairedLeapPenalty -
         W_LEAP_NONCHORD * leapToNonChordPenalty -
         W_TOO_STEPWISE * tooStepwisePenalty(candidate, intervalSemis) -
@@ -472,13 +670,32 @@ export function chooseBest(
         W_DO_TI_PENALTY * penaltyDoToTiDown(candidate.midi) +
         W_TI_DO_BONUS * bonusTiToDoUp(candidate.midi);
 
+      const prevMotionForChain = prevMotion;
+      const climbJumpOutPenalty =
+        input.phrase &&
+        input.phrase.currentMeasure >= input.phrase.peakMeasure &&
+        prevMotionForChain &&
+        prevMotionForChain.interval >= 3 &&
+        isLeap &&
+        sign(intervalSigned) === prevMotionForChain.direction
+          ? W_CLIMAX_JUMP_OUT
+          : 0;
+
+      const leapChainPenalty =
+        prevMotionForChain && prevMotionForChain.interval >= 3 && isLeap
+          ? W_REPEAT_LEAP_AFTER_LEAP +
+            (sign(intervalSigned) === prevMotionForChain.direction ? W_SAME_DIRECTION_LEAP_AFTER_LEAP : 0)
+          : 0;
+
+      const finalScore = score - leapChainPenalty - climbJumpOutPenalty;
+
       const resolvedLeapReason: BestResult['leapReason'] = isLeap
         ? (leapReason ?? 'fallback_leap_penalized_but_best')
         : null;
 
       return {
         candidate,
-        score,
+        score: finalScore,
         distance,
         tonnetzDistance,
         leapReason: resolvedLeapReason,

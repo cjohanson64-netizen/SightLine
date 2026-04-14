@@ -86,6 +86,12 @@ const RHYTHM_TEMPLATES: RhythmTemplate[] = [
     tags: { cadence: true },
   },
   {
+    id: "CLIMAX_SUSTAINED",
+    grid: [1],
+    counts: { whole: 1, half: 0, quarter: 0, eighth: 0 },
+    tags: { climax: true, stable: true },
+  },
+  {
     id: "CLIMAX_SIMPLE",
     grid: [1, 3],
     counts: { whole: 0, half: 2, quarter: 0, eighth: 0 },

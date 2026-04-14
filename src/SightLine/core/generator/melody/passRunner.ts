@@ -101,7 +101,11 @@ export function runPhraseConstraintPasses(input: {
 export function runFinalizationPipeline(input: {
   melody: MelodyEvent[];
   beatsPerMeasure: number;
-  buildPlaybackArrayPass5: (events: MelodyEvent[], beatsPerMeasure: number) => MelodyEvent[];
+  buildPlaybackArrayPass5: (
+    events: MelodyEvent[],
+    beatsPerMeasure: number,
+    allowedNoteValues?: Array<'EE' | 'Q' | 'H' | 'W'>
+  ) => MelodyEvent[];
   filterRenderableAttackEvents: (events: MelodyEvent[]) => MelodyEvent[];
   applyUserConstraintsPass10: (
     events: MelodyEvent[],
@@ -145,8 +149,16 @@ export function runFinalizationPipeline(input: {
     beatsPerMeasure?: number;
   };
 }): { pass5BaseMelody: MelodyEvent[]; pass5ConstraintSweep: { events: MelodyEvent[]; constraintLog: Array<{ code: string; detail: unknown }> }; pass5FinalMelody: MelodyEvent[] } {
-  const pass5BaseMelody = input.buildPlaybackArrayPass5(input.filterRenderableAttackEvents(input.melody), input.beatsPerMeasure);
+  const pass5BaseMelody = input.buildPlaybackArrayPass5(
+    input.filterRenderableAttackEvents(input.melody),
+    input.beatsPerMeasure,
+    input.pass10Ctx.allowedNoteValues
+  );
   const pass5ConstraintSweep = input.applyUserConstraintsPass10(pass5BaseMelody, input.pass10Ctx);
-  const pass5FinalMelody = input.buildPlaybackArrayPass5(pass5ConstraintSweep.events, input.beatsPerMeasure);
+  const pass5FinalMelody = input.buildPlaybackArrayPass5(
+    pass5ConstraintSweep.events,
+    input.beatsPerMeasure,
+    input.pass10Ctx.allowedNoteValues
+  );
   return { pass5BaseMelody, pass5ConstraintSweep, pass5FinalMelody };
 }

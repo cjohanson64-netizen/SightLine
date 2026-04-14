@@ -231,7 +231,6 @@ function AppContent(): JSX.Element {
     suggestions: string[];
   } | null>(null);
   const [relaxationNotice, setRelaxationNotice] = useState<string>("");
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
@@ -788,7 +787,7 @@ function AppContent(): JSX.Element {
   // ── Main render ────────────────────────────────────────────────────────────
   return (
     <div
-      className={`AppShell ${theme === "light" ? "AppThemeLight" : "AppThemeDark"} ${projection.isProjectionMode ? "AppProjectionMode" : ""}`}
+      className={`AppShell AppThemeDark ${projection.isProjectionMode ? "AppProjectionMode" : ""}`}
       onClickCapture={handleStudentInteractionClickCapture}
       onChangeCapture={handleStudentInteractionChangeCapture}
     >
@@ -809,10 +808,8 @@ function AppContent(): JSX.Element {
           billingActionTitle={billingActionTitle}
           isProjectionMode={projection.isProjectionMode}
           canAccessClass={mode === "teacher"}
-          theme={theme}
-        onThemeChange={setTheme}
-        interactionDisabled={interactionDisabled}
-      />
+          interactionDisabled={interactionDisabled}
+        />
 
       {!projection.isProjectionMode && location.pathname === "/guide" ? (
         <div className="AppIntro">
@@ -845,6 +842,7 @@ function AppContent(): JSX.Element {
           element={
             <GeneratorPage
               currentMelody={currentMelody}
+              currentSpecSnapshot={currentSpecSnapshot}
               calibrationStatus={calibration.status}
               calibrationReady={calibration.isReady}
               assessmentError={micAssessment.errorMessage}

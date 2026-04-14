@@ -25,6 +25,7 @@ type TeacherState = ReturnType<typeof useTeacherLibrary>;
 
 interface GeneratorPageProps {
   currentMelody: MelodyEvent[];
+  currentSpecSnapshot: ExerciseSpec | null;
   calibrationStatus: "idle" | "requesting_permission" | "recording" | "processing" | "complete" | "error";
   calibrationReady: boolean;
   assessmentError: string | null;
@@ -77,6 +78,7 @@ interface GeneratorPageProps {
 
 export default function GeneratorPage({
   currentMelody,
+  currentSpecSnapshot,
   calibrationStatus,
   calibrationReady,
   assessmentError,
@@ -126,6 +128,8 @@ export default function GeneratorPage({
   updateExerciseTitle,
   interactionDisabled,
 }: GeneratorPageProps): JSX.Element {
+  const notationSpec = currentSpecSnapshot ?? spec;
+
   return (
     <div
       className={`AppMain ${projection.isProjectionMode ? "AppMainProjection" : ""}`}
@@ -251,6 +255,8 @@ export default function GeneratorPage({
 
             <NotationViewer
               musicXml={displayNotationMusicXml}
+              timeSig={notationSpec.timeSig}
+              phraseLengthMeasures={notationSpec.phraseLengthMeasures}
               selectableNoteCount={assessmentResult?.segmentedNotes.length ?? 0}
               selectedNoteIndex={selectedAssessmentNoteIndex}
               noteOutcomeByIndex={assessmentNoteOutcomeByIndex}

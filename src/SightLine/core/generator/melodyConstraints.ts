@@ -95,7 +95,8 @@ export function finalizeMelodyConstraints(
     runFinalizationPipeline({
       melody: input.melody,
       beatsPerMeasure: input.beatsPerMeasure,
-      buildPlaybackArrayPass5,
+      buildPlaybackArrayPass5: (events, beatsPerMeasure, allowedNoteValues) =>
+        buildPlaybackArrayPass5(events, beatsPerMeasure, allowedNoteValues),
       filterRenderableAttackEvents,
       applyUserConstraintsPass10,
       pass10Ctx: {
@@ -126,6 +127,7 @@ export function finalizeMelodyConstraints(
     initialPass5FinalMelody,
     input.phraseLengthMeasures,
     input.beatsPerMeasure,
+    input.spec.userConstraints?.allowedNoteValues,
   );
   const pass6Playback = renderPlaybackPass11(pass5FinalMelody, {
     beatsPerMeasure: input.beatsPerMeasure,

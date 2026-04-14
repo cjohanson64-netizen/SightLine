@@ -1,6 +1,7 @@
 import type { ExerciseSpec, PhraseSpec } from '@/SightLine/domain/music';
 
 export type PhraseDirection = 'ascending' | 'descending' | 'arch' | 'invertedArch' | 'wave';
+export type ClimaxStyle = 'stepwise' | 'leap' | 'sustained' | 'delayed';
 
 export type PhraseTarget = {
   measure: number;
@@ -11,6 +12,7 @@ export type PhraseTarget = {
 
 export type PhrasePlan = {
   direction: PhraseDirection;
+  climaxStyle: ClimaxStyle;
   peakMeasure: number;
   peakDegree: number;
   startDegree: number;
@@ -103,6 +105,38 @@ function defaultPeakMeasure(measures: number, rng: () => number): number {
   return pick(rng, [a, b]);
 }
 
+function chooseClimaxStyle(
+  difficulty: number,
+  measures: number,
+  rng: () => number
+): ClimaxStyle {
+  if (measures <= 2) {
+    return pick(rng, ['stepwise', 'leap']);
+  }
+  if (difficulty <= 1) {
+    return pick(rng, ['stepwise', 'stepwise', 'sustained']);
+  }
+  if (difficulty === 2) {
+    return pick(rng, ['stepwise', 'leap', 'sustained', 'delayed']);
+  }
+  return pick(rng, ['stepwise', 'leap', 'sustained', 'delayed']);
+}
+
+function peakMeasureForStyle(
+  measures: number,
+  style: ClimaxStyle,
+  rng: () => number
+): number {
+  const base = defaultPeakMeasure(measures, rng);
+  if (style === 'delayed') {
+    return Math.min(Math.max(2, measures - 1), base + 1);
+  }
+  if (style === 'sustained') {
+    return Math.max(2, Math.min(measures - 1, base));
+  }
+  return base;
+}
+
 function interpolateDegree(
   direction: PhraseDirection,
   measure: number,
@@ -158,6 +192,7 @@ export function generatePhrasePlan(input: PhrasePlannerInput): PhrasePlan {
   const beatsPerMeasure = Math.max(1, Number(input.timeSignature.split('/')[0]) || 4);
 
   const direction = toDirection(difficulty, rng);
+  const climaxStyle = chooseClimaxStyle(difficulty, input.measures, rng);
 
   // If caller locks a start degree, that hard boundary overrides defaults.
   const startDegree =
@@ -165,13 +200,26 @@ export function generatePhrasePlan(input: PhrasePlannerInput): PhrasePlan {
       ? clampDegree(input.startDegree, input.range)
       : pickDefaultStartAnchor(rng, input.range);
 
-  const peakMeasure = defaultPeakMeasure(input.measures, rng);
+  const peakMeasure = peakMeasureForStyle(input.measures, climaxStyle, rng);
 
   const peakDegreeOptions =
-    difficulty <= 1 ? [3, 5] : difficulty === 2 ? [5] : [5, 6];
+    climaxStyle === 'stepwise'
+      ? difficulty <= 1
+        ? [3, 5]
+        : [5]
+      : climaxStyle === 'leap'
+        ? difficulty <= 1
+          ? [5]
+          : [5, 6]
+        : climaxStyle === 'sustained'
+          ? [5, 6]
+          : [5, 6];
   let peakDegree = clampDegree(pick(rng, peakDegreeOptions), input.range);
   if (peakDegree === startDegree) {
     peakDegree = clampDegree(Math.min(7, peakDegree + 1), input.range);
+  }
+  if (climaxStyle === 'delayed' && peakDegree < 5) {
+    peakDegree = clampDegree(5, input.range);
   }
 
   const cadenceType = input.cadence ?? 'authentic';
@@ -208,6 +256,24 @@ export function generatePhrasePlan(input: PhrasePlannerInput): PhrasePlan {
     targetDegree: peakDegree,
     priority: 'high'
   });
+
+  if (climaxStyle === 'delayed' && peakMeasure > 2) {
+    targets.push({
+      measure: peakMeasure - 1,
+      beat: 1,
+      targetDegree: clampDegree(Math.max(startDegree, peakDegree - 1), input.range),
+      priority: 'medium'
+    });
+  }
+
+  if (climaxStyle === 'sustained' && peakMeasure < input.measures) {
+    targets.push({
+      measure: peakMeasure,
+      beat: Math.max(1, beatsPerMeasure - 1),
+      targetDegree: peakDegree,
+      priority: 'high'
+    });
+  }
 
   if (input.measures >= 4) {
     const midMeasure = Math.max(2, Math.min(input.measures - 1, Math.floor((input.measures + 1) / 2)));
@@ -296,6 +362,7 @@ export function generatePhrasePlan(input: PhrasePlannerInput): PhrasePlan {
 
   return {
     direction,
+    climaxStyle,
     peakMeasure,
     peakDegree,
     startDegree,

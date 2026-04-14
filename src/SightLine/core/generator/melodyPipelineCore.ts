@@ -65,15 +65,32 @@ const W_FINAL_SOL = 220;
 const W_HALF_FINAL_SOL_REWARD = 12;
 const W_HALF_FINAL_OTHER_PENALTY = 7;
 const W_FIRST_DO_REWARD = 5;
+const W_FIRST_PLANNED_START_MATCH = 14;
+const W_FIRST_PLANNED_START_MISS = 9;
 const W_FIRST_SOL_PENALTY = 5;
 const W_PRE_CLIMAX_LEAP_INTO = 6;
 const W_PRE_CLIMAX_ASC_STEP = 2;
+const W_PRE_CLIMAX_PEAK_DEGREE_PROGRESS = 4.4;
+const W_PRE_CLIMAX_UPWARD_LEAP_PROGRESS = 3.2;
 const W_CLIMAX_BIG_UP_LEAP_REWARD = 5;
+const W_CLIMAX_TARGET_DEGREE = 12;
+const W_CLIMAX_UPPER_REGISTER = 10;
+const W_CLIMAX_NOT_UNIQUE = 24;
 const W_POST_CLIMAX_LEAP = 14;
 const W_POST_CLIMAX_LARGE_DOWN_LEAP = 24;
 const W_POST_CLIMAX_STEP_DOWN_REWARD = 7;
+const W_POST_CLIMAX_ASCENT = 8;
+const W_POST_CLIMAX_ABOVE_PEAK = 18;
 const W_LEAP_RECOVERY_FAIL = 12;
 const W_SOFT_CEILING = 4;
+const W_DOWNWARD_LEAP_TASTE = 5.2;
+const W_TENDENCY_TONE_MOTION = 4.4;
+const W_TRITONE_LEAP = 11;
+const W_REPEAT_LEAP_AFTER_LEAP = 8;
+const W_SAME_DIRECTION_LEAP_AFTER_LEAP = 10;
+const W_CLIMAX_JUMP_OUT = 14;
+const W_TONIC_CADENCE_PROTECTION = 5.6;
+const W_FAST_RHYTHM_LEAP = 4.6;
 const MAX_MELODIC_LEAP_SEMIS = 12;
 const DEBUG_INTERVAL_CAP = false;
 
@@ -309,6 +326,141 @@ function tonicCandidatesInOctaveSpan(tonicPc: number, lowOctave: number, highOct
   return result;
 }
 
+function tessituraProgress(midi: number, rangeMin: number, rangeMax: number): number {
+  const span = Math.max(1, rangeMax - rangeMin);
+  return (midi - rangeMin) / span;
+}
+
+function downwardLeapTastePenalty(
+  prevDegree: number,
+  candidateDegree: number,
+  interval: number
+): number {
+  if (interval >= 0) {
+    return 0;
+  }
+
+  const absInterval = Math.abs(interval);
+  if (absInterval <= 4) {
+    return 0;
+  }
+  if (absInterval === 5) {
+    if (
+      (prevDegree === 1 && candidateDegree === 5) ||
+      (prevDegree === 5 && candidateDegree === 2)
+    ) {
+      return -0.4;
+    }
+    if (prevDegree === 4 && candidateDegree === 1) {
+      return 0.6;
+    }
+    return 0.35;
+  }
+  if (absInterval === 7) {
+    if (prevDegree === 5 && candidateDegree === 1) {
+      return 1.1;
+    }
+    if (prevDegree === 1 && candidateDegree === 4) {
+      return 3.1;
+    }
+    return 1.8;
+  }
+  if (absInterval === 8 || absInterval === 9) {
+    return 4.6;
+  }
+  if (absInterval === 10 || absInterval === 11) {
+    return 7.2;
+  }
+  return 9.5;
+}
+
+function tendencyToneMotionPenalty(
+  prevDegree: number,
+  candidateDegree: number,
+  interval: number
+): number {
+  const absInterval = Math.abs(interval);
+  let penalty = 0;
+  if (candidateDegree === 7) {
+    if (absInterval > 2) {
+      penalty += 5.2;
+    } else if (absInterval === 1) {
+      penalty -= 0.7;
+    }
+  } else if (candidateDegree === 4 && absInterval > 2) {
+    penalty += 2.2;
+  }
+
+  if (prevDegree === 7) {
+    if (absInterval > 2) {
+      penalty += 5.6;
+    } else if (absInterval === 1) {
+      penalty -= 0.6;
+    }
+  } else if (prevDegree === 4 && absInterval > 2) {
+    penalty += 2.4;
+  }
+  return penalty;
+}
+
+function tonicCadencePenalty(
+  prevDegree: number,
+  candidateDegree: number,
+  interval: number,
+  options: {
+    isCadentialZone: boolean;
+    prevTessituraProgress: number;
+    isRhythmicallyEmphasized: boolean;
+  }
+): number {
+  if (prevDegree !== 1) {
+    return 0;
+  }
+
+  let penalty = 0;
+  if (candidateDegree === 2 && interval > 0) {
+    penalty += options.isCadentialZone ? 4.8 : 1.8;
+    if (options.prevTessituraProgress >= 0.65) {
+      penalty += 1.6;
+    }
+    if (options.isRhythmicallyEmphasized) {
+      penalty += 1.1;
+    }
+  }
+  if (candidateDegree === 1) {
+    penalty -= options.isCadentialZone ? 0.8 : 0.3;
+  }
+  if ((candidateDegree === 7 || candidateDegree === 6) && interval < 0) {
+    penalty -= options.isCadentialZone ? 0.9 : 0.35;
+  }
+  return penalty;
+}
+
+function fastRhythmLeapPenalty(
+  interval: number,
+  options: {
+    fastContext: boolean;
+    intoTendencyTone: boolean;
+    intoStructuralGoal: boolean;
+  }
+): number {
+  if (!options.fastContext) {
+    return 0;
+  }
+  const absInterval = Math.abs(interval);
+  if (absInterval <= 2) {
+    return 0;
+  }
+  let penalty = absInterval >= 5 ? 3.8 : 1.8;
+  if (options.intoTendencyTone) {
+    penalty += 2.6;
+  }
+  if (options.intoStructuralGoal) {
+    penalty += 1.8;
+  }
+  return penalty;
+}
+
 
 function findClimaxIndex(slots: StructuralSlot[], peakMeasure: number): number {
   if (slots.length === 0) {
@@ -335,7 +487,8 @@ function findClimaxIndex(slots: StructuralSlot[], peakMeasure: number): number {
 function choosePass3ClimaxIndex(
   slots: StructuralSlot[],
   phrasePlanPeakMeasure: number,
-  phraseGrid?: PhraseGridPlan
+  phraseGrid?: PhraseGridPlan,
+  climaxStyle: PhrasePlan['climaxStyle'] = 'stepwise'
 ): number {
   if (slots.length === 0) {
     return 0;
@@ -366,13 +519,25 @@ function choosePass3ClimaxIndex(
       prevMeasurePlan?.templateId === 'SMOOTH_BEAT3';
 
     const measureDistance = Math.abs(slot.localMeasure - phrasePlanPeakMeasure);
-    const beatDistanceFrom3 = Math.abs(slot.beat - 3);
+    const targetBeat =
+      climaxStyle === 'delayed'
+        ? 4
+        : climaxStyle === 'sustained'
+          ? 1
+          : 3;
+    const beatDistanceFrom3 = Math.abs(slot.beat - targetBeat);
     let score = measureDistance * 10 + beatDistanceFrom3 * 2;
     if (longLanding) {
       score -= 8;
     }
     if (runIntoClimax) {
       score -= 5;
+    }
+    if (climaxStyle === 'sustained' && longLanding) {
+      score -= 7;
+    }
+    if (climaxStyle === 'delayed' && slot.localMeasure >= phrasePlanPeakMeasure) {
+      score -= 4;
     }
     if (inCadence) {
       score += 6;
@@ -486,8 +651,15 @@ export function generateStructuralSkeleton(input: {
     curr.durationToNextBeats = Number(Math.max(0.5, nextPos - currPos).toFixed(3));
   }
 
-  const climaxIndex = choosePass3ClimaxIndex(slots, input.phrasePlan.peakMeasure, input.phraseGrid);
+  const climaxIndex = choosePass3ClimaxIndex(
+    slots,
+    input.phrasePlan.peakMeasure,
+    input.phraseGrid,
+    input.phrasePlan.climaxStyle
+  );
   const notes: MelodyEvent[] = [];
+  let structuralClimaxRetunes = 0;
+  let structuralPeakCompetitionRepairs = 0;
   let prevMidi = input.startPrevMidi;
 
   for (let i = 0; i < slots.length; i += 1) {
@@ -504,6 +676,7 @@ export function generateStructuralSkeleton(input: {
     const isAtOrAfterPeak = i >= climaxIndex;
     const isImmediateAfterClimax = i === climaxIndex + 1;
     let candidates = chordToneCandidatesInRange(slot.harmonyEvent.chordPcs, input.rangeMin, input.rangeMax);
+    const plannedStartDegree = input.phrasePlan.startDegree;
 
     const startDegree = input.startDegreePreference ?? 1;
     if (i === 0 && input.startDegreeUserSpecified) {
@@ -522,13 +695,21 @@ export function generateStructuralSkeleton(input: {
         }
       }
     } else if (i === 0) {
-      // Default opening: allow Do or Mi, avoid Sol as a starting degree unless constraints force fallback.
-      const openingPreferred = candidates.filter((midi) => {
+      // Opening identity follows the planner first; fall back to the broader Do/Mi opening set if needed.
+      const plannedOpening = candidates.filter((midi) => {
         const degree = midiToDegree(midi, input.keyScale);
-        return degree === 1 || degree === 3;
+        return degree === plannedStartDegree;
       });
-      if (openingPreferred.length > 0) {
-        candidates = openingPreferred;
+      if (plannedOpening.length > 0) {
+        candidates = plannedOpening;
+      } else {
+        const openingPreferred = candidates.filter((midi) => {
+          const degree = midiToDegree(midi, input.keyScale);
+          return degree === 1 || degree === 3;
+        });
+        if (openingPreferred.length > 0) {
+          candidates = openingPreferred;
+        }
       }
     }
 
@@ -577,6 +758,10 @@ export function generateStructuralSkeleton(input: {
       .map((midi) => {
         const pc = ((midi % 12) + 12) % 12;
         const candidateDegree = midiToDegree(midi, input.keyScale);
+        const prevDegree = midiToDegree(prevMidi, input.keyScale);
+        const peakDegree = input.phrasePlan.peakDegree;
+        const prevPeakDegreeDistance = Math.abs(prevDegree - peakDegree);
+        const candidatePeakDegreeDistance = Math.abs(candidateDegree - peakDegree);
         const harmonyPenalty = slot.harmonyEvent.chordPcs.includes(pc) ? 0 : 1;
         const upAfterClimaxPenalty = i > climaxIndex && midi > prevMidi ? (midi - prevMidi) : 0;
         const nearCeilingPenalty = i !== climaxIndex && midi >= input.rangeMax - 1 ? W_SOFT_CEILING : 0;
@@ -585,6 +770,19 @@ export function generateStructuralSkeleton(input: {
         const isLeap = absInterval >= 3;
         const isFinalStructural = i === slots.length - 1;
         const isFirstStructural = i === 0;
+        const downwardLeapPenalty = downwardLeapTastePenalty(prevDegree, candidateDegree, interval);
+        const tendencyPenalty = tendencyToneMotionPenalty(prevDegree, candidateDegree, interval);
+        const tritonePenalty = absInterval === 6 ? 1 : 0;
+        const cadentialTonicPenalty = tonicCadencePenalty(prevDegree, candidateDegree, interval, {
+          isCadentialZone: slot.cadenceContext !== undefined || i >= Math.max(0, slots.length - 2),
+          prevTessituraProgress: tessituraProgress(prevMidi, input.rangeMin, input.rangeMax),
+          isRhythmicallyEmphasized: isStrongBeat(slot.beat) || slot.durationToNextBeats >= 2
+        });
+        const fastLeapPenalty = fastRhythmLeapPenalty(interval, {
+          fastContext: slot.durationToNextBeats <= 1,
+          intoTendencyTone: candidateDegree === 7,
+          intoStructuralGoal: i === climaxIndex || slot.cadenceContext !== undefined
+        });
 
         let endpointPenalty = 0;
         if (isFinalStructural) {
@@ -606,28 +804,76 @@ export function generateStructuralSkeleton(input: {
           if (input.startDegreeUserSpecified && input.startDegreePreference !== undefined) {
             endpointPenalty += candidateDegree === input.startDegreePreference ? 0 : 10_000;
           } else {
+            endpointPenalty +=
+              candidateDegree === plannedStartDegree
+                ? -W_FIRST_PLANNED_START_MATCH
+                : W_FIRST_PLANNED_START_MISS;
             endpointPenalty += candidateDegree === 1 ? -W_FIRST_DO_REWARD : 0;
             endpointPenalty += candidateDegree === 5 ? W_FIRST_SOL_PENALTY : 0;
           }
         }
 
         let climaxTransitionPenalty = 0;
-        if (isPreClimaxRegion) {
+        if (isPreClimaxRegion && !isFirstStructural) {
           const nearPeakWindow = i >= Math.max(0, climaxIndex - 1);
           const landingNearEnvelope = Math.abs(midi - slot.envelopeTargetMidi) <= 2;
-          if (nearPeakWindow && interval > 0 && isLeap && landingNearEnvelope) {
+          if (
+            input.phrasePlan.climaxStyle === 'leap' &&
+            nearPeakWindow &&
+            interval > 0 &&
+            isLeap &&
+            landingNearEnvelope
+          ) {
             // Prefer occasional singable leaps into climax.
             climaxTransitionPenalty -= W_PRE_CLIMAX_LEAP_INTO;
           }
-          if (interval > 0 && absInterval > 0 && absInterval <= 2) {
+          if (
+            input.phrasePlan.climaxStyle !== 'leap' &&
+            interval > 0 &&
+            absInterval > 0 &&
+            absInterval <= 2
+          ) {
             // Encourage ascending scalar preparation into the climax region.
             climaxTransitionPenalty -= W_PRE_CLIMAX_ASC_STEP;
+          }
+          if (interval > 0 && candidatePeakDegreeDistance < prevPeakDegreeDistance) {
+            climaxTransitionPenalty -=
+              W_PRE_CLIMAX_PEAK_DEGREE_PROGRESS *
+              Math.max(1, prevPeakDegreeDistance - candidatePeakDegreeDistance);
+          }
+          if (
+            input.phrasePlan.climaxStyle === 'leap' &&
+            interval > 0 &&
+            isLeap &&
+            candidatePeakDegreeDistance < prevPeakDegreeDistance
+          ) {
+            climaxTransitionPenalty -= W_PRE_CLIMAX_UPWARD_LEAP_PROGRESS;
+          }
+          if (input.phrasePlan.climaxStyle === 'delayed' && candidatePeakDegreeDistance === 0) {
+            climaxTransitionPenalty += 6;
           }
         }
 
         if (i === climaxIndex && interval > 0 && (absInterval === 7 || absInterval === 8 || absInterval === 9 || absInterval === 12)) {
           // A controlled large upward leap into climax (5th/6th/8ve) is musically valid.
           climaxTransitionPenalty -= W_CLIMAX_BIG_UP_LEAP_REWARD;
+        }
+
+        if (i === climaxIndex) {
+          climaxTransitionPenalty += W_CLIMAX_TARGET_DEGREE * candidatePeakDegreeDistance;
+          climaxTransitionPenalty -= W_CLIMAX_UPPER_REGISTER * tessituraProgress(midi, input.rangeMin, input.rangeMax);
+          if (midi <= highestSoFar) {
+            climaxTransitionPenalty += W_CLIMAX_NOT_UNIQUE;
+          }
+          if (input.phrasePlan.climaxStyle === 'stepwise' && isLeap) {
+            climaxTransitionPenalty += 5;
+          }
+          if (input.phrasePlan.climaxStyle === 'leap' && interval > 0 && absInterval >= 3 && absInterval <= 9) {
+            climaxTransitionPenalty -= 7;
+          }
+          if (input.phrasePlan.climaxStyle === 'sustained' && slot.durationToNextBeats >= 2) {
+            climaxTransitionPenalty -= 6;
+          }
         }
 
         if (isPostClimaxRegion && prevIsHighestSoFar) {
@@ -642,6 +888,24 @@ export function generateStructuralSkeleton(input: {
             climaxTransitionPenalty -= W_POST_CLIMAX_STEP_DOWN_REWARD;
           }
         }
+        if (isPostClimaxRegion) {
+          if (interval > 0) {
+            climaxTransitionPenalty += W_POST_CLIMAX_ASCENT;
+          }
+          if (midi >= highestSoFar) {
+            climaxTransitionPenalty += W_POST_CLIMAX_ABOVE_PEAK;
+          }
+          if (input.phrasePlan.climaxStyle === 'sustained' && i === climaxIndex + 1 && interval < 0) {
+            climaxTransitionPenalty += 4;
+          }
+          if (
+            (input.phrasePlan.climaxStyle === 'stepwise' || input.phrasePlan.climaxStyle === 'leap') &&
+            interval < 0 &&
+            absInterval <= 2
+          ) {
+            climaxTransitionPenalty -= 2;
+          }
+        }
 
         let leapRecoveryPenalty = 0;
         if (prevWasLeap) {
@@ -650,12 +914,26 @@ export function generateStructuralSkeleton(input: {
           if (!(isStep && oppositeDirection)) {
             leapRecoveryPenalty += W_LEAP_RECOVERY_FAIL;
           }
+          if (isLeap) {
+            leapRecoveryPenalty += W_REPEAT_LEAP_AFTER_LEAP;
+          }
+          if (interval !== 0 && Math.sign(interval) === prevDirection) {
+            leapRecoveryPenalty += W_SAME_DIRECTION_LEAP_AFTER_LEAP;
+          }
+          if (i === climaxIndex + 1 && notes[i - 1]?.midi === highestSoFar && !(isStep && oppositeDirection)) {
+            leapRecoveryPenalty += W_CLIMAX_JUMP_OUT;
+          }
         }
 
         const cost =
           W_ENVELOPE * Math.abs(midi - slot.envelopeTargetMidi) +
           W_VOICE_LEADING * Math.abs(midi - prevMidi) +
           W_HARMONY * harmonyPenalty +
+          W_DOWNWARD_LEAP_TASTE * downwardLeapPenalty +
+          W_TENDENCY_TONE_MOTION * tendencyPenalty +
+          W_TRITONE_LEAP * tritonePenalty +
+          W_TONIC_CADENCE_PROTECTION * cadentialTonicPenalty +
+          W_FAST_RHYTHM_LEAP * fastLeapPenalty +
           W_UP_AFTER_CLIMAX * upAfterClimaxPenalty +
           nearCeilingPenalty +
           endpointPenalty +
@@ -671,7 +949,7 @@ export function generateStructuralSkeleton(input: {
       })[0].midi;
 
     let safeChosenMidi = chosenMidi;
-    if (i === climaxIndex) {
+    if (i === climaxIndex && safeChosenMidi <= highestSoFar) {
       const prevForClimax = i > 0 ? notes[i - 1].midi : prevMidi;
       const nextForClimax = i + 1 < notes.length ? notes[i + 1].midi : null;
       const illegalDegreeSet = new Set(input.spec.illegalDegrees);
@@ -679,9 +957,11 @@ export function generateStructuralSkeleton(input: {
         .filter((midi) => !illegalDegreeSet.has(midiToDegree(midi, input.keyScale)))
         .filter((midi) => Math.abs(midi - prevForClimax) <= input.maxLeapSemitones)
         .filter((midi) => (nextForClimax === null ? true : Math.abs(nextForClimax - midi) <= input.maxLeapSemitones))
+        .filter((midi) => midi > highestSoFar)
         .sort((a, b) => b - a)[0];
       if (highestFeasible !== undefined) {
         safeChosenMidi = highestFeasible;
+        structuralClimaxRetunes += 1;
       }
     }
     if (i > 0 && Math.abs(safeChosenMidi - prevMidi) > input.maxLeapSemitones) {
@@ -738,8 +1018,11 @@ export function generateStructuralSkeleton(input: {
       .filter((midi) => (nextClimaxMidi === null ? true : Math.abs(nextClimaxMidi - midi) <= input.maxLeapSemitones))
       .sort((a, b) => b - a)[0];
     if (highestFeasibleClimax !== undefined) {
-      notes[climaxIndex] = retuneEventMidi(notes[climaxIndex], highestFeasibleClimax);
-      climaxMidi = highestFeasibleClimax;
+      if (highestFeasibleClimax !== climaxMidi) {
+        notes[climaxIndex] = retuneEventMidi(notes[climaxIndex], highestFeasibleClimax);
+        climaxMidi = highestFeasibleClimax;
+        structuralClimaxRetunes += 1;
+      }
     }
 
     const maxOther = notes.reduce((max, note, index) => (index === climaxIndex ? max : Math.max(max, note.midi)), Number.NEGATIVE_INFINITY);
@@ -751,6 +1034,7 @@ export function generateStructuralSkeleton(input: {
       if (candidates.length > 0) {
         notes[climaxIndex] = retuneEventMidi(notes[climaxIndex], candidates[0]);
         climaxMidi = candidates[0];
+        structuralClimaxRetunes += 1;
       }
     }
 
@@ -764,8 +1048,15 @@ export function generateStructuralSkeleton(input: {
         .sort((a, b) => Math.abs(a - notes[i].midi) - Math.abs(b - notes[i].midi));
       if (lower.length > 0) {
         notes[i] = retuneEventMidi(notes[i], lower[0]);
+        structuralPeakCompetitionRepairs += 1;
       }
     }
+  }
+
+  if (structuralClimaxRetunes > 0 || structuralPeakCompetitionRepairs > 0) {
+    console.debug(
+      `[climax-structural-repair] phrase=${input.phraseIndex + 1} climaxRetunes=${structuralClimaxRetunes} competingPeakRepairs=${structuralPeakCompetitionRepairs}`
+    );
   }
 
   return {
@@ -1712,6 +2003,7 @@ export function realizePhraseGridPitches(input: {
           continue;
         }
         const degree = midiToDegree(midi, input.keyScale);
+        const prevDegree = midiToDegree(inputEdge.prevMidi, input.keyScale);
         if (illegalDegreeSet.has(degree)) {
           continue;
         }
@@ -1727,12 +2019,28 @@ export function realizePhraseGridPitches(input: {
         }
         const chordTone = chordCandidates.includes(midi);
         const towardTarget = Math.sign(inputEdge.targetMidi - inputEdge.prevMidi) === Math.sign(midi - inputEdge.prevMidi);
+        const tritonePenalty = leap === 6 ? 8 : 0;
+        const tendencyPenalty = tendencyToneMotionPenalty(prevDegree, degree, toPrev) * 2.2;
+        const fastLeapPenalty = fastRhythmLeapPenalty(toPrev, {
+          fastContext: Math.abs((inputEdge.slot.onset % 1) - 0.5) < 0.001 || inputEdge.intent === 'smoothing_run',
+          intoTendencyTone: degree === 7,
+          intoStructuralGoal: inputEdge.slot.isClimax || inputEdge.slot.isCadence
+        }) * 1.8;
+        const tonicPenalty = tonicCadencePenalty(prevDegree, degree, toPrev, {
+          isCadentialZone: inputEdge.slot.isCadence,
+          prevTessituraProgress: tessituraProgress(inputEdge.prevMidi, input.rangeMin, input.rangeMax),
+          isRhythmicallyEmphasized: strong
+        }) * 1.6;
         const score =
           Math.abs(midi - inputEdge.desiredMidi) * 3 +
           Math.abs(midi - inputEdge.prevMidi) +
           (strong && !chordTone ? 4 : 0) +
           (!strong && chordTone ? 1.5 : 0) +
-          (towardTarget ? 0 : 3);
+          (towardTarget ? 0 : 3) +
+          tritonePenalty +
+          tendencyPenalty +
+          fastLeapPenalty +
+          tonicPenalty;
         if (score < bestScore) {
           best = midi;
           bestScore = score;
@@ -2771,6 +3079,9 @@ function applyClimaxShouldRule(
   if (attacks.length === 0) {
     return;
   }
+  let taggedClimaxRetunes = 0;
+  let competingPeakRepairs = 0;
+  let postClimaxSmoothRepairs = 0;
   const taggedClimaxIndices = attacks
     .map((event, idx) => ({ event, idx }))
     .filter(({ event }) => (event.functionTags ?? []).includes('climax'))
@@ -2787,6 +3098,7 @@ function applyClimaxShouldRule(
           detail: { from: target.midi, to: raised }
         });
         Object.assign(target, retuneEvent(target, raised));
+        taggedClimaxRetunes += 1;
       }
     }
   }
@@ -2804,6 +3116,7 @@ function applyClimaxShouldRule(
         detail: { measure: event.measure, from: event.midi, to: down }
       });
       Object.assign(event, retuneEvent(event, down));
+      competingPeakRepairs += 1;
     }
   }
 
@@ -2825,7 +3138,14 @@ function applyClimaxShouldRule(
         detail: { from: curr.midi, to: preferred, prev: prev.midi }
       });
       Object.assign(curr, retuneEvent(curr, preferred));
+      postClimaxSmoothRepairs += 1;
     }
+  }
+
+  if (taggedClimaxRetunes > 0 || competingPeakRepairs > 0 || postClimaxSmoothRepairs > 0) {
+    console.debug(
+      `[climax-should-repair] taggedRetunes=${taggedClimaxRetunes} competingPeakRepairs=${competingPeakRepairs} postClimaxSmoothRepairs=${postClimaxSmoothRepairs}`
+    );
   }
 }
 
@@ -3364,6 +3684,64 @@ function legalDurationPlaceholder(
   return { duration: 'quarter', durationBeats: 1 };
 }
 
+type ForbiddenQuarterRepairRecord = {
+  phase: 'rewrite' | 'pass5' | 'pass10';
+  measure: number;
+  onset: number;
+  origin: 'rewrite' | 'smoothing' | 'connective' | 'structural' | 'embellish' | 'final_normalization' | 'unknown';
+  reason: string;
+};
+
+function classifyForbiddenQuarterOrigin(reason: string): ForbiddenQuarterRepairRecord['origin'] {
+  if (reason.includes('smoothing')) {
+    return 'smoothing';
+  }
+  if (reason.includes('pass4_edge') || reason.includes('connective')) {
+    return 'connective';
+  }
+  if (reason.includes('structuralSkeleton')) {
+    return 'structural';
+  }
+  if (reason.includes('embellish')) {
+    return 'embellish';
+  }
+  if (reason.includes('pass5') || reason.includes('pass10')) {
+    return 'final_normalization';
+  }
+  if (reason.includes('rhythm:')) {
+    return 'rewrite';
+  }
+  return 'unknown';
+}
+
+function logForbiddenQuarterRepairSummary(records: ForbiddenQuarterRepairRecord[]): void {
+  if (records.length === 0) {
+    return;
+  }
+
+  const byPhase = new Map<string, number>();
+  const byOrigin = new Map<string, number>();
+  for (const record of records) {
+    byPhase.set(record.phase, (byPhase.get(record.phase) ?? 0) + 1);
+    byOrigin.set(record.origin, (byOrigin.get(record.origin) ?? 0) + 1);
+  }
+
+  const phaseSummary = [...byPhase.entries()]
+    .map(([phase, count]) => `${phase}:${count}`)
+    .join(',');
+  const originSummary = [...byOrigin.entries()]
+    .map(([origin, count]) => `${origin}:${count}`)
+    .join(',');
+  const detailSummary = records
+    .slice(0, 8)
+    .map((record) => `m${record.measure}@${record.onset}:${record.origin}`)
+    .join(' ');
+
+  console.debug(
+    `[rhythm-ee-repair] total=${records.length} phases=${phaseSummary} origins=${originSummary} details=${detailSummary}`
+  );
+}
+
 function rewriteFallbackGrid(
   beatsPerMeasure: number,
   allowedNoteValues?: Array<'EE' | 'Q' | 'H' | 'W'>,
@@ -3413,6 +3791,100 @@ function rewriteFallbackGrid(
     return [1, 1.5, 2];
   }
   return [1];
+}
+
+function repairForbiddenQuarterDurations(
+  events: MelodyEvent[],
+  beatsPerMeasure: number,
+  allowedNoteValues?: Array<'EE' | 'Q' | 'H' | 'W'>,
+  repairLog?: Pass10ConstraintLogEntry[]
+): boolean {
+  const allowed = new Set<'EE' | 'Q' | 'H' | 'W'>(allowedNoteValues ?? ['EE', 'Q', 'H']);
+  if (allowed.has('Q') || !allowed.has('EE')) {
+    return false;
+  }
+
+  let changed = false;
+  const repairRecords: ForbiddenQuarterRepairRecord[] = [];
+  const measures = [...new Set(events.filter((e) => e.isAttack === true).map((e) => e.measure))].sort((a, b) => a - b);
+  for (const measure of measures) {
+    const attacks = events
+      .filter((e) => e.measure === measure && e.isAttack === true)
+      .sort((a, b) => (a.onsetBeat ?? a.beat) - (b.onsetBeat ?? b.beat));
+
+    for (let i = 0; i < attacks.length; i += 1) {
+      const curr = attacks[i];
+      const onset = curr.onsetBeat ?? curr.beat;
+      const nextOnset =
+        i + 1 < attacks.length
+          ? (attacks[i + 1].onsetBeat ?? attacks[i + 1].beat)
+          : beatsPerMeasure + 1;
+      const dur = Number((nextOnset - onset).toFixed(3));
+      if (Math.abs(dur - 1) >= 1e-6) {
+        continue;
+      }
+
+      const splitOnset = Number((onset + 0.5).toFixed(3));
+      const collision = attacks.some(
+        (attack) => Math.abs((attack.onsetBeat ?? attack.beat) - splitOnset) < 1e-6,
+      );
+      if (collision) {
+        repairLog?.push({
+          code: 'pass10_forbidden_quarter_collision',
+          detail: { measure, onset, splitOnset }
+        });
+        continue;
+      }
+
+      events.push({
+        ...curr,
+        beat: splitOnset,
+        onsetBeat: splitOnset,
+        isAttack: true,
+        tieStart: undefined,
+        tieStop: undefined,
+        duration: 'eighth',
+        durationBeats: 0.5,
+        reason: `${curr.reason}|pass10_forbidden_quarter_to_ee`
+      });
+      changed = true;
+      repairLog?.push({
+        code: 'pass10_forbidden_quarter_to_ee',
+        detail: { measure, onset, splitOnset }
+      });
+      repairRecords.push({
+        phase: 'pass10',
+        measure,
+        onset,
+        origin: classifyForbiddenQuarterOrigin(curr.reason),
+        reason: curr.reason
+      });
+    }
+  }
+
+  logForbiddenQuarterRepairSummary(repairRecords);
+  return changed;
+}
+
+function assertNoForbiddenQuarterDurations(
+  events: MelodyEvent[],
+  allowedNoteValues?: Array<'EE' | 'Q' | 'H' | 'W'>
+): void {
+  const allowed = new Set<'EE' | 'Q' | 'H' | 'W'>(allowedNoteValues ?? ['EE', 'Q', 'H']);
+  if (allowed.has('Q') || !allowed.has('EE')) {
+    return;
+  }
+
+  const forbidden = events.find(
+    (event) => event.isAttack !== false && Math.abs((event.durationBeats ?? -1) - 1) < 1e-6
+  );
+  if (!forbidden) {
+    return;
+  }
+
+  throw new Error(
+    `allowed_note_values_quarter_leak m${forbidden.measure} onset=${String(forbidden.onsetBeat ?? forbidden.beat)}`
+  );
 }
 
 function enforceAllowedNoteValuesPass10(
@@ -3574,6 +4046,18 @@ function enforceAllowedNoteValuesPass10(
       );
       ensureMeasureValidity(events, beatsPerMeasure, repairLog);
     }
+  }
+
+  if (repairForbiddenQuarterDurations(events, beatsPerMeasure, ctx.allowedNoteValues, repairLog)) {
+    ensureMeasureValidity(events, beatsPerMeasure, repairLog);
+    enforceNoLoneEighths(
+      events,
+      beatsPerMeasure,
+      allowedEeBeatBasesForMeter(beatsPerMeasure),
+      Math.max(0, ctx.user.minEighthPairsPerPhrase ?? 0),
+      repairLog
+    );
+    ensureMeasureValidity(events, beatsPerMeasure, repairLog);
   }
 }
 
@@ -3899,8 +4383,15 @@ export function renderPlaybackPass11(
   return playback;
 }
 
-export function buildPlaybackArrayPass5(events: MelodyEvent[], beatsPerMeasure: number): MelodyEvent[] {
+export function buildPlaybackArrayPass5(
+  events: MelodyEvent[],
+  beatsPerMeasure: number,
+  allowedNoteValues?: Array<'EE' | 'Q' | 'H' | 'W'>
+): MelodyEvent[] {
   const attacks = filterRenderableAttackEvents(events);
+  const allowed = new Set<'EE' | 'Q' | 'H' | 'W'>(allowedNoteValues ?? ['EE', 'Q', 'H']);
+  const splitQuarterToEighths = !allowed.has('Q') && allowed.has('EE');
+  const repairRecords: ForbiddenQuarterRepairRecord[] = [];
   const byMeasure = new Map<number, MelodyEvent[]>();
   for (const event of attacks) {
     if (!byMeasure.has(event.measure)) {
@@ -3954,6 +4445,36 @@ export function buildPlaybackArrayPass5(events: MelodyEvent[], beatsPerMeasure: 
       const onset = current.onsetBeat ?? current.beat;
       const nextOnset = next ? (next.onsetBeat ?? next.beat) : beatsPerMeasure + 1;
       const durationBeats = Number((nextOnset - onset).toFixed(3));
+      if (splitQuarterToEighths && Math.abs(durationBeats - 1) < 1e-6) {
+        repairRecords.push({
+          phase: 'pass5',
+          measure,
+          onset,
+          origin: classifyForbiddenQuarterOrigin(current.reason),
+          reason: current.reason
+        });
+        result.push({
+          ...current,
+          beat: onset,
+          onsetBeat: onset,
+          durationBeats: 0.5,
+          duration: 'eighth',
+          isAttack: true,
+          reason: `${current.reason}|pass5_split_forbidden_quarter`
+        });
+        result.push({
+          ...current,
+          beat: Number((onset + 0.5).toFixed(3)),
+          onsetBeat: Number((onset + 0.5).toFixed(3)),
+          durationBeats: 0.5,
+          duration: 'eighth',
+          isAttack: true,
+          tieStart: undefined,
+          tieStop: undefined,
+          reason: `${current.reason}|pass5_split_forbidden_quarter`
+        });
+        continue;
+      }
       result.push({
         ...current,
         beat: onset,
@@ -3965,13 +4486,15 @@ export function buildPlaybackArrayPass5(events: MelodyEvent[], beatsPerMeasure: 
     }
   }
 
+  logForbiddenQuarterRepairSummary(repairRecords);
   return result.sort((a, b) => a.measure - b.measure || (a.onsetBeat ?? a.beat) - (b.onsetBeat ?? b.beat));
 }
 
 export function removeStrayPhraseStartTrailingEighths(
   events: MelodyEvent[],
   phraseLengthMeasures: number,
-  beatsPerMeasure: number
+  beatsPerMeasure: number,
+  allowedNoteValues?: Array<'EE' | 'Q' | 'H' | 'W'>
 ): MelodyEvent[] {
   if (Math.abs(beatsPerMeasure - 3) > 0.001) {
     return events;
@@ -4012,7 +4535,11 @@ export function removeStrayPhraseStartTrailingEighths(
     at35.durationBeats = 0;
   }
 
-  return buildPlaybackArrayPass5(filterRenderableAttackEvents(next), beatsPerMeasure);
+  return buildPlaybackArrayPass5(
+    filterRenderableAttackEvents(next),
+    beatsPerMeasure,
+    allowedNoteValues
+  );
 }
 
 function isLockedAttack(event: MelodyEvent): boolean {
@@ -4178,6 +4705,8 @@ export function rewriteAttacksAndQuantizeByMeasure(
   options: RewriteAttackOptions = {}
 ): MelodyEvent[] {
   const beatsPerMeasure = options.beatsPerMeasure ?? 4;
+  const allowed = new Set<'EE' | 'Q' | 'H' | 'W'>(options.allowedNoteValues ?? ['EE', 'Q', 'H']);
+  const preferEeRepair = !allowed.has('Q') && allowed.has('EE');
   const tagged = labelEventFunctions(events, phrasePlan);
   const byMeasure = new Map<number, MelodyEvent[]>();
   for (const event of tagged) {
@@ -4188,6 +4717,7 @@ export function rewriteAttacksAndQuantizeByMeasure(
   }
 
   const rewritten: MelodyEvent[] = [];
+  const repairRecords: ForbiddenQuarterRepairRecord[] = [];
 
   for (const [measure, inMeasureUnsorted] of byMeasure.entries()) {
     const inMeasure = [...inMeasureUnsorted].sort((a, b) => a.beat - b.beat);
@@ -4311,8 +4841,14 @@ export function rewriteAttacksAndQuantizeByMeasure(
       const prev = mergedAttacks[mergedAttacks.length - 1];
       const preserveEeAttack =
         usesEeGrid &&
-        eeSlots.some((slot) => Math.abs(slot - prev?.onset!) < 0.001) &&
-        eeSlots.some((slot) => Math.abs(slot - item.onset) < 0.001);
+        !!prev &&
+        (
+          (preferEeRepair && Math.abs(item.onset - prev.onset - 0.5) < 0.001) ||
+          (
+            eeSlots.some((slot) => Math.abs(slot - prev.onset) < 0.001) &&
+            eeSlots.some((slot) => Math.abs(slot - item.onset) < 0.001)
+          )
+        );
       if (prev && prev.event.midi === item.event.midi && !preserveEeAttack) {
         prev.event.tieStart = true;
         prev.event.reason = `${prev.event.reason}|tieMerge`;
@@ -4325,6 +4861,38 @@ export function rewriteAttacksAndQuantizeByMeasure(
       const current = mergedAttacks[i];
       const next = mergedAttacks[i + 1];
       const durationBeats = (next?.onset ?? 5) - current.onset;
+      const reason = `${current.event.reason}${usesEeGrid ? '|rhythm:smoothing_window' : ''}`;
+      if (preferEeRepair && Math.abs(durationBeats - 1) < 1e-6) {
+        repairRecords.push({
+          phase: 'rewrite',
+          measure: current.event.measure,
+          onset: current.onset,
+          origin: classifyForbiddenQuarterOrigin(reason),
+          reason
+        });
+        rewritten.push({
+          ...current.event,
+          beat: current.onset,
+          onsetBeat: current.onset,
+          durationBeats: 0.5,
+          duration: 'eighth',
+          isAttack: true,
+          tieStop: undefined,
+          reason: `${reason}|rewrite_split_forbidden_quarter`
+        });
+        rewritten.push({
+          ...current.event,
+          beat: Number((current.onset + 0.5).toFixed(3)),
+          onsetBeat: Number((current.onset + 0.5).toFixed(3)),
+          durationBeats: 0.5,
+          duration: 'eighth',
+          isAttack: true,
+          tieStop: undefined,
+          tieStart: undefined,
+          reason: `${reason}|rewrite_split_forbidden_quarter`
+        });
+        continue;
+      }
       rewritten.push({
         ...current.event,
         beat: current.onset,
@@ -4333,7 +4901,7 @@ export function rewriteAttacksAndQuantizeByMeasure(
         duration: beatsToDuration(durationBeats),
         isAttack: true,
         tieStop: undefined,
-        reason: `${current.event.reason}${usesEeGrid ? '|rhythm:smoothing_window' : ''}`
+        reason
       });
     }
 
@@ -4352,6 +4920,7 @@ export function rewriteAttacksAndQuantizeByMeasure(
     }
   }
 
+  logForbiddenQuarterRepairSummary(repairRecords);
   const attacksOnly = filterRenderableAttackEvents(rewritten);
 
   const grouped = new Map<number, MelodyEvent[]>();
@@ -4461,7 +5030,7 @@ export function tieMergeRepeatedPitchesInMeasure(events: MelodyEvent[]): { event
 
 function templatePattern(template: MeasureTemplateId, eventCount: number): number[] {
   const clampCount = Math.max(1, eventCount);
-  if (template === 'CADENCE_W') {
+  if (template === 'CADENCE_W' || template === 'CLIMAX_SUSTAINED') {
     return clampCount === 1 ? [8] : [4, 4];
   }
   if (template === 'CADENCE_HH' || template === 'CLIMAX_SIMPLE') {
@@ -4786,7 +5355,29 @@ export function createMelodyCandidates(
       }
     });
     let pass5FinalMelody = initialPass5FinalMelody;
-    pass5FinalMelody = removeStrayPhraseStartTrailingEighths(pass5FinalMelody, phraseLengthMeasures, beatsPerMeasure);
+    pass5FinalMelody = removeStrayPhraseStartTrailingEighths(
+      pass5FinalMelody,
+      phraseLengthMeasures,
+      beatsPerMeasure,
+      normalizedSpec.userConstraints?.allowedNoteValues
+    );
+    if (
+      repairForbiddenQuarterDurations(
+        pass5FinalMelody,
+        beatsPerMeasure,
+        normalizedSpec.userConstraints?.allowedNoteValues
+      )
+    ) {
+      pass5FinalMelody = buildPlaybackArrayPass5(
+        filterRenderableAttackEvents(pass5FinalMelody),
+        beatsPerMeasure,
+        normalizedSpec.userConstraints?.allowedNoteValues
+      );
+    }
+    assertNoForbiddenQuarterDurations(
+      pass5FinalMelody,
+      normalizedSpec.userConstraints?.allowedNoteValues
+    );
     const pass6Playback = renderPlaybackPass11(pass5FinalMelody, {
       beatsPerMeasure
     });
