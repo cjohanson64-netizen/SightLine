@@ -24,10 +24,79 @@ export interface GraphEdge<T = unknown> {
   data: T;
 }
 
+export type DebugProjectedMelodyFunction =
+  | 'climax'
+  | 'cadence'
+  | 'structural'
+  | 'opening'
+  | 'release'
+  | 'connective_nht';
+
+export interface DebugProjectedTargetNote {
+  noteId: string;
+  measure: number;
+  beat: number;
+  pitch: string;
+  phraseIndex: number;
+  functions: DebugProjectedMelodyFunction[];
+}
+
+export interface DebugProjectedAssessmentExplanation {
+  explanationId: string;
+  targetNoteId: string | null;
+  performedNoteId: string | null;
+  outcome: 'correct' | 'near_pitch' | 'incorrect_pitch' | 'ambiguous';
+}
+
+export interface DebugPhraseSemanticsSummary {
+  phraseIndex: number;
+  openingPitch: string | null;
+  climaxPitch: string | null;
+  cadencePitches: string[];
+  hasRelease: boolean;
+  hasConnectiveNht: boolean;
+  summaryText: string;
+}
+
+export interface SemanticInsight {
+  category:
+    | 'climax'
+    | 'cadence'
+    | 'release'
+    | 'connective_motion'
+    | 'structural_shape';
+  polarity: 'strength' | 'weakness';
+  message: string;
+  priority: number;
+}
+
+export type PracticeFocus =
+  | 'climax_release'
+  | 'cadence_resolution'
+  | 'connective_motion'
+  | 'structural_accuracy'
+  | 'range_confidence';
+
+export interface PracticeRecommendation {
+  focus: PracticeFocus;
+  title: string;
+  message: string;
+}
+
+export interface DebugSemanticsProjection {
+  targetNotes: DebugProjectedTargetNote[];
+  assessmentExplanations: DebugProjectedAssessmentExplanation[];
+  phraseSummaries: DebugPhraseSemanticsSummary[];
+  strengths: SemanticInsight[];
+  weaknesses: SemanticInsight[];
+  recommendation: PracticeRecommendation | null;
+}
+
 export interface ArtifactGraph {
   nodes: GraphNode[];
   edges: GraphEdge[];
   root: string;
+  debugSemantics?: DebugSemanticsProjection;
 }
 
 export function createEmptyGraph(rootId = 'artifact-root'): ArtifactGraph {

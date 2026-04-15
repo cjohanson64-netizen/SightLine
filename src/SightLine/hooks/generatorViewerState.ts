@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
+import type { DebugSemanticsProjection } from "@/SightLine/domain/artifact";
 import type { ExerciseSpec, MelodyEvent } from "@/SightLine/domain/music";
 import { usePitchEdit } from "./usePitchEdit";
 import { usePlayback } from "./usePlayback";
@@ -41,6 +42,7 @@ export interface GeneratorViewerStateControllers {
   setRelaxationNotice: (value: string) => void;
   setSeed: (value: number) => void;
   setSpec: Dispatch<SetStateAction<ExerciseSpec>>;
+  setDebugSemantics?: (value: DebugSemanticsProjection) => void;
 }
 
 export function loadExerciseIntoViewer(
@@ -68,4 +70,12 @@ export function loadExerciseIntoViewer(
   controls.pitchEdit.setSelectedNoteId(null);
   controls.pitchEdit.setEditMessage(editMessageText ?? "");
   controls.playback.setPlaybackHighlightIndex(null);
+  controls.setDebugSemantics?.({
+    targetNotes: [],
+    assessmentExplanations: [],
+    phraseSummaries: [],
+    strengths: [],
+    weaknesses: [],
+    recommendation: null,
+  });
 }

@@ -20,7 +20,7 @@ export interface WeightedAssessmentScoreWeights {
 
 export const DEFAULT_WEIGHTED_ASSESSMENT_SCORE_WEIGHTS: WeightedAssessmentScoreWeights = {
   correct: 1,
-  near: 0.95,
+  near: 1,
   transposed_consistent: 0.95,
   low_confidence: 0.95,
   ambiguous: 0.85,

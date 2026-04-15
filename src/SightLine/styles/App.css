@@ -654,8 +654,8 @@ body {
 }
 
 .AppAssessmentNoteBadge--near {
-  background: rgba(241, 210, 79, 0.2);
-  color: #ffed9b;
+  background: rgba(30, 207, 135, 0.18);
+  color: #9af0ca;
 }
 
 .AppAssessmentNoteBadge--incorrect {
@@ -688,7 +688,7 @@ body {
 }
 
 .AppAssessmentLegendSwatch--near {
-  background: #f1d24f;
+  background: #1ecf87;
 }
 
 .AppAssessmentLegendSwatch--incorrect {

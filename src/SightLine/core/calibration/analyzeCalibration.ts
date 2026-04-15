@@ -2,14 +2,19 @@ import { KEY_TO_PC, midiToPc, midiToPitch, pitchOctaveForMidi, prefersFlatsForKe
 import { detectPitchFrames } from '@/SightLine/core/audio/detectPitchFrames';
 import { segmentPerformedMelody } from '@/SightLine/core/audio/segmentPerformedMelody';
 import type { MelodyEvent } from '@/SightLine/domain/music';
-import type { CalibrationProfile, CalibrationRunResult, CalibrationSignalQuality } from './types';
+import type {
+  CalibratedDegreeProfile,
+  CalibrationProfile,
+  CalibrationRunResult,
+  CalibrationSignalQuality,
+} from './types';
 
 interface AnalyzeCalibrationInput {
   audioBlob: Blob;
   targetMelody: MelodyEvent[];
 }
 
-const CALIBRATION_LABELS = ['do', 're', 'mi', 'fa', 'sol'];
+const CALIBRATION_LABELS = ['do', 're', 'mi', 'fa', 'sol', 'la', 'ti', 'do'];
 
 function weightedMedian(entries: Array<{ value: number; weight: number }>): number | null {
   if (entries.length === 0) {
@@ -44,7 +49,7 @@ function buildCalibrationTarget(targetMelody: MelodyEvent[]): MelodyEvent[] {
   const [keyRaw = 'C', modeRaw = 'major'] = String(anchor.keyId ?? 'C-major').split('-');
   const mode = modeRaw === 'minor' ? 'minor' : 'major';
   const tonicPc = KEY_TO_PC[keyRaw] ?? midiToPc(anchor.midi);
-  const degreeOffsets = mode === 'minor' ? [0, 2, 3, 5, 7] : [0, 2, 4, 5, 7];
+  const degreeOffsets = mode === 'minor' ? [0, 2, 3, 5, 7, 8, 10, 12] : [0, 2, 4, 5, 7, 9, 11, 12];
   const meanOffset = degreeOffsets.reduce((sum, value) => sum + value, 0) / degreeOffsets.length;
   const medianTargetMidi =
     [...active.map((event) => event.midi)].sort((a, b) => a - b)[Math.floor(active.length / 2)] ?? anchor.midi;
@@ -92,7 +97,7 @@ function classifySignalQuality(
   const score =
     (avgConfidence ?? 0) * 0.5 +
     (avgStability ?? 0) * 0.35 +
-    Math.min(1, usableCount / 5) * 0.15;
+    Math.min(1, usableCount / 8) * 0.15;
   if (score >= 0.75) {
     return 'good';
   }
@@ -102,11 +107,39 @@ function classifySignalQuality(
   return 'poor';
 }
 
+function degreeStability(note: CalibrationRunResult['segmentedNotes'][number]): number {
+  const spread = note.stablePitchSpread ?? note.pitchSpread ?? 2.5;
+  return Math.max(0, Math.min(1, 1 - spread / 2.5));
+}
+
+function buildDegreeProfiles(
+  calibrationTarget: MelodyEvent[],
+  segmentedNotes: CalibrationRunResult['segmentedNotes'],
+): CalibratedDegreeProfile[] {
+  return calibrationTarget.map((targetNote, index) => {
+    const detected = segmentedNotes[index];
+    return {
+      degree: (index + 1) as CalibratedDegreeProfile['degree'],
+      label: CALIBRATION_LABELS[index] ?? `degree-${index + 1}`,
+      expectedPitch: targetNote.pitch,
+      expectedMidi: targetNote.midi,
+      detectedMidi: detected?.midi ?? null,
+      center: detected?.pitchCenter ?? null,
+      offsetFromExpected:
+        detected?.pitchCenter !== null ? detected.pitchCenter - targetNote.midi : null,
+      confidence: detected?.confidence ?? 0,
+      stability: detected ? degreeStability(detected) : 0,
+      status: detected?.status ?? 'missing',
+    };
+  });
+}
+
 function buildProfile(
   calibrationTarget: MelodyEvent[],
   segmentedNotes: CalibrationRunResult['segmentedNotes'],
 ): CalibrationProfile {
   const usableNotes = segmentedNotes.filter((note) => note.pitchCenter !== null && note.status !== 'missing');
+  const degrees = buildDegreeProfiles(calibrationTarget, segmentedNotes);
   const offsetEntries = usableNotes
     .filter((note) => typeof note.expectedMidi === 'number' && typeof note.pitchCenter === 'number')
     .map((note) => ({
@@ -116,10 +149,7 @@ function buildProfile(
   const phraseOffset = weightedMedian(offsetEntries);
   const averageConfidence = average(usableNotes.map((note) => note.confidence));
   const averagePitchStability = average(
-    usableNotes.map((note) => {
-      const spread = note.stablePitchSpread ?? note.pitchSpread ?? 2.5;
-      return Math.max(0, Math.min(1, 1 - spread / 2.5));
-    }),
+    usableNotes.map((note) => degreeStability(note)),
   );
   const signalQuality = classifySignalQuality(
     usableNotes.length,
@@ -131,7 +161,7 @@ function buildProfile(
       ? calibrationTarget[0].midi + phraseOffset
       : null;
   const successful =
-    usableNotes.length >= 4 &&
+    usableNotes.length >= 6 &&
     (averageConfidence ?? 0) >= 0.5 &&
     signalQuality !== 'poor';
 
@@ -144,13 +174,15 @@ function buildProfile(
       phraseOffset !== null ? Math.round(phraseOffset / 12) * 12 : null,
     averageConfidence,
     averagePitchStability,
+    overallConfidence: averageConfidence,
     signalQuality,
     summary: successful
-      ? 'Calibration complete.'
-      : 'Calibration was only partly clear. Try again for a stronger listening guide.',
+      ? 'Full-scale calibration complete.'
+      : 'Calibration was only partly clear. Try the full scale again for a stronger listening guide.',
     expectedPatternLabels: CALIBRATION_LABELS,
     expectedMidis: calibrationTarget.map((note) => note.midi),
     detectedCenters: segmentedNotes.map((note) => note.pitchCenter),
+    degrees,
   };
 }
 
@@ -169,11 +201,14 @@ export async function analyzeCalibration(
     throw new Error("I couldn't hear enough stable pitch for calibration. Try again in a quieter space.");
   }
 
-  const { cleanedFrames, segmentedNotes } = segmentPerformedMelody(frames, calibrationTarget);
+  const { cleanedFrames, segmentedNotes } = segmentPerformedMelody(frames, calibrationTarget, {
+    disableContourSanity: true,
+    disablePhraseLevelSmoothing: true,
+  });
   const usableCount = segmentedNotes.filter((note) => note.pitchCenter !== null && note.status !== 'missing').length;
 
-  if (usableCount < 3) {
-    throw new Error("I couldn't hear the calibration pattern clearly enough. Sing do re mi fa sol a little more clearly and try again.");
+  if (usableCount < 4) {
+    throw new Error("I couldn't hear the calibration pattern clearly enough. Sing do re mi fa sol la ti do a little more clearly and try again.");
   }
 
   const profile = buildProfile(calibrationTarget, segmentedNotes);

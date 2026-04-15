@@ -1,4 +1,5 @@
 import { midiToPitch, prefersFlatsForKey } from '@/SightLine/core/midi';
+import type { CalibrationProfile } from '@/SightLine/core/calibration/types';
 import type { MelodyEvent } from '@/SightLine/domain/music';
 import type { CleanedPitchFrame, DetectedPitchFrame, SegmentedPerformedNote } from './types';
 
@@ -8,6 +9,9 @@ interface SegmentOptions {
   slackMs?: number;
   boundarySearchMs?: number;
   expectedMidiOffset?: number | null;
+  calibrationProfile?: CalibrationProfile | null;
+  disableContourSanity?: boolean;
+  disablePhraseLevelSmoothing?: boolean;
 }
 
 interface DominantClusterAnalysis {
@@ -48,6 +52,12 @@ interface ExpectedWindow {
   startMs: number;
   endMs: number;
   target: MelodyEvent;
+}
+
+interface CalibrationSupportMatch {
+  supported: boolean;
+  level: 'strong' | 'weak' | 'rejected' | null;
+  reason: string | null;
 }
 
 function durationBeats(event: MelodyEvent): number {
@@ -574,6 +584,128 @@ function targetDirection(
   return null;
 }
 
+function octaveAlignedCalibrationCenter(
+  center: number,
+  sourceExpectedMidi: number,
+  targetExpectedMidi: number,
+): number {
+  const octaveShift = Math.round((targetExpectedMidi - sourceExpectedMidi) / 12);
+  return center + octaveShift * 12;
+}
+
+function findCalibrationSupport(
+  note: SegmentedPerformedNote,
+  calibrationProfile: CalibrationProfile | null,
+): CalibrationSupportMatch {
+  if (
+    !calibrationProfile?.successful ||
+    calibrationProfile.signalQuality === 'poor' ||
+    note.pitchCenter === null ||
+    typeof note.expectedMidi !== 'number'
+  ) {
+    return { supported: false, level: null, reason: null };
+  }
+
+  const expectedMidi = note.expectedMidi;
+  const candidates = calibrationProfile.degrees.filter(
+    (degree) => degree.center !== null,
+  );
+
+  if (candidates.length === 0) {
+    return { supported: false, level: 'rejected', reason: 'Calibration profile had no stable stored centers.' };
+  }
+
+  let bestDistance = Number.POSITIVE_INFINITY;
+  let bestSourceDistance = Number.POSITIVE_INFINITY;
+  let matchedDegree: CalibrationProfile['degrees'][number] | null = null;
+  let matchedAlignedCenter: number | null = null;
+
+  for (const candidate of candidates) {
+    const alignedCenter = octaveAlignedCalibrationCenter(
+      candidate.center as number,
+      candidate.expectedMidi,
+      expectedMidi,
+    );
+    const alignedExpectedMidi = octaveAlignedCalibrationCenter(
+      candidate.expectedMidi,
+      candidate.expectedMidi,
+      expectedMidi,
+    );
+    const expectedAlignmentError = Math.abs(alignedExpectedMidi - expectedMidi);
+    if (expectedAlignmentError > 0.01) {
+      continue;
+    }
+    const distance = Math.abs(note.pitchCenter - alignedCenter);
+    const sourceDistance = Math.abs(candidate.expectedMidi - expectedMidi);
+    if (
+      distance < bestDistance - 0.001 ||
+      (Math.abs(distance - bestDistance) <= 0.001 && sourceDistance < bestSourceDistance)
+    ) {
+      bestDistance = distance;
+      bestSourceDistance = sourceDistance;
+      matchedDegree = candidate;
+      matchedAlignedCenter = alignedCenter;
+    }
+  }
+
+  if (!matchedDegree || matchedAlignedCenter === null) {
+    return {
+      supported: false,
+      level: 'rejected',
+      reason: 'Calibration degrees could not be octave-aligned cleanly to this target note.',
+    };
+  }
+
+  if (matchedDegree.confidence < 0.5 || matchedDegree.stability < 0.35) {
+    return {
+      supported: false,
+      level: 'rejected',
+      reason: `Calibration matched degree ${matchedDegree.degree}, but that stored point was too weak or unstable to trust.`,
+    };
+  }
+
+  if (bestDistance <= 0.45 && matchedDegree.confidence >= 0.62 && matchedDegree.stability >= 0.45) {
+    return {
+      supported: true,
+      level: 'strong',
+      reason: `Strong calibration support from degree ${matchedDegree.degree} (${matchedDegree.label}) at ${matchedAlignedCenter.toFixed(2)} semitones, ${bestDistance.toFixed(2)} away from the local center.`,
+    };
+  }
+
+  if (bestDistance <= 0.75) {
+    return {
+      supported: false,
+      level: 'weak',
+      reason: `Calibration matched degree ${matchedDegree.degree} (${matchedDegree.label}), but support was only weak at ${bestDistance.toFixed(2)} semitones away.`,
+    };
+  }
+
+  return {
+    supported: false,
+    level: 'rejected',
+    reason: `Calibration matched degree ${matchedDegree.degree} (${matchedDegree.label}), but the stored center sat ${bestDistance.toFixed(2)} semitones away from this local pitch.`,
+  };
+}
+
+function hasStrongLocalPitchEvidence(note: SegmentedPerformedNote): boolean {
+  const spread = note.stablePitchSpread ?? note.pitchSpread ?? Number.POSITIVE_INFINITY;
+  const dominantStrength = note.dominantBucketStrength ?? 0;
+  const calibrationSupportIsStrong = note.calibrationSupportLevel === 'strong';
+  const confidenceFloor = calibrationSupportIsStrong ? 0.62 : 0.68;
+  const spreadLimit = calibrationSupportIsStrong ? 1.05 : 0.9;
+  const dominantStrengthFloor = calibrationSupportIsStrong ? 0.52 : 0.58;
+
+  return (
+    note.pitchCenter !== null &&
+    note.status === 'clear' &&
+    note.confidence >= confidenceFloor &&
+    note.usedFrameCount >= 3 &&
+    spread <= spreadLimit &&
+    !note.targetConsistentAmbiguity &&
+    dominantStrength >= dominantStrengthFloor
+  );
+}
+
 function applyContourSanity(segmentedNotes: SegmentedPerformedNote[]): SegmentedPerformedNote[] {
   return segmentedNotes.map((note, index, notes) => {
     if (note.pitchCenter === null) {
@@ -602,6 +734,7 @@ function applyContourSanity(segmentedNotes: SegmentedPerformedNote[]): Segmented
       return note;
     }
 
+    const strongLocalEvidence = hasStrongLocalPitchEvidence(note);
     const alternate = note.alternateCandidateCenters.find((candidate) =>
       expectedDirection === 'up'
         ? previousCenter === null || candidate > previousCenter + 0.35
@@ -609,6 +742,13 @@ function applyContourSanity(segmentedNotes: SegmentedPerformedNote[]): Segmented
           ? previousCenter === null || candidate < previousCenter - 0.35
           : Math.abs(candidate - chosenCenter) <= 0.5
     );
+
+    if (strongLocalEvidence) {
+      return {
+        ...note,
+        debugReason: `${note.debugReason} Local pitch evidence was stable, so contour sanity preserved the detected note despite phrase-motion disagreement.`,
+      };
+    }
 
     if (alternate === undefined) {
       return {
@@ -659,6 +799,13 @@ function applyPhraseLevelSmoothing(segmentedNotes: SegmentedPerformedNote[]): Se
       return note;
     }
 
+    if (hasStrongLocalPitchEvidence(note)) {
+      return {
+        ...note,
+        debugReason: `${note.debugReason} Local pitch evidence was stable, so phrase-level smoothing kept the detected note instead of replacing it.`,
+      };
+    }
+
     return {
       ...note,
       pitchCenter: betterAlternate,
@@ -676,7 +823,8 @@ function buildSegmentedNote(
   frames: CleanedPitchFrame[],
   minConfidence: number,
   slackMs: number,
-  expectedMidiOffset: number | null
+  expectedMidiOffset: number | null,
+  calibrationProfile: CalibrationProfile | null
 ): SegmentedPerformedNote {
   const relevantFrames = frames.filter(
     (frame) =>
@@ -721,7 +869,7 @@ function buildSegmentedNote(
       : 'Stable-core analysis still found competing or widely spread pitch centers.';
   }
 
-  return {
+  const provisionalNote: SegmentedPerformedNote = {
     index: window.targetIndex,
     targetIndex: window.targetIndex,
     expectedMidi: window.target.midi ?? null,
@@ -754,8 +902,28 @@ function buildSegmentedNote(
     edgeTrimApplied: stableCore.edgeTrimApplied,
     clusterRescued: stableCore.clusterRescued,
     targetConsistentAmbiguity: stableCore.targetConsistentAmbiguity,
+    calibrationSupportedLocalEvidence: false,
+    calibrationSupportLevel: null,
+    calibrationSupportReason: null,
     status,
     debugReason,
+  };
+
+  const calibrationSupport = findCalibrationSupport(provisionalNote, calibrationProfile);
+  const confidence = calibrationSupport.supported
+    ? Math.min(1, provisionalNote.confidence + 0.04)
+    : provisionalNote.confidence;
+  const supportedDebugReason = calibrationSupport.supported && calibrationSupport.reason
+    ? `${provisionalNote.debugReason} ${calibrationSupport.reason}`
+    : provisionalNote.debugReason;
+
+  return {
+    ...provisionalNote,
+    confidence,
+    calibrationSupportedLocalEvidence: calibrationSupport.supported,
+    calibrationSupportLevel: calibrationSupport.level,
+    calibrationSupportReason: calibrationSupport.reason,
+    debugReason: supportedDebugReason,
   };
 }
 
@@ -769,6 +937,9 @@ export function segmentPerformedMelody(
   const slackMs = options?.slackMs ?? 60;
   const boundarySearchMs = options?.boundarySearchMs ?? 90;
   const expectedMidiOffset = options?.expectedMidiOffset ?? null;
+  const calibrationProfile = options?.calibrationProfile ?? null;
+  const disableContourSanity = options?.disableContourSanity ?? false;
+  const disablePhraseLevelSmoothing = options?.disablePhraseLevelSmoothing ?? false;
   const cleanedFrames = cleanPitchFrames(frames, minConfidence);
   const phraseBounds = estimatePhraseBounds(cleanedFrames, minConfidence);
 
@@ -792,6 +963,7 @@ export function segmentPerformedMelody(
       minConfidence,
       slackMs,
       expectedMidiOffset,
+      calibrationProfile,
     );
 
     if (
@@ -823,8 +995,12 @@ export function segmentPerformedMelody(
     };
   });
 
-  const contourAdjustedNotes = applyContourSanity(provisionalNotes);
-  const segmentedNotes = applyPhraseLevelSmoothing(contourAdjustedNotes);
+  const contourAdjustedNotes = disableContourSanity
+    ? provisionalNotes
+    : applyContourSanity(provisionalNotes);
+  const segmentedNotes = disablePhraseLevelSmoothing
+    ? contourAdjustedNotes
+    : applyPhraseLevelSmoothing(contourAdjustedNotes);
 
   return {
     cleanedFrames,

@@ -51,6 +51,9 @@ export interface SegmentedPerformedNote {
   edgeTrimApplied: boolean;
   clusterRescued: boolean;
   targetConsistentAmbiguity: boolean;
+  calibrationSupportedLocalEvidence: boolean;
+  calibrationSupportLevel: 'strong' | 'weak' | 'rejected' | null;
+  calibrationSupportReason: string | null;
   status: SegmentedNoteStatus;
   debugReason: string;
 }

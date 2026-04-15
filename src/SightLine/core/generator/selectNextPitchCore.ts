@@ -300,6 +300,37 @@ function tonicCadencePenalty(
   return penalty;
 }
 
+function leadingToneResolutionPenalty(
+  prevDegree: number,
+  candidateDegree: number,
+  interval: number,
+  options: {
+    cadenceZone: boolean;
+    descendingBias: boolean;
+  }
+): number {
+  if (prevDegree !== 7) {
+    return 0;
+  }
+
+  const absInterval = Math.abs(interval);
+  if (candidateDegree === 1 && interval > 0 && absInterval <= 2) {
+    return options.cadenceZone ? -3.0 : -2.0;
+  }
+  if (candidateDegree === 6 && interval < 0 && absInterval <= 2) {
+    return options.cadenceZone
+      ? (options.descendingBias ? -0.7 : 0.8)
+      : (options.descendingBias ? -0.5 : 1.0);
+  }
+  if (candidateDegree === 2) {
+    return options.cadenceZone ? 5.0 : 3.0;
+  }
+  if (absInterval > 2) {
+    return options.cadenceZone ? 5.8 : 4.0;
+  }
+  return options.cadenceZone ? 2.1 : 1.4;
+}
+
 export function chooseBest(
   candidates: CandidatePitch[],
   input: SelectNextPitchInput,
@@ -617,6 +648,10 @@ export function chooseBest(
         prevTessituraProgress: tessituraProgress(prevPitch.midi),
         strongContext: input.isStrongBeat === true || cadenceZone
       });
+      const leadingTonePenalty = leadingToneResolutionPenalty(prevDegree, candidateDegree, intervalSigned, {
+        cadenceZone,
+        descendingBias: intervalSigned < 0 && intervalSemis <= 2
+      });
 
       const W_TARGET = 5.2 * priorityWeight;
       const W_DIRECTION = 4.4;
@@ -633,6 +668,7 @@ export function chooseBest(
       const W_TENDENCY_TONE_MOTION = 4.2;
       const W_TRITONE_LEAP = 10.5;
       const W_TONIC_CADENCE_PROTECTION = 5.2;
+      const W_LEADING_TONE_RESOLUTION = 5.4;
       const W_UNREPAIRED = 4.7;
       const W_REPEAT_LEAP_AFTER_LEAP = 7.4;
       const W_SAME_DIRECTION_LEAP_AFTER_LEAP = 8.8;
@@ -663,6 +699,7 @@ export function chooseBest(
         W_TENDENCY_TONE_MOTION * tendencyPenalty -
         W_TRITONE_LEAP * tritonePenalty -
         W_TONIC_CADENCE_PROTECTION * tonicPenalty -
+        W_LEADING_TONE_RESOLUTION * leadingTonePenalty -
         W_UNREPAIRED * unrepairedLeapPenalty -
         W_LEAP_NONCHORD * leapToNonChordPenalty -
         W_TOO_STEPWISE * tooStepwisePenalty(candidate, intervalSemis) -

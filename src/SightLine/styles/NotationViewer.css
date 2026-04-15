@@ -153,10 +153,48 @@
   filter: drop-shadow(0 0 4px rgba(17, 23, 34, 0.55)) drop-shadow(0 0 8px rgba(70, 110, 170, 0.5));
 }
 
+.NotationViewer-notehead--climax {
+  filter: none;
+}
+
+.NotationViewer-climaxBadgeRect {
+  fill: rgba(27, 34, 46, 0.94);
+  stroke: #d8af35;
+  stroke-width: 0.9px;
+}
+
+.NotationViewer-climaxBadgeText {
+  fill: #f7e3a2;
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0;
+  dominant-baseline: middle;
+}
+
 .NotationViewer-notehead--correct path,
 .NotationViewer-notehead--correct ellipse,
 .NotationViewer-notehead--correct circle,
-.NotationViewer-notehead--correct polygon {
+.NotationViewer-notehead--correct polygon,
+.NotationViewer-notehead--near path,
+.NotationViewer-notehead--near ellipse,
+.NotationViewer-notehead--near circle,
+.NotationViewer-notehead--near polygon {
   fill: #1ecf87 !important;
   stroke: #1ecf87 !important;
+}
+
+.NotationViewer-notehead--incorrect path,
+.NotationViewer-notehead--incorrect ellipse,
+.NotationViewer-notehead--incorrect circle,
+.NotationViewer-notehead--incorrect polygon {
+  fill: #e25555 !important;
+  stroke: #e25555 !important;
+}
+
+.NotationViewer-notehead--ambiguous path,
+.NotationViewer-notehead--ambiguous ellipse,
+.NotationViewer-notehead--ambiguous circle,
+.NotationViewer-notehead--ambiguous polygon {
+  fill: #e89a2b !important;
+  stroke: #e89a2b !important;
 }

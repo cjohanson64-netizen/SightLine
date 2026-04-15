@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { generateExercise } from "../core/engine";
 import { toGuestSpec, normalizeUserConstraintsInSpec } from "../core/spec";
+import type { DebugSemanticsProjection } from "@/SightLine/domain/artifact";
 import { usePitchEdit } from "./usePitchEdit";
 import { useStudentSession } from "./useStudentSession";
 import { useTeacherLibrary } from "./useTeacherLibrary";
@@ -34,6 +35,7 @@ interface UseGeneratorEngineOptions {
   setRelaxationNotice: (value: string) => void;
   setSeed: (value: number) => void;
   setSpec: Dispatch<SetStateAction<ExerciseSpec>>;
+  setDebugSemantics: (value: DebugSemanticsProjection) => void;
   spec: ExerciseSpec;
   student: Pick<StudentState, "studentSession" | "markActivity" | "trackProgress">;
   teacher: Pick<TeacherState, "setActiveExerciseId">;
@@ -61,6 +63,7 @@ export function useGeneratorEngine({
   setRelaxationNotice,
   setSeed,
   setSpec,
+  setDebugSemantics,
   spec,
   student,
   teacher,
@@ -80,6 +83,14 @@ export function useGeneratorEngine({
       setMusicXml("");
       setCurrentMelody([]);
       setCurrentSpecSnapshot(null);
+      setDebugSemantics({
+        targetNotes: [],
+        assessmentExplanations: [],
+        phraseSummaries: [],
+        strengths: [],
+        weaknesses: [],
+        recommendation: null,
+      });
       pitchEdit.setPitchPatch({});
       setError(output.error);
       setRelaxationNotice("");
@@ -90,6 +101,16 @@ export function useGeneratorEngine({
     const nextSpecSnapshot = normalizeUserConstraintsInSpec(specForRun);
     setMusicXml(output.musicXml);
     setCurrentMelody(extractMelodyEvents(output.artifact));
+    setDebugSemantics(
+      output.artifact.debugSemantics ?? {
+        targetNotes: [],
+        assessmentExplanations: [],
+        phraseSummaries: [],
+        strengths: [],
+        weaknesses: [],
+        recommendation: null,
+      },
+    );
     setCurrentSpecSnapshot(nextSpecSnapshot);
     setCurrentBeatsPerMeasure(
       Math.max(1, Number(specForRun.timeSig.split("/")[0]) || 4),

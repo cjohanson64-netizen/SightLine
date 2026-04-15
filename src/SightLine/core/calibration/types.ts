@@ -2,6 +2,21 @@ import type { CleanedPitchFrame, DetectedPitchFrame, SegmentedPerformedNote } fr
 
 export type CalibrationSignalQuality = 'good' | 'fair' | 'poor';
 
+export type CalibratedScaleDegree = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+
+export interface CalibratedDegreeProfile {
+  degree: CalibratedScaleDegree;
+  label: string;
+  expectedPitch: string;
+  expectedMidi: number;
+  detectedMidi: number | null;
+  center: number | null;
+  offsetFromExpected: number | null;
+  confidence: number;
+  stability: number;
+  status: SegmentedPerformedNote['status'];
+}
+
 export interface CalibrationProfile {
   successful: boolean;
   keyId: string | null;
@@ -10,11 +25,13 @@ export interface CalibrationProfile {
   registerOffset: number | null;
   averageConfidence: number | null;
   averagePitchStability: number | null;
+  overallConfidence: number | null;
   signalQuality: CalibrationSignalQuality | null;
   summary: string;
   expectedPatternLabels: string[];
   expectedMidis: number[];
   detectedCenters: Array<number | null>;
+  degrees: CalibratedDegreeProfile[];
 }
 
 export interface CalibrationRunResult {

@@ -91,6 +91,7 @@ const W_SAME_DIRECTION_LEAP_AFTER_LEAP = 10;
 const W_CLIMAX_JUMP_OUT = 14;
 const W_TONIC_CADENCE_PROTECTION = 5.6;
 const W_FAST_RHYTHM_LEAP = 4.6;
+const W_LEADING_TONE_RESOLUTION = 5.8;
 const MAX_MELODIC_LEAP_SEMIS = 12;
 const DEBUG_INTERVAL_CAP = false;
 
@@ -436,6 +437,37 @@ function tonicCadencePenalty(
   return penalty;
 }
 
+function leadingToneResolutionPenalty(
+  prevDegree: number,
+  candidateDegree: number,
+  interval: number,
+  options: {
+    isCadentialZone: boolean;
+    descendingBias: boolean;
+  }
+): number {
+  if (prevDegree !== 7) {
+    return 0;
+  }
+
+  const absInterval = Math.abs(interval);
+  if (candidateDegree === 1 && interval > 0 && absInterval <= 2) {
+    return options.isCadentialZone ? -3.2 : -2.1;
+  }
+  if (candidateDegree === 6 && interval < 0 && absInterval <= 2) {
+    return options.isCadentialZone
+      ? (options.descendingBias ? -0.8 : 0.9)
+      : (options.descendingBias ? -0.55 : 1.1);
+  }
+  if (candidateDegree === 2) {
+    return options.isCadentialZone ? 5.4 : 3.2;
+  }
+  if (absInterval > 2) {
+    return options.isCadentialZone ? 6.2 : 4.3;
+  }
+  return options.isCadentialZone ? 2.4 : 1.6;
+}
+
 function fastRhythmLeapPenalty(
   interval: number,
   options: {
@@ -778,6 +810,10 @@ export function generateStructuralSkeleton(input: {
           prevTessituraProgress: tessituraProgress(prevMidi, input.rangeMin, input.rangeMax),
           isRhythmicallyEmphasized: isStrongBeat(slot.beat) || slot.durationToNextBeats >= 2
         });
+        const leadingTonePenalty = leadingToneResolutionPenalty(prevDegree, candidateDegree, interval, {
+          isCadentialZone: slot.cadenceContext !== undefined || i >= Math.max(0, slots.length - 2),
+          descendingBias: interval < 0 && absInterval <= 2
+        });
         const fastLeapPenalty = fastRhythmLeapPenalty(interval, {
           fastContext: slot.durationToNextBeats <= 1,
           intoTendencyTone: candidateDegree === 7,
@@ -933,6 +969,7 @@ export function generateStructuralSkeleton(input: {
           W_TENDENCY_TONE_MOTION * tendencyPenalty +
           W_TRITONE_LEAP * tritonePenalty +
           W_TONIC_CADENCE_PROTECTION * cadentialTonicPenalty +
+          W_LEADING_TONE_RESOLUTION * leadingTonePenalty +
           W_FAST_RHYTHM_LEAP * fastLeapPenalty +
           W_UP_AFTER_CLIMAX * upAfterClimaxPenalty +
           nearCeilingPenalty +
@@ -2021,6 +2058,10 @@ export function realizePhraseGridPitches(input: {
         const towardTarget = Math.sign(inputEdge.targetMidi - inputEdge.prevMidi) === Math.sign(midi - inputEdge.prevMidi);
         const tritonePenalty = leap === 6 ? 8 : 0;
         const tendencyPenalty = tendencyToneMotionPenalty(prevDegree, degree, toPrev) * 2.2;
+        const leadingTonePenalty = leadingToneResolutionPenalty(prevDegree, degree, toPrev, {
+          isCadentialZone: inputEdge.slot.isCadence,
+          descendingBias: toPrev < 0 && leap <= 2
+        }) * 2.1;
         const fastLeapPenalty = fastRhythmLeapPenalty(toPrev, {
           fastContext: Math.abs((inputEdge.slot.onset % 1) - 0.5) < 0.001 || inputEdge.intent === 'smoothing_run',
           intoTendencyTone: degree === 7,
@@ -2039,6 +2080,7 @@ export function realizePhraseGridPitches(input: {
           (towardTarget ? 0 : 3) +
           tritonePenalty +
           tendencyPenalty +
+          leadingTonePenalty +
           fastLeapPenalty +
           tonicPenalty;
         if (score < bestScore) {

@@ -44,8 +44,8 @@ function buildSignalQualitySummary(
     level === 'high'
       ? 'Input quality looked stable overall.'
       : level === 'medium'
-        ? 'Input quality was usable, but some noise or unstable onsets may have affected the result.'
-        : 'Input quality was limited by noise or unstable pitch support, so assessment confidence is lower.';
+        ? 'Input quality was usable, but some noise or unstable onsets may have affected the result. Try singing with more breath energy.'
+        : 'Input quality was limited by noise or unstable pitch support, so assessment confidence is lower. Try singing with more breath energy.';
 
   return {
     level,
@@ -265,8 +265,14 @@ export async function runMicAssessment(
     typeof input.calibrationProfile.tonicOffsetSemitones === 'number'
       ? input.calibrationProfile.tonicOffsetSemitones
       : null;
+  const usableCalibrationProfile =
+    input.calibrationProfile?.successful &&
+    input.calibrationProfile.signalQuality !== 'poor'
+      ? input.calibrationProfile
+      : null;
   const { cleanedFrames, segmentedNotes } = segmentPerformedMelody(frames, input.targetMelody, {
     expectedMidiOffset: effectiveCalibrationOffset,
+    calibrationProfile: usableCalibrationProfile,
   });
 
   if (segmentedNotes.length === 0) {
@@ -296,8 +302,8 @@ export async function runMicAssessment(
   if (signalQuality.level !== 'high') {
     warnings.push(signalQuality.summary);
   }
-  if (effectiveCalibrationOffset !== null) {
-    warnings.push('Calibration was used as a soft listening guide for this assessment.');
+  if (usableCalibrationProfile) {
+    warnings.push('Full-scale calibration was used as a soft listening guide for this assessment.');
   }
 
   const rawAssessment = evaluateMelodyAssessment({
@@ -353,7 +359,6 @@ export async function runMicAssessment(
     warnings,
     signalQuality,
     comparisonMode: input.mode,
-    calibrationProfileUsed:
-      effectiveCalibrationOffset !== null ? input.calibrationProfile ?? null : null,
+    calibrationProfileUsed: usableCalibrationProfile,
   };
 }

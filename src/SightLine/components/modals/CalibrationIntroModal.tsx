@@ -29,11 +29,11 @@ export default function CalibrationIntroModal({
         </button>
         <h3 id="calibration-intro-title">Before You Begin</h3>
         <p className="AppHistoryLabel">
-          Sing <strong>DO RE MI FA SOL</strong>
+          Sing <strong>DO RE MI FA SOL LA TI DO</strong>
           <br />
           in the key you will use.
           <br />
-          Calibration helps SightLine listen more accurately.
+          Calibration helps SightLine listen more accurately across your full range.
         </p>
         <div className="AppBatchActions">
           <button

@@ -22,6 +22,8 @@ exerciseArtifact := @compose([
   specGraph,
   harmonyGraph,
   melodyGraph,
+  performedMelodyGraph,
+  assessmentExplanationGraph,
   analysisGraph
 ], merge: artifactRoot)
   <> @project(format: "graph")

@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
+import type { DebugSemanticsProjection } from "@/SightLine/domain/artifact";
 import { usePlayback } from "./usePlayback";
 import { useSolfege } from "./useSolfege";
 import { useStudentSession } from "./useStudentSession";
@@ -62,6 +63,7 @@ interface UseGeneratorActionsOptions {
   setSaveStatus: (value: "idle" | "saving" | "saved" | "error") => void;
   setSeed: (value: number) => void;
   setSpec: Dispatch<SetStateAction<ExerciseSpec>>;
+  setDebugSemantics: (value: DebugSemanticsProjection) => void;
   solfege: Pick<
     SolfegeState,
     | "addSolfegeLyricsToMusicXml"
@@ -103,6 +105,7 @@ export function useGeneratorActions({
   setSaveStatus,
   setSeed,
   setSpec,
+  setDebugSemantics,
   solfege,
   spec,
   student,
@@ -126,6 +129,7 @@ export function useGeneratorActions({
     setRelaxationNotice,
     setSeed,
     setSpec,
+    setDebugSemantics,
   };
 
   const { runWithNewSeed, rerunWithCurrentSeed } = useGeneratorEngine({
@@ -143,6 +147,7 @@ export function useGeneratorActions({
     setRelaxationNotice,
     setSeed,
     setSpec,
+    setDebugSemantics,
     spec,
     student,
     teacher,

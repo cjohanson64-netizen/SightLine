@@ -2,6 +2,7 @@
 
 import type React from "react";
 import type { MicAssessmentRunResult } from "@/SightLine/core/audio/types";
+import type { DebugSemanticsProjection } from "@/SightLine/domain/artifact";
 import type { ExerciseSpec, MelodyEvent } from "@/SightLine/domain/music";
 import AssessmentPanel from "../components/AssessmentPanel";
 import GeneratorNotationControls from "../components/GeneratorNotationControls";
@@ -34,6 +35,8 @@ interface GeneratorPageProps {
   assessmentPlaybackDisabled: boolean;
   assessmentNoteOutcomeByIndex: Array<"correct" | "near" | "incorrect" | "ambiguous" | null>;
   assessmentResult: MicAssessmentRunResult | null;
+  debugSemantics: DebugSemanticsProjection;
+  climaxNoteIndices: number[];
   selectedAssessmentNoteIndex: number | null;
   assessmentStatus: "idle" | "requesting_permission" | "recording" | "processing" | "complete" | "error";
   displayNotationMusicXml: string;
@@ -87,6 +90,8 @@ export default function GeneratorPage({
   assessmentPlaybackDisabled,
   assessmentNoteOutcomeByIndex,
   assessmentResult,
+  debugSemantics,
+  climaxNoteIndices,
   selectedAssessmentNoteIndex,
   assessmentStatus,
   displayNotationMusicXml,
@@ -220,6 +225,7 @@ export default function GeneratorPage({
           <AssessmentPanel
             status={assessmentStatus}
             result={assessmentResult}
+            debugSemantics={debugSemantics}
             errorMessage={assessmentError}
             selectedNoteIndex={selectedAssessmentNoteIndex}
             showDeveloperDebug={teacher.subscriptionIsAdmin}
@@ -260,6 +266,8 @@ export default function GeneratorPage({
               selectableNoteCount={assessmentResult?.segmentedNotes.length ?? 0}
               selectedNoteIndex={selectedAssessmentNoteIndex}
               noteOutcomeByIndex={assessmentNoteOutcomeByIndex}
+              climaxNoteIndices={climaxNoteIndices}
+              showClimaxMarkers={Boolean(assessmentResult)}
               onNoteSelect={(index) => onAssessmentNoteSelect(index)}
               zoom={projection.isProjectionMode ? 2.5 : 1}
               projectionMode={projection.isProjectionMode}

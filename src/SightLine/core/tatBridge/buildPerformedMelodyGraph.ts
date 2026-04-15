@@ -6,5 +6,7 @@ export function buildPerformedMelodyGraph(melody: MelodyEvent[]): Graph {
   return buildMelodyGraph(melody, {
     collectionId: 'performed-melody-events',
     collectionLabel: 'Performed Melody',
+    noteIdPrefix: 'performed-note',
+    includeFunctions: false,
   });
 }

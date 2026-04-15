@@ -37,7 +37,10 @@ import { toMusicXmlFromMelody } from "../core/projection/toMusicXml";
 import { defaultSpec, normalizeUserConstraintsInSpec } from "../core/spec";
 import { saveAssessmentLog } from "../core/assessmentLogs/saveAssessmentLog";
 import type { MicAssessmentRunResult } from "@/SightLine/core/audio/types";
+import type { DebugSemanticsProjection } from "@/SightLine/domain/artifact";
 import type { ExerciseSpec, MelodyEvent } from "@/SightLine/domain/music";
+import { projectPracticeRecommendation } from "../core/tatBridge/projectPracticeRecommendation";
+import { projectSemanticInsights } from "../core/tatBridge/projectSemanticInsights";
 import "../styles/App.css";
 
 import { useAuth } from "../hooks/useAuth";
@@ -71,6 +74,15 @@ type AssessmentNoteOutcome =
   | "incorrect"
   | "ambiguous"
   | null;
+
+const EMPTY_DEBUG_SEMANTICS: DebugSemanticsProjection = {
+  targetNotes: [],
+  assessmentExplanations: [],
+  phraseSummaries: [],
+  strengths: [],
+  weaknesses: [],
+  recommendation: null,
+};
 
 // ---------------------------------------------------------------------------
 // Pure helpers (kept local because they depend on domain types)
@@ -225,6 +237,8 @@ function AppContent(): JSX.Element {
   const [currentSpecSnapshot, setCurrentSpecSnapshot] =
     useState<ExerciseSpec | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
+  const [debugSemantics, setDebugSemantics] =
+    useState<DebugSemanticsProjection>(EMPTY_DEBUG_SEMANTICS);
   const [error, setError] = useState<{
     title: string;
     message: string;
@@ -387,6 +401,53 @@ function AppContent(): JSX.Element {
       return null;
     });
   }, [micAssessment.result, currentPatchedMelody]);
+
+  const semanticInsightOutcomes = useMemo<
+    Array<"correct" | "near_pitch" | "incorrect_pitch" | "ambiguous" | null>
+  >(
+    () =>
+      assessmentOutcomeByIndex.map((outcome) =>
+        outcome === "near"
+          ? "near_pitch"
+          : outcome === "incorrect"
+            ? "incorrect_pitch"
+            : outcome,
+      ),
+    [assessmentOutcomeByIndex],
+  );
+
+  const projectedDebugSemantics = useMemo<DebugSemanticsProjection>(
+    () => {
+      const semanticInsights = projectSemanticInsights({
+        targetNotes: debugSemantics.targetNotes,
+        assessmentExplanations: debugSemantics.assessmentExplanations,
+        phraseSummaries: debugSemantics.phraseSummaries,
+        noteOutcomes: semanticInsightOutcomes,
+      });
+
+      return {
+        ...debugSemantics,
+        ...semanticInsights,
+        recommendation: projectPracticeRecommendation({
+          targetNotes: debugSemantics.targetNotes,
+          assessmentExplanations: debugSemantics.assessmentExplanations,
+          strengths: semanticInsights.strengths,
+          weaknesses: semanticInsights.weaknesses,
+        }),
+      };
+    },
+    [debugSemantics, semanticInsightOutcomes],
+  );
+
+  const climaxNoteIndices = useMemo<number[]>(
+    () =>
+      micAssessment.result
+        ? projectedDebugSemantics.targetNotes.flatMap((note, index) =>
+            note.functions.includes("climax") ? [index] : [],
+          )
+        : [],
+    [micAssessment.result, projectedDebugSemantics.targetNotes],
+  );
 
   const assessmentNoteColorsByIndex = useMemo<
     Record<number, string | undefined>
@@ -623,6 +684,7 @@ function AppContent(): JSX.Element {
     setSaveStatus,
     setSeed,
     setSpec,
+    setDebugSemantics,
     solfege: {
       addSolfegeLyricsToMusicXml: solfege.addSolfegeLyricsToMusicXml,
       solfegeMode: solfege.solfegeMode,
@@ -848,6 +910,8 @@ function AppContent(): JSX.Element {
               assessmentError={micAssessment.errorMessage}
               assessmentNoteOutcomeByIndex={assessmentOutcomeByIndex}
               assessmentResult={micAssessment.result}
+              debugSemantics={projectedDebugSemantics}
+              climaxNoteIndices={climaxNoteIndices}
               selectedAssessmentNoteIndex={selectedAssessmentNoteIndex}
               assessmentStatus={micAssessment.status}
               assessmentAccessMessage={assessmentAccess.access.message}

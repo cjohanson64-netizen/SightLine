@@ -18,6 +18,8 @@ interface NotationViewerProps {
   selectableNoteCount?: number;
   selectedNoteIndex?: number | null;
   noteOutcomeByIndex?: Array<'correct' | 'near' | 'incorrect' | 'ambiguous' | null>;
+  climaxNoteIndices?: number[];
+  showClimaxMarkers?: boolean;
   onNoteSelect?: (index: number) => void;
 }
 
@@ -460,6 +462,88 @@ function decorateSelectableNoteheads(
   });
 }
 
+function getOrderedNoteheads(container: HTMLElement): SVGElement[] {
+  let noteheads = Array.from(container.querySelectorAll('svg g.vf-notehead'));
+  if (noteheads.length === 0) {
+    noteheads = Array.from(container.querySelectorAll('svg .vf-notehead'));
+  }
+
+  return noteheads
+    .map((node) => {
+      const x = safeCenterX(node);
+      return x === null ? null : { node, x };
+    })
+    .filter((entry): entry is { node: Element; x: number } => entry !== null)
+    .sort((a, b) => a.x - b.x)
+    .map(({ node }) => node as SVGElement);
+}
+
+function decorateClimaxNoteheads(
+  container: HTMLElement,
+  climaxNoteIndices: number[],
+  showClimaxMarkers: boolean
+): void {
+  Array.from(container.querySelectorAll('svg .NotationViewer-climaxBadge')).forEach((node) =>
+    node.remove()
+  );
+
+  const noteheads = getOrderedNoteheads(container);
+  const climaxIndices = new Set(climaxNoteIndices);
+
+  noteheads.forEach((node, index) => {
+    node.classList.remove('NotationViewer-notehead--climax');
+    node.removeAttribute('data-climax-marker');
+    if (!showClimaxMarkers || !climaxIndices.has(index)) {
+      return;
+    }
+    node.classList.add('NotationViewer-notehead--climax');
+    node.setAttribute('data-climax-marker', 'Climax');
+
+    try {
+      const svg = node.ownerSVGElement;
+      const box = (node as SVGGraphicsElement).getBBox();
+      if (!svg || !Number.isFinite(box.x) || !Number.isFinite(box.y)) {
+        return;
+      }
+
+      const namespace = 'http://www.w3.org/2000/svg';
+      const badgeGroup = document.createElementNS(namespace, 'g');
+      badgeGroup.setAttribute('class', 'NotationViewer-climaxBadge');
+      badgeGroup.setAttribute('pointer-events', 'none');
+
+      const label = 'Climax';
+      const charWidth = 5.4;
+      const horizontalPadding = 6;
+      const badgeWidth = label.length * charWidth + horizontalPadding * 2;
+      const badgeHeight = 14;
+      const badgeX = box.x + box.width / 2 - badgeWidth / 2;
+      const badgeY = box.y - 22;
+
+      const rect = document.createElementNS(namespace, 'rect');
+      rect.setAttribute('x', badgeX.toFixed(2));
+      rect.setAttribute('y', badgeY.toFixed(2));
+      rect.setAttribute('width', badgeWidth.toFixed(2));
+      rect.setAttribute('height', badgeHeight.toFixed(2));
+      rect.setAttribute('rx', '7');
+      rect.setAttribute('ry', '7');
+      rect.setAttribute('class', 'NotationViewer-climaxBadgeRect');
+
+      const text = document.createElementNS(namespace, 'text');
+      text.setAttribute('x', (box.x + box.width / 2).toFixed(2));
+      text.setAttribute('y', (badgeY + 9.6).toFixed(2));
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('class', 'NotationViewer-climaxBadgeText');
+      text.textContent = label;
+
+      badgeGroup.appendChild(rect);
+      badgeGroup.appendChild(text);
+      svg.appendChild(badgeGroup);
+    } catch {
+      // If a badge cannot be placed, leave the note tagged without blocking render.
+    }
+  });
+}
+
 function scheduleNotationDecorations(
   container: HTMLElement,
   renderSeqRef: MutableRefObject<number>,
@@ -468,6 +552,8 @@ function scheduleNotationDecorations(
   selectableNoteCount: number,
   selectedNoteIndex: number | null,
   noteOutcomeByIndex: Array<'correct' | 'near' | 'incorrect' | 'ambiguous' | null>,
+  climaxNoteIndices: number[],
+  showClimaxMarkers: boolean,
   onNoteSelect?: (index: number) => void
 ): void {
   const seq = renderSeqRef.current;
@@ -479,6 +565,7 @@ function scheduleNotationDecorations(
     noteOutcomeByIndex,
     onNoteSelect
   );
+  decorateClimaxNoteheads(container, climaxNoteIndices, showClimaxMarkers);
   requestAnimationFrame(() => {
     if (seq !== renderSeqRef.current || !container.isConnected) {
       return;
@@ -491,6 +578,7 @@ function scheduleNotationDecorations(
       noteOutcomeByIndex,
       onNoteSelect
     );
+    decorateClimaxNoteheads(container, climaxNoteIndices, showClimaxMarkers);
     requestAnimationFrame(() => {
       if (seq !== renderSeqRef.current || !container.isConnected) {
         return;
@@ -503,6 +591,7 @@ function scheduleNotationDecorations(
         noteOutcomeByIndex,
         onNoteSelect
       );
+      decorateClimaxNoteheads(container, climaxNoteIndices, showClimaxMarkers);
     });
   });
 }
@@ -522,6 +611,8 @@ export default function NotationViewer({
   selectableNoteCount = 0,
   selectedNoteIndex = null,
   noteOutcomeByIndex = [],
+  climaxNoteIndices = [],
+  showClimaxMarkers = false,
   onNoteSelect
 }: NotationViewerProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -636,6 +727,8 @@ export default function NotationViewer({
           selectableNoteCount,
           selectedNoteIndex,
           noteOutcomeByIndex,
+          climaxNoteIndices,
+          showClimaxMarkers,
           onNoteSelect
         );
       })
@@ -673,6 +766,8 @@ export default function NotationViewer({
       selectableNoteCount,
       selectedNoteIndex,
       noteOutcomeByIndex,
+      climaxNoteIndices,
+      showClimaxMarkers,
       onNoteSelect
     );
   }, [
@@ -685,6 +780,8 @@ export default function NotationViewer({
     selectableNoteCount,
     selectedNoteIndex,
     noteOutcomeByIndex,
+    climaxNoteIndices,
+    showClimaxMarkers,
     onNoteSelect
   ]);
 

@@ -13,6 +13,7 @@ import {
   registerValueBinding
 } from '@tat/runtime/evaluateNodeCapture';
 import type { RuntimeState } from '@tat/runtime/executeProgram';
+import type { MelodyAssessmentResult } from '@/SightLine/domain/assessment';
 import type {
   AssayMetric,
   ExerciseSpec,
@@ -21,6 +22,8 @@ import type {
 } from '@/SightLine/domain/music';
 import type { MelodySelectionTrace } from '@/SightLine/core/generator/melody';
 import { buildTargetMelodyGraph } from './buildTargetMelodyGraph';
+import { buildPerformedMelodyGraph } from './buildPerformedMelodyGraph';
+import { buildAssessmentExplanationGraph } from './buildAssessmentExplanationGraph';
 
 const ARTIFACT_ROOT_ID = 'artifactRoot';
 
@@ -191,6 +194,8 @@ export interface BuildAssessmentBindingsInput {
   spec: ExerciseSpec;
   harmony: HarmonyEvent[];
   melody: MelodyEvent[];
+  performedMelody?: MelodyEvent[];
+  assessment?: MelodyAssessmentResult | null;
   metrics: AssayMetric[];
   trace: MelodySelectionTrace[];
   relaxationTier?: number;
@@ -203,8 +208,9 @@ export function buildAssessmentBindings(
   const bindings = createRuntimeBindings();
   registerValueBinding(bindings, 'exerciseSeed', input.seed);
   registerValueBinding(bindings, 'melodyNoteCount', input.melody.length);
+  registerValueBinding(bindings, 'performedMelodyNoteCount', input.performedMelody?.length ?? 0);
   registerValueBinding(bindings, 'phraseCount', input.spec.phrases.length);
-  registerValueBinding(bindings, 'assessmentStage', 'generation');
+  registerValueBinding(bindings, 'assessmentStage', input.assessment ? 'assessment' : 'generation');
 
   const graphs = new Map<string, Graph>();
   const assetKinds = new Map<string, RuntimeState['assetKinds'] extends Map<infer K, infer V> ? V : never>();
@@ -212,6 +218,12 @@ export function buildAssessmentBindings(
   const specGraph = buildSpecGraph(input.spec);
   const harmonyGraph = buildHarmonyGraph(input.harmony);
   const melodyGraph = buildTargetMelodyGraph(input.melody);
+  const performedMelodyGraph = buildPerformedMelodyGraph(input.performedMelody ?? []);
+  const assessmentExplanationGraph = buildAssessmentExplanationGraph({
+    targetMelody: input.melody,
+    performedMelody: input.performedMelody,
+    assessment: input.assessment
+  });
   const analysisGraph = buildAnalysisGraph({
     metrics: input.metrics,
     trace: input.trace,
@@ -222,11 +234,15 @@ export function buildAssessmentBindings(
   graphs.set('specGraph', specGraph);
   graphs.set('harmonyGraph', harmonyGraph);
   graphs.set('melodyGraph', melodyGraph);
+  graphs.set('performedMelodyGraph', performedMelodyGraph);
+  graphs.set('assessmentExplanationGraph', assessmentExplanationGraph);
   graphs.set('analysisGraph', analysisGraph);
 
   assetKinds.set('specGraph', 'graph');
   assetKinds.set('harmonyGraph', 'graph');
   assetKinds.set('melodyGraph', 'graph');
+  assetKinds.set('performedMelodyGraph', 'graph');
+  assetKinds.set('assessmentExplanationGraph', 'graph');
   assetKinds.set('analysisGraph', 'graph');
 
   return {

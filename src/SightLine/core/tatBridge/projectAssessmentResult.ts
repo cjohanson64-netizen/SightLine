@@ -1,6 +1,7 @@
 import { graphToDebugObject } from '@tat/runtime/graph';
 import type { ExecuteProgramResult } from '@tat/runtime/executeProgram';
 import type { ArtifactGraph, GraphNode, NodeKind } from '@/SightLine/domain/artifact';
+import { projectDebugSemantics } from './projectDebugSemantics';
 
 const KNOWN_KINDS = new Set<NodeKind>([
   'artifact',
@@ -56,27 +57,34 @@ export function projectAssessmentResult(
   }
 
   const debug = graphToDebugObject(graph);
+  const nodes = debug.nodes.map(
+    (node): GraphNode => ({
+      id: node.id,
+      kind: resolveKind(node.value),
+      label: resolveLabel(node.id, node.value),
+      data: resolveData(node.value)
+    })
+  );
+  const edges = debug.edges.map((edge) => ({
+    id: edge.id,
+    from: edge.subject,
+    to: edge.object,
+    kind: edge.relation,
+    data: {
+      relation: edge.relation,
+      graphKind: edge.kind,
+      context: edge.context
+    }
+  }));
 
   return {
     root: debug.root ?? 'artifact-root',
-    nodes: debug.nodes.map(
-      (node): GraphNode => ({
-        id: node.id,
-        kind: resolveKind(node.value),
-        label: resolveLabel(node.id, node.value),
-        data: resolveData(node.value)
-      })
-    ),
-    edges: debug.edges.map((edge) => ({
-      id: edge.id,
-      from: edge.subject,
-      to: edge.object,
-      kind: edge.relation,
-      data: {
-        relation: edge.relation,
-        graphKind: edge.kind,
-        context: edge.context
-      }
-    }))
+    nodes,
+    edges,
+    debugSemantics: projectDebugSemantics({
+      root: debug.root ?? 'artifact-root',
+      nodes,
+      edges
+    })
   };
 }
