@@ -1,6 +1,10 @@
 import type { AssessmentScoreSummary, MelodyAssessmentResult, PitchAssessmentNote } from '@/SightLine/domain/assessment';
 import type { MicAssessmentRunResult, SegmentedPerformedNote } from '@/SightLine/core/audio/types';
 
+function roundFit(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
 export type WeightedAssessmentNoteState =
   | 'correct'
   | 'near'
@@ -42,6 +46,7 @@ export interface WeightedAssessmentSummary {
     incorrect: number;
   };
   generosityAdjustments: {
+    intervalRecoveryCredit: number;
     nearMatchPhraseBoost: number;
     sessionBiasBoost: number;
     adjustedByGenerosity: boolean;
@@ -82,6 +87,22 @@ export function classifyWeightedAssessmentNoteState(
   if (segmented?.status === 'ambiguous' || segmented?.targetConsistentAmbiguity) {
     return 'ambiguous';
   }
+  // If the pitch signal was unstable (spread pitch cluster or weak dominant bucket) and the
+  // miss is small, treat the note as ambiguous rather than fully incorrect. This prevents
+  // breathy or unfocused tone — which produces diffuse pitch estimates — from being penalized
+  // the same as a genuine pitch error on a clean signal.
+  const signalIsUnstable =
+    (segmented?.pitchSpread ?? 0) > 1.5 ||
+    (segmented?.stablePitchSpread ?? 0) > 1.2 ||
+    (typeof segmented?.dominantBucketStrength === 'number' &&
+      segmented.dominantBucketStrength < 0.60);
+  if (
+    note?.matchKind === 'incorrect' &&
+    signalIsUnstable &&
+    (note.absDelta ?? 99) <= 2
+  ) {
+    return 'ambiguous';
+  }
   return 'incorrect';
 }
 
@@ -91,19 +112,23 @@ export function getWeightedAssessmentNoteScore(
   weights: WeightedAssessmentScoreWeights = DEFAULT_WEIGHTED_ASSESSMENT_SCORE_WEIGHTS
 ): number {
   const state = classifyWeightedAssessmentNoteState(note, segmented);
+  const intervalRecoveryCredit = note?.intervalRecoveryApplied
+    ? note.intervalRecoveryCredit
+    : 0;
+
   switch (state) {
     case 'correct':
-      return weights.correct;
+      return Math.max(weights.correct, intervalRecoveryCredit);
     case 'near':
-      return weights.near;
+      return Math.max(weights.near, intervalRecoveryCredit);
     case 'transposed_consistent':
-      return weights.transposed_consistent;
+      return Math.max(weights.transposed_consistent, intervalRecoveryCredit);
     case 'low_confidence':
-      return weights.low_confidence;
+      return Math.max(weights.low_confidence, intervalRecoveryCredit);
     case 'ambiguous':
-      return weights.ambiguous;
+      return Math.max(weights.ambiguous, intervalRecoveryCredit);
     default:
-      return weights.incorrect;
+      return Math.max(weights.incorrect, intervalRecoveryCredit);
   }
 }
 
@@ -136,6 +161,12 @@ export function buildWeightedAssessmentSummaryFromAssessment(
     counts[state] += 1;
     return sum + getWeightedAssessmentNoteScore(note, segmented, input.weights);
   }, 0);
+  const intervalRecoveryCredit = roundFit(
+    input.assessment.notes.reduce(
+      (sum, note) => sum + (note.intervalRecoveryApplied ? note.intervalRecoveryCredit : 0),
+      0,
+    ),
+  );
 
   const totalPossible = input.assessment.summary.targetNoteCount;
   const basePercentage =
@@ -195,9 +226,11 @@ export function buildWeightedAssessmentSummaryFromAssessment(
     percentage,
     counts,
     generosityAdjustments: {
+      intervalRecoveryCredit,
       nearMatchPhraseBoost: Number(nearMatchPhraseBoost.toFixed(2)),
       sessionBiasBoost: Number(sessionBiasBoost.toFixed(2)),
-      adjustedByGenerosity: nearMatchPhraseBoost > 0 || sessionBiasBoost > 0,
+      adjustedByGenerosity:
+        intervalRecoveryCredit > 0 || nearMatchPhraseBoost > 0 || sessionBiasBoost > 0,
     },
   };
 }

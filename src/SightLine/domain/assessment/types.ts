@@ -82,6 +82,8 @@ export interface PitchAssessmentNote {
   isolatedErrorSoftened: boolean;
   globalOffsetCorrectionApplied: boolean;
   appliedGlobalOffset: number | null;
+  intervalRecoveryCredit: number;
+  intervalRecoveryApplied: boolean;
   interpretationReason: string | null;
 }
 
@@ -173,6 +175,17 @@ export interface RecoveryAssessment {
     pitch: boolean;
     interval: boolean;
     contour: boolean;
+  };
+  intervalRescue: {
+    applicable: boolean;
+    startIndex: number | null;
+    endIndex: number | null;
+    rescuedNoteIndices: number[];
+    comparableIntervalCount: number;
+    directionMatchRatio: number | null;
+    intervalCloseness: number | null;
+    rejoinedTarget: boolean;
+    creditPerNote: number;
   };
 }
 

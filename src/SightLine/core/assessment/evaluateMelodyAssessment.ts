@@ -68,6 +68,18 @@ function roundFit(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 
+const INTERVAL_RECOVERY_CONFIG = {
+  lookaheadNotes: 4,
+  maxRescuedNotes: 3,
+  maxClusterSize: 3,
+  minimumComparableIntervals: 2,
+  minimumDirectionMatchRatio: 0.66,
+  minimumIntervalCloseness: 0.62,
+  minimumWindowScore: 0.72,
+  baseCreditPerNote: 0.3,
+  maxCreditPerNote: 0.6,
+} as const;
+
 function mean(values: number[]): number {
   if (values.length === 0) {
     return 0;
@@ -900,6 +912,8 @@ function buildPitchAssessments(
       isolatedErrorSoftened: false,
       globalOffsetCorrectionApplied: phraseCorrectionOffset !== 0,
       appliedGlobalOffset: phraseCorrectionOffset !== 0 ? phraseCorrectionOffset : null,
+      intervalRecoveryCredit: 0,
+      intervalRecoveryApplied: false,
       interpretationReason: null,
     };
   });
@@ -1208,7 +1222,7 @@ function findFirstDivergence(
   contours: ContourAssessmentSpan[]
 ): FirstDivergencePoint | null {
   for (const note of notes) {
-    if (note.target && note.performed && !note.isCorrect) {
+    if (note.target && note.performed && note.matchKind === 'incorrect') {
       return {
         noteIndex: note.index,
         reason: 'pitch_mismatch',
@@ -1310,6 +1324,17 @@ function assessRecovery(
         interval: false,
         contour: false,
       },
+      intervalRescue: {
+        applicable: false,
+        startIndex: null,
+        endIndex: null,
+        rescuedNoteIndices: [],
+        comparableIntervalCount: 0,
+        directionMatchRatio: null,
+        intervalCloseness: null,
+        rejoinedTarget: false,
+        creditPerNote: 0,
+      },
     };
   }
 
@@ -1353,6 +1378,17 @@ function assessRecovery(
       intervalRecoveryIndex: intervalRecovery?.toIndex ?? null,
       contourRecoveryIndex: contourRecovery?.toIndex ?? null,
       recoveredDimensions,
+      intervalRescue: {
+        applicable: false,
+        startIndex: null,
+        endIndex: null,
+        rescuedNoteIndices: [],
+        comparableIntervalCount: 0,
+        directionMatchRatio: null,
+        intervalCloseness: null,
+        rejoinedTarget: false,
+        creditPerNote: 0,
+      },
     };
   }
 
@@ -1378,6 +1414,248 @@ function assessRecovery(
     intervalRecoveryIndex: intervalRecovery?.toIndex ?? null,
     contourRecoveryIndex: contourRecovery?.toIndex ?? null,
     recoveredDimensions,
+    intervalRescue: {
+      applicable: false,
+      startIndex: null,
+      endIndex: null,
+      rescuedNoteIndices: [],
+      comparableIntervalCount: 0,
+      directionMatchRatio: null,
+      intervalCloseness: null,
+      rejoinedTarget: false,
+      creditPerNote: 0,
+    },
+  };
+}
+
+function intervalDirection(semitones: number): ContourDirection {
+  if (semitones > 0) {
+    return 'up';
+  }
+  if (semitones < 0) {
+    return 'down';
+  }
+  return 'same';
+}
+
+function scoreIntervalCloseness(expected: number, performed: number): number {
+  const difference = Math.abs(expected - performed);
+  if (difference === 0) {
+    return 1;
+  }
+  if (difference === 1) {
+    return 0.82;
+  }
+  if (difference === 2) {
+    return 0.58;
+  }
+  if (difference === 3) {
+    return 0.3;
+  }
+  return 0;
+}
+
+// Returns all maximal runs of incorrect notes (with both target and performed present).
+// Each cluster is a candidate for interval rescue.
+function findMistakeClusters(
+  notes: PitchAssessmentNote[],
+): Array<{ startIndex: number; endIndex: number }> {
+  const clusters: Array<{ startIndex: number; endIndex: number }> = [];
+  let clusterStart: number | null = null;
+
+  for (let i = 0; i < notes.length; i += 1) {
+    const isIncorrect =
+      notes[i].matchKind === 'incorrect' &&
+      notes[i].target !== null &&
+      notes[i].performed !== null;
+
+    if (isIncorrect) {
+      if (clusterStart === null) {
+        clusterStart = i;
+      }
+    } else if (clusterStart !== null) {
+      clusters.push({ startIndex: clusterStart, endIndex: i - 1 });
+      clusterStart = null;
+    }
+  }
+
+  if (clusterStart !== null) {
+    clusters.push({ startIndex: clusterStart, endIndex: notes.length - 1 });
+  }
+
+  return clusters;
+}
+
+// Replaces the original single-divergence rescue with a multi-cluster pass.
+// Each small cluster of consecutive incorrect notes is evaluated independently.
+// Clusters longer than maxClusterSize are skipped — sustained wrong sections
+// should not qualify, only local slips with clear recovery.
+function applyMultiClusterIntervalRescue(
+  notes: PitchAssessmentNote[],
+  targetMelody: AssessmentMelodyNote[],
+  performedMelody: AssessmentMelodyNote[],
+  firstDivergence: FirstDivergencePoint | null,
+  globalRelationship: GlobalRelationshipKind,
+  recovery: RecoveryAssessment,
+): { notes: PitchAssessmentNote[]; recovery: RecoveryAssessment } {
+  if (
+    !firstDivergence ||
+    globalRelationship === 'exact_match' ||
+    globalRelationship === 'octave_shifted' ||
+    globalRelationship === 'globally_transposed'
+  ) {
+    return { notes, recovery };
+  }
+
+  const clusters = findMistakeClusters(notes).filter(
+    (cluster) =>
+      cluster.endIndex - cluster.startIndex + 1 <= INTERVAL_RECOVERY_CONFIG.maxClusterSize,
+  );
+
+  if (clusters.length === 0) {
+    return { notes, recovery };
+  }
+
+  let rescuedNotes = notes;
+  const allRescuedIndices: number[] = [];
+  // Track the first qualifying cluster for the intervalRescue summary field.
+  let firstRescuedCluster: {
+    startIndex: number;
+    endIndex: number;
+    comparableIntervalCount: number;
+    directionMatchRatio: number;
+    intervalCloseness: number;
+    rejoinedTarget: boolean;
+    creditPerNote: number;
+  } | null = null;
+
+  for (const cluster of clusters) {
+    const windowEndIndex = Math.min(
+      notes.length - 1,
+      cluster.endIndex + INTERVAL_RECOVERY_CONFIG.lookaheadNotes,
+    );
+
+    let comparableIntervalCount = 0;
+    let directionMatchCount = 0;
+    let closenessTotal = 0;
+
+    for (let index = cluster.startIndex; index < windowEndIndex; index += 1) {
+      const targetCurrent = targetMelody[index];
+      const targetNext = targetMelody[index + 1];
+      const performedCurrent = performedMelody[index];
+      const performedNext = performedMelody[index + 1];
+
+      if (!targetCurrent || !targetNext || !performedCurrent || !performedNext) {
+        continue;
+      }
+
+      const expectedInterval = targetNext.midi - targetCurrent.midi;
+      const performedInterval = performedNext.midi - performedCurrent.midi;
+      comparableIntervalCount += 1;
+
+      if (intervalDirection(expectedInterval) === intervalDirection(performedInterval)) {
+        directionMatchCount += 1;
+      }
+      closenessTotal += scoreIntervalCloseness(expectedInterval, performedInterval);
+    }
+
+    const directionMatchRatio =
+      comparableIntervalCount > 0 ? directionMatchCount / comparableIntervalCount : 0;
+    const intervalCloseness =
+      comparableIntervalCount > 0 ? closenessTotal / comparableIntervalCount : 0;
+    // Use the original notes array for the rejoined check so earlier rescued clusters
+    // do not influence whether a later cluster appears to re-align with the target.
+    const rejoinedTarget = notes.some(
+      (note, index) =>
+        index > cluster.startIndex &&
+        index <= windowEndIndex &&
+        note.target !== null &&
+        note.performed !== null &&
+        ((note.absDelta ?? Number.POSITIVE_INFINITY) <= 1 || note.isCorrect),
+    );
+    const windowScore =
+      directionMatchRatio * 0.45 +
+      intervalCloseness * 0.4 +
+      (rejoinedTarget ? 0.15 : 0);
+
+    const qualifies =
+      comparableIntervalCount >= INTERVAL_RECOVERY_CONFIG.minimumComparableIntervals &&
+      directionMatchRatio >= INTERVAL_RECOVERY_CONFIG.minimumDirectionMatchRatio &&
+      intervalCloseness >= INTERVAL_RECOVERY_CONFIG.minimumIntervalCloseness &&
+      windowScore >= INTERVAL_RECOVERY_CONFIG.minimumWindowScore;
+
+    if (!qualifies) {
+      continue;
+    }
+
+    const creditPerNote = Math.min(
+      INTERVAL_RECOVERY_CONFIG.maxCreditPerNote,
+      INTERVAL_RECOVERY_CONFIG.baseCreditPerNote +
+        Math.max(0, windowScore - INTERVAL_RECOVERY_CONFIG.minimumWindowScore) * 0.5 +
+        (rejoinedTarget ? 0.08 : 0),
+    );
+
+    const clusterRescuedIndices: number[] = [];
+    rescuedNotes = rescuedNotes.map((note, index) => {
+      const inCluster = index >= cluster.startIndex && index <= cluster.endIndex;
+      const canRescue =
+        inCluster &&
+        clusterRescuedIndices.length < INTERVAL_RECOVERY_CONFIG.maxRescuedNotes &&
+        note.target !== null &&
+        note.performed !== null &&
+        note.matchKind === 'incorrect' &&
+        (note.absDelta ?? Number.POSITIVE_INFINITY) <= 4;
+
+      if (!canRescue) {
+        return note;
+      }
+
+      clusterRescuedIndices.push(index);
+      return {
+        ...note,
+        intervalRecoveryApplied: true,
+        intervalRecoveryCredit: roundFit(creditPerNote),
+        interpretationReason:
+          'Absolute pitch diverged here, but the next notes preserved a close local interval pattern and showed recovery.',
+      };
+    });
+
+    allRescuedIndices.push(...clusterRescuedIndices);
+
+    if (firstRescuedCluster === null && clusterRescuedIndices.length > 0) {
+      firstRescuedCluster = {
+        startIndex: cluster.startIndex,
+        endIndex: windowEndIndex,
+        comparableIntervalCount,
+        directionMatchRatio,
+        intervalCloseness,
+        rejoinedTarget,
+        creditPerNote,
+      };
+    }
+  }
+
+  if (allRescuedIndices.length === 0) {
+    return { notes, recovery };
+  }
+
+  const s = firstRescuedCluster!;
+  return {
+    notes: rescuedNotes,
+    recovery: {
+      ...recovery,
+      intervalRescue: {
+        applicable: true,
+        startIndex: s.startIndex,
+        endIndex: s.endIndex,
+        rescuedNoteIndices: allRescuedIndices,
+        comparableIntervalCount: s.comparableIntervalCount,
+        directionMatchRatio: roundFit(s.directionMatchRatio),
+        intervalCloseness: roundFit(s.intervalCloseness),
+        rejoinedTarget: s.rejoinedTarget,
+        creditPerNote: roundFit(s.creditPerNote),
+      },
+    },
   };
 }
 
@@ -1809,7 +2087,18 @@ export function evaluateMelodyAssessment(
     globalRelationship.kind
   );
   const rhythm = assessRhythm(targetMelody, input);
-  const interpretedNotes = applyTransposedConsistencyInterpretation(notes, tonalState);
+  const intervalRecoveryAdjusted = applyMultiClusterIntervalRescue(
+    notes,
+    targetMelody,
+    performedMelody,
+    firstDivergence,
+    globalRelationship.kind,
+    recovery,
+  );
+  const interpretedNotes = applyTransposedConsistencyInterpretation(
+    intervalRecoveryAdjusted.notes,
+    tonalState,
+  );
 
   const pitchCorrectCount = interpretedNotes.filter((note) => note.isCorrect).length;
   const pitchIncorrectCount = interpretedNotes.length - pitchCorrectCount;
@@ -1823,7 +2112,7 @@ export function evaluateMelodyAssessment(
     summary: {
       comparisonMode: mode,
       globalRelationship: globalRelationship.kind,
-      recoveryKind: recovery.kind,
+      recoveryKind: intervalRecoveryAdjusted.recovery.kind,
       tonalStateKind: tonalState.kind,
       transpositionSemitoneOffset: globalRelationship.semitoneDelta,
       transpositionPitchClassOffset: globalRelationship.pitchClassDelta,
@@ -1848,7 +2137,7 @@ export function evaluateMelodyAssessment(
     intervals,
     contours,
     firstDivergence,
-    recovery,
+    recovery: intervalRecoveryAdjusted.recovery,
     tonalState,
     rhythm,
     scores: {

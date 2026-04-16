@@ -58,11 +58,19 @@ function noteOutcome(
   if (weightedState === "near") {
     return "near";
   }
-  if (
-    weightedState === "low_confidence" ||
-    weightedState === "ambiguous" ||
-    weightedState === "transposed_consistent"
-  ) {
+  // transposed_consistent means the system explicitly accepted the note as musically
+  // coherent (e.g. consistent interval pattern in a shifted tonal frame). That is a
+  // positive outcome — show it in the same green tier as "near", not as a warning.
+  if (weightedState === "transposed_consistent") {
+    return "near";
+  }
+  // targetConsistentAmbiguity means the signal was ambiguous but the ambiguous pitch
+  // matched what was expected — the system accepted it. Show it green alongside other
+  // accepted notes, not amber alongside genuinely unclear ones.
+  if (segmented?.targetConsistentAmbiguity) {
+    return "near";
+  }
+  if (weightedState === "low_confidence" || weightedState === "ambiguous") {
     return "ambiguous";
   }
   return "incorrect";
@@ -85,6 +93,11 @@ function noteStatusLabel(
   note: PitchAssessmentNote | undefined,
   segmented: SegmentedPerformedNote | undefined,
 ): string {
+  // Check displayState and signal fields before the outcome so that accepted-context
+  // notes get their own label even when their outcome tier is shared with other states.
+  if (note?.displayState === "transposed_consistent") {
+    return "Consistent key shift";
+  }
   const outcome = noteOutcome(note, segmented);
   if (outcome === "correct") {
     return "Correct";
@@ -92,8 +105,15 @@ function noteStatusLabel(
   if (outcome === "near") {
     return "Slightly off";
   }
-  if (note?.displayState === "transposed_consistent") {
-    return "Consistent key shift";
+  // Distinguish the two reasons a note can land in the amber tier:
+  // - targetConsistentAmbiguity: signal was ambiguous but the pitch matched — accepted, not failed
+  // - low_confidence / weak signal: pitch evidence was too soft to be certain
+  // - plain ambiguous: genuinely unclear pitch center
+  if (segmented?.targetConsistentAmbiguity) {
+    return "Accepted";
+  }
+  if (classifyWeightedNoteState(note, segmented) === "low_confidence") {
+    return "Weak signal";
   }
   if (outcome === "ambiguous") {
     return "Unclear";
@@ -121,13 +141,13 @@ function describeNote(
     segmented?.status === "ambiguous" &&
     segmented.targetConsistentAmbiguity
   ) {
-    return "This note was a little unclear, but it stayed close to the expected pitch.";
+    return "The pitch wasn't perfectly defined, but it matched what was expected here.";
   }
   if (segmented?.status === "ambiguous") {
     return "This note was unclear because the pitch center was unstable.";
   }
   if (segmented?.status === "weak") {
-    return "This note was affected by noisy or unstable pitch evidence.";
+    return "This note had a weak signal — the pitch was hard to detect clearly.";
   }
   if (!note?.performed || note.matchKind === "missing") {
     return "This note was unclear because a strong pitch was not detected.";
@@ -336,11 +356,11 @@ export default function AssessmentPanel({
             <h4>Legend</h4>
             <p className="AppHistoryLabel">
               <span className="AppAssessmentLegendSwatch AppAssessmentLegendSwatch--correct" />{" "}
-              Correct or slightly off note
+              Correct, slightly off, or consistent key shift
             </p>
             <p className="AppHistoryLabel">
               <span className="AppAssessmentLegendSwatch AppAssessmentLegendSwatch--ambiguous" />{" "}
-              Ambiguous or low-confidence note
+              Accepted despite unclear signal, or weak signal
             </p>
             <p className="AppHistoryLabel">
               <span className="AppAssessmentLegendSwatch AppAssessmentLegendSwatch--incorrect" />{" "}
@@ -529,7 +549,11 @@ export default function AssessmentPanel({
                     Adjusted pitch: {weightedSummary?.percentage ?? 0}%
                   </p>
                   <p className="AppHistoryLabel">
-                    Near-match boost:{" "}
+                    Interval-recovery credit:{" "}
+                    {weightedSummary?.generosityAdjustments.intervalRecoveryCredit.toFixed(
+                      2,
+                    ) ?? "0.00"}{" "}
+                    | Near-match boost:{" "}
                     {weightedSummary?.generosityAdjustments.nearMatchPhraseBoost.toFixed(
                       2,
                     ) ?? "0.00"}{" "}
@@ -574,6 +598,9 @@ export default function AssessmentPanel({
                               : ""}
                             {assessedNote?.isolatedErrorSoftened
                               ? ` | isolated-error softening yes`
+                              : ""}
+                            {assessedNote?.intervalRecoveryApplied
+                              ? ` | interval-recovery credit ${assessedNote.intervalRecoveryCredit.toFixed(2)}`
                               : ""}
                             {assessedNote?.interpretationReason
                               ? ` | ${assessedNote.interpretationReason}`
