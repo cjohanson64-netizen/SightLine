@@ -84,11 +84,23 @@ function buildMasteryExplanationSignals(
 
   const pitchEvidenceTotal = Math.max(1, result.summary.targetNoteCount);
   const strongPitchCredits = result.notes.reduce((sum, note) => {
-    if (note.displayState === 'correct' || note.displayState === 'transposed_consistent') {
+    if (note.displayState === 'transposed_consistent') {
+      return sum + 0.94;
+    }
+    if (note.intonationBand === 'in_tune') {
       return sum + 1;
     }
-    if (note.displayState === 'same_note_off_center') {
-      return sum + 0.98;
+    if (note.intonationBand === 'tuned') {
+      return sum + 0.94;
+    }
+    if (note.intonationBand === 'loose_center') {
+      return sum + 0.82;
+    }
+    if (note.intonationBand === 'poor_center') {
+      return sum + 0.65;
+    }
+    if (note.displayState === 'correct') {
+      return sum + 1;
     }
     return sum;
   }, 0);

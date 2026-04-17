@@ -917,6 +917,7 @@ function buildPitchAssessments(
           : pitchMatch.matchKind === 'adjacent_semitone'
             ? 'adjacent_semitone'
             : 'incorrect',
+      intonationBand: null,
       weakWindowProtectionApplied: false,
       isolatedErrorSoftened: false,
       globalOffsetCorrectionApplied: phraseCorrectionOffset !== 0,
@@ -961,7 +962,13 @@ function detectDominantGlobalOffset(
       supportCount: 0,
       supportRatio: 0,
       confidence: 0,
+      strongConsistentBiasDetected: false,
       treatedAsBias: false,
+      appliedAsPhraseCorrection: false,
+      appliedNoteCount: 0,
+      appliedSupportRatio: 0,
+      medianResidualCents: null,
+      scoringImpact: null,
       reason: null,
     }
   ): GlobalOffsetCorrectionAnalysis => ({
@@ -1009,7 +1016,13 @@ function detectDominantGlobalOffset(
         supportCount: 0,
         supportRatio: 0,
         confidence: 0,
+        strongConsistentBiasDetected: false,
         treatedAsBias: false,
+        appliedAsPhraseCorrection: false,
+        appliedNoteCount: 0,
+        appliedSupportRatio: 0,
+        medianResidualCents: null,
+        scoringImpact: null,
         reason: 'Not enough eligible notes for session bias estimation.',
       }
     );
@@ -1079,10 +1092,17 @@ function detectDominantGlobalOffset(
               biasCandidate.supportRatio * (phraseAlreadyMostlyAcceptable ? 1 : 0.8)
             )
           ),
+          strongConsistentBiasDetected:
+            phraseAlreadyMostlyAcceptable && biasCandidate.supportRatio >= 0.6,
           treatedAsBias:
             phraseAlreadyMostlyAcceptable || biasCandidate.supportRatio < 0.75,
+          appliedAsPhraseCorrection: false,
+          appliedNoteCount: 0,
+          appliedSupportRatio: 0,
+          medianResidualCents: null,
+          scoringImpact: null,
           reason: phraseAlreadyMostlyAcceptable
-            ? 'Repeated ±1 semitone offsets look more like session bias because the phrase is already mostly acceptable.'
+            ? 'Detected repeated ±1 semitone drift across an otherwise acceptable phrase; holding it as phrase-bias evidence unless stronger correction logic promotes it.'
             : 'Repeated ±1 semitone offsets are being treated as soft session bias until stronger phrase-level evidence appears.',
         }
       : {
@@ -1090,7 +1110,13 @@ function detectDominantGlobalOffset(
           supportCount: 0,
           supportRatio: 0,
           confidence: 0,
+          strongConsistentBiasDetected: false,
           treatedAsBias: false,
+          appliedAsPhraseCorrection: false,
+          appliedNoteCount: 0,
+          appliedSupportRatio: 0,
+          medianResidualCents: null,
+          scoringImpact: null,
           reason: null,
         };
 
@@ -2335,7 +2361,13 @@ function buildCalibrationFrameCorrection(
       supportCount: 0,
       supportRatio: 0,
       confidence: 0,
+      strongConsistentBiasDetected: false,
       treatedAsBias: false,
+      appliedAsPhraseCorrection: false,
+      appliedNoteCount: 0,
+      appliedSupportRatio: 0,
+      medianResidualCents: null,
+      scoringImpact: null,
       reason: null,
     },
   };

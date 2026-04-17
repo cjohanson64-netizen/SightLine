@@ -2,9 +2,7 @@
 
 import type React from "react";
 import type { MicAssessmentRunResult } from "@/SightLine/core/audio/types";
-import type { DebugSemanticsProjection } from "@/SightLine/domain/artifact";
 import type { ExerciseSpec, MelodyEvent } from "@/SightLine/domain/music";
-import AssessmentPanel from "../components/AssessmentPanel";
 import GeneratorNotationControls from "../components/GeneratorNotationControls";
 import GeneratorStudentSidebar from "../components/GeneratorStudentSidebar";
 import GeneratorTeacherSidebar from "../components/GeneratorTeacherSidebar";
@@ -27,18 +25,13 @@ type TeacherState = ReturnType<typeof useTeacherLibrary>;
 interface GeneratorPageProps {
   currentMelody: MelodyEvent[];
   currentSpecSnapshot: ExerciseSpec | null;
-  calibrationStatus: "idle" | "requesting_permission" | "recording" | "processing" | "complete" | "error";
-  calibrationReady: boolean;
-  assessmentError: string | null;
   assessmentAccessMessage: string | null;
   assessmentAccessBlocked: boolean;
   assessmentPlaybackDisabled: boolean;
   assessmentNoteOutcomeByIndex: Array<"correct" | "near" | "incorrect" | "ambiguous" | null>;
   assessmentResult: MicAssessmentRunResult | null;
-  debugSemantics: DebugSemanticsProjection;
   climaxNoteIndices: number[];
   selectedAssessmentNoteIndex: number | null;
-  assessmentStatus: "idle" | "requesting_permission" | "recording" | "processing" | "complete" | "error";
   displayNotationMusicXml: string;
   error: { title: string; message: string; suggestions: string[] } | null;
   exportMusicXml: string;
@@ -58,7 +51,6 @@ interface GeneratorPageProps {
   onAssessmentNoteSelect: (index: number | null) => void;
   onAssessmentUpgrade: () => void;
   onRunAssessment: () => void;
-  onClearAssessment: () => void;
   pitchEditMode: boolean;
   playback: PlaybackState;
   projection: ProjectionState;
@@ -82,18 +74,13 @@ interface GeneratorPageProps {
 export default function GeneratorPage({
   currentMelody,
   currentSpecSnapshot,
-  calibrationStatus,
-  calibrationReady,
-  assessmentError,
   assessmentAccessMessage,
   assessmentAccessBlocked,
   assessmentPlaybackDisabled,
   assessmentNoteOutcomeByIndex,
   assessmentResult,
-  debugSemantics,
   climaxNoteIndices,
   selectedAssessmentNoteIndex,
-  assessmentStatus,
   displayNotationMusicXml,
   error,
   exportMusicXml,
@@ -113,7 +100,6 @@ export default function GeneratorPage({
   onAssessmentNoteSelect,
   onAssessmentUpgrade,
   onRunAssessment,
-  onClearAssessment,
   pitchEditMode,
   playback,
   projection,
@@ -159,22 +145,13 @@ export default function GeneratorPage({
               onTitleChange={updateExerciseTitle}
               onGenerate={runWithNewSeed}
               onRunAssessment={onRunAssessment}
-              calibrationStatus={calibrationStatus}
-              calibrationReady={calibrationReady}
               assessmentAccessMessage={assessmentAccessMessage}
               assessmentAccessBlocked={assessmentAccessBlocked}
               onAssessmentUpgrade={onAssessmentUpgrade}
-              assessmentStatus={assessmentStatus}
               assessmentDisabled={
                 interactionDisabled ||
                 currentMelody.length === 0 ||
-                calibrationStatus === "requesting_permission" ||
-                calibrationStatus === "processing" ||
-                assessmentStatus === "requesting_permission" ||
-                assessmentStatus === "processing" ||
-                (assessmentAccessBlocked &&
-                  calibrationStatus !== "recording" &&
-                  assessmentStatus !== "recording")
+                assessmentAccessBlocked
               }
               showUpdateSave={Boolean(teacher.activeExerciseId)}
               saveDisabled={
@@ -222,16 +199,6 @@ export default function GeneratorPage({
               {saveStatus === "saving" ? "Saving..." : saveMessage}
             </p>
           ) : null}
-          <AssessmentPanel
-            status={assessmentStatus}
-            result={assessmentResult}
-            debugSemantics={debugSemantics}
-            errorMessage={assessmentError}
-            selectedNoteIndex={selectedAssessmentNoteIndex}
-            showDeveloperDebug={teacher.subscriptionIsAdmin}
-            onSelectNote={onAssessmentNoteSelect}
-            onClear={onClearAssessment}
-          />
         </>
       ) : null}
 

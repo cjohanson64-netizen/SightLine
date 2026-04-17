@@ -43,7 +43,7 @@ function getPrimaryStrength(
     return 'You kept the phrase moving steadily.';
   }
   if (
-    weightedSummary.counts.same_note_off_center >=
+    weightedSummary.counts.loose_center + weightedSummary.counts.poor_center >=
     Math.max(2, Math.ceil(result.assessment.summary.targetNoteCount / 4))
   ) {
     return 'Many of your notes were close to the target pitch.';
@@ -66,17 +66,17 @@ function getPrimaryImprovement(
   }
   const offCenterSharp = result.assessment.notes.filter(
     (note) =>
-      note.displayState === 'same_note_off_center' &&
+      (note.intonationBand === 'loose_center' || note.intonationBand === 'poor_center') &&
       (note.centerDeviationCents ?? 0) > 0,
   ).length;
   const offCenterFlat = result.assessment.notes.filter(
     (note) =>
-      note.displayState === 'same_note_off_center' &&
+      (note.intonationBand === 'loose_center' || note.intonationBand === 'poor_center') &&
       (note.centerDeviationCents ?? 0) < 0,
   ).length;
   if (
-    offCenterSharp >= Math.max(2, weightedSummary.counts.same_note_off_center / 2) ||
-    offCenterFlat >= Math.max(2, weightedSummary.counts.same_note_off_center / 2)
+    offCenterSharp >= Math.max(2, (weightedSummary.counts.loose_center + weightedSummary.counts.poor_center) / 2) ||
+    offCenterFlat >= Math.max(2, (weightedSummary.counts.loose_center + weightedSummary.counts.poor_center) / 2)
   ) {
     return offCenterSharp >= offCenterFlat
       ? 'A few notes were slightly high within the right note.'
@@ -108,7 +108,7 @@ function getPracticeSuggestion(
     return 'Clap the rhythm first, then sing it again.';
   }
   if (
-    weightedSummary.counts.same_note_off_center >=
+    weightedSummary.counts.loose_center + weightedSummary.counts.poor_center >=
     Math.max(2, Math.ceil(result.assessment.summary.targetNoteCount / 4))
   ) {
     return 'Sing the phrase more slowly and center each note before moving on.';

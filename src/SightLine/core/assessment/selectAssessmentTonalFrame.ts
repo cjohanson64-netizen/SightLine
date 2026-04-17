@@ -4,26 +4,26 @@ import {
   midiToPitch,
   pitchOctaveForMidi,
   prefersFlatsForKey,
-} from '@/SightLine/core/midi';
-import { alignPerformedToTarget } from '@/SightLine/core/audio/alignPerformedToTarget';
-import type { SegmentedPerformedNote } from '@/SightLine/core/audio/types';
-import type { CalibrationProfile } from '@/SightLine/core/calibration/types';
+} from "@/SightLine/core/midi";
+import { alignPerformedToTarget } from "@/SightLine/core/audio/alignPerformedToTarget";
+import type { SegmentedPerformedNote } from "@/SightLine/core/audio/types";
+import type { CalibrationProfile } from "@/SightLine/core/calibration/types";
 import type {
   AssessmentComparisonMode,
   MelodyAssessmentResult,
   TonalFrameCandidateAnalysis,
   TonalFrameKind,
   TonalFrameSelectionAnalysis,
-} from '@/SightLine/domain/assessment';
-import type { MelodyEvent } from '@/SightLine/domain/music';
-import { buildAssessmentScoreSummary } from '../assessmentLogs/scoring';
-import { evaluateMelodyAssessment } from './evaluateMelodyAssessment';
+} from "@/SightLine/domain/assessment";
+import type { MelodyEvent } from "@/SightLine/domain/music";
+import { buildAssessmentScoreSummary } from "../assessmentLogs/scoring";
+import { evaluateMelodyAssessment } from "./evaluateMelodyAssessment";
 
 interface TonalFrameCandidate {
   kind: TonalFrameKind;
   label: string;
   semitoneOffset: number;
-  source: 'written' | 'calibration';
+  source: "written" | "calibration";
   targetMelody: MelodyEvent[];
 }
 
@@ -41,8 +41,34 @@ interface SelectAssessmentTonalFrameResult {
   analysis: TonalFrameSelectionAnalysis;
 }
 
-const SHARP_KEYS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
-const FLAT_KEYS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+const SHARP_KEYS = [
+  "C",
+  "C#",
+  "D",
+  "Eb",
+  "E",
+  "F",
+  "F#",
+  "G",
+  "Ab",
+  "A",
+  "Bb",
+  "B",
+];
+const FLAT_KEYS = [
+  "C",
+  "Db",
+  "D",
+  "Eb",
+  "E",
+  "F",
+  "Gb",
+  "G",
+  "Ab",
+  "A",
+  "Bb",
+  "B",
+];
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -53,7 +79,9 @@ function normalizeSignedPitchClassOffset(value: number): number {
   return normalized > 6 ? normalized - 12 : normalized;
 }
 
-function weightedAverage(entries: Array<{ value: number; weight: number }>): number | null {
+function weightedAverage(
+  entries: Array<{ value: number; weight: number }>,
+): number | null {
   if (entries.length === 0) {
     return null;
   }
@@ -61,31 +89,48 @@ function weightedAverage(entries: Array<{ value: number; weight: number }>): num
   if (totalWeight <= 0) {
     return null;
   }
-  return entries.reduce((sum, entry) => sum + entry.value * entry.weight, 0) / totalWeight;
+  return (
+    entries.reduce((sum, entry) => sum + entry.value * entry.weight, 0) /
+    totalWeight
+  );
 }
 
-function deriveCalibrationOffset(profile: CalibrationProfile | null | undefined): number | null {
-  if (!profile?.successful || profile.signalQuality === 'poor') {
+function deriveCalibrationOffset(
+  profile: CalibrationProfile | null | undefined,
+): number | null {
+  if (
+    !profile?.successful ||
+    profile.signalQuality === "poor" ||
+    profile.coherence === "low"
+  ) {
+    return null;
+  }
+
+  const coherentDegrees = profile.degrees.filter(
+    (degree) =>
+      typeof degree.offsetFromExpected === "number" &&
+      degree.status !== "missing" &&
+      degree.confidence >= 0.45 &&
+      degree.stability >= 0.35,
+  );
+
+  if (coherentDegrees.length < 5) {
     return null;
   }
 
   const weightedDegreeOffset = weightedAverage(
-    profile.degrees
-      .filter(
-        (degree) =>
-          typeof degree.offsetFromExpected === 'number' &&
-          degree.status !== 'missing' &&
-          degree.confidence >= 0.45,
-      )
-      .map((degree) => ({
-        value: degree.offsetFromExpected as number,
-        weight: Math.max(0.15, degree.confidence * Math.max(0.2, degree.stability)),
-      })),
+    coherentDegrees.map((degree) => ({
+      value: degree.offsetFromExpected as number,
+      weight: Math.max(
+        0.15,
+        degree.confidence * Math.max(0.2, degree.stability),
+      ),
+    })),
   );
 
   const rawOffset =
     weightedDegreeOffset ??
-    (typeof profile.tonicOffsetSemitones === 'number'
+    (typeof profile.tonicOffsetSemitones === "number"
       ? profile.tonicOffsetSemitones
       : null);
 
@@ -100,7 +145,7 @@ function deriveCalibrationOffset(profile: CalibrationProfile | null | undefined)
 
 function transposeKeyName(
   key: string | null | undefined,
-  mode: 'major' | 'minor',
+  mode: "major" | "minor",
   semitoneOffset: number,
 ): string | null {
   if (!key || !(key in KEY_TO_PC)) {
@@ -121,8 +166,10 @@ function transposeTargetMelody(
   }
 
   return targetMelody.map((event) => {
-    const [keyRaw = 'C', modeRaw = 'major'] = String(event.keyId ?? 'C-major').split('-');
-    const mode = modeRaw === 'minor' ? 'minor' : 'major';
+    const [keyRaw = "C", modeRaw = "major"] = String(
+      event.keyId ?? "C-major",
+    ).split("-");
+    const mode = modeRaw === "minor" ? "minor" : "major";
     const nextKey = transposeKeyName(keyRaw, mode, semitoneOffset) ?? keyRaw;
     const shiftedMidi = event.midi + semitoneOffset;
     const preferFlats = prefersFlatsForKey(nextKey as never, mode);
@@ -154,10 +201,10 @@ function isStructuralNote(event: MelodyEvent | null | undefined): boolean {
     return false;
   }
   return (
-    event.role !== 'NonHarmonicTone' ||
-    event.functionTags?.includes('structural') === true ||
-    event.functionTags?.includes('climax') === true ||
-    event.functionTags?.includes('cadence') === true
+    event.role !== "NonHarmonicTone" ||
+    event.functionTags?.includes("structural") === true ||
+    event.functionTags?.includes("climax") === true ||
+    event.functionTags?.includes("cadence") === true
   );
 }
 
@@ -173,26 +220,34 @@ function buildCandidateAnalysis(
     segmentedNotes,
   });
   const noteCount = Math.max(1, assessment.summary.targetNoteCount);
-  const exactCount = assessment.notes.filter((note) => note.absDelta === 0).length;
-  const adjacentCount = assessment.notes.filter((note) => note.absDelta === 1).length;
+  const exactCount = assessment.notes.filter(
+    (note) => note.absDelta === 0,
+  ).length;
+  const adjacentCount = assessment.notes.filter(
+    (note) => note.absDelta === 1,
+  ).length;
   const structuralIndices = assessment.notes
-    .map((note, index) => (isStructuralNote(note.target?.sourceEvent ?? null) ? index : -1))
+    .map((note, index) =>
+      isStructuralNote(note.target?.sourceEvent ?? null) ? index : -1,
+    )
     .filter((index) => index >= 0);
   const structuralExactCount = structuralIndices.filter(
     (index) => assessment.notes[index]?.absDelta === 0,
   ).length;
   const cadenceIndices = assessment.notes
     .map((note, index) =>
-      note.target?.sourceEvent.functionTags?.includes('cadence') ? index : -1,
+      note.target?.sourceEvent.functionTags?.includes("cadence") ? index : -1,
     )
     .filter((index) => index >= 0);
   const cadenceExactCount = cadenceIndices.filter(
     (index) => assessment.notes[index]?.absDelta === 0,
   ).length;
   const contourComparable =
-    assessment.summary.contourCorrectCount + assessment.summary.contourIncorrectCount;
+    assessment.summary.contourCorrectCount +
+    assessment.summary.contourIncorrectCount;
   const intervalComparable =
-    assessment.summary.intervalCorrectCount + assessment.summary.intervalIncorrectCount;
+    assessment.summary.intervalCorrectCount +
+    assessment.summary.intervalIncorrectCount;
   const contourFit =
     contourComparable > 0
       ? assessment.summary.contourCorrectCount / contourComparable
@@ -205,7 +260,9 @@ function buildCandidateAnalysis(
     structuralIndices.length > 0
       ? structuralExactCount / structuralIndices.length
       : exactCount / noteCount;
-  const localPitchFit = clamp01((exactCount + adjacentCount * 0.35) / noteCount);
+  const localPitchFit = clamp01(
+    (exactCount + adjacentCount * 0.35) / noteCount,
+  );
   const cadenceFit =
     cadenceIndices.length > 0
       ? cadenceExactCount / cadenceIndices.length
@@ -217,21 +274,22 @@ function buildCandidateAnalysis(
         return false;
       }
       return (
-        segmented?.status === 'weak' ||
-        segmented?.status === 'ambiguous' ||
+        segmented?.status === "weak" ||
+        segmented?.status === "ambiguous" ||
         segmented?.targetConsistentAmbiguity === true
       );
     }).length / noteCount;
-  const calibrationOverallConfidence = calibrationProfile?.overallConfidence ?? null;
+  const calibrationOverallConfidence =
+    calibrationProfile?.overallConfidence ?? null;
   const calibrationSignalQuality = calibrationProfile?.signalQuality ?? null;
   const calibrationSupport =
-    candidate.kind === 'calibration_transposed' &&
+    candidate.kind === "calibration_transposed" &&
     calibrationOffset !== null &&
     candidate.semitoneOffset === calibrationOffset &&
     calibrationOverallConfidence !== null
       ? clamp01(
           calibrationOverallConfidence *
-            (calibrationSignalQuality === 'good' ? 1 : 0.7),
+            (calibrationSignalQuality === "good" ? 1 : 0.7),
         )
       : 0;
   const pitchScore = scoreSummary.pitchScore / 100;
@@ -254,7 +312,9 @@ function buildCandidateAnalysis(
     `cadence ${(cadenceFit * 100).toFixed(0)}%`,
   ];
   if (calibrationSupport > 0) {
-    rationale.push(`calibration support ${(calibrationSupport * 100).toFixed(0)}%`);
+    rationale.push(
+      `calibration support ${(calibrationSupport * 100).toFixed(0)}%`,
+    );
   }
   if (rescuePressure > 0) {
     rationale.push(`rescue pressure ${(rescuePressure * 100).toFixed(0)}%`);
@@ -282,13 +342,13 @@ function buildCandidateAnalysis(
 
 function buildDefaultSelectionAnalysis(): TonalFrameSelectionAnalysis {
   return {
-    selectedKind: 'written',
-    selectedLabel: 'Written target',
+    selectedKind: "written",
+    selectedLabel: "Written target",
     selectedSemitoneOffset: 0,
     comparedAgainstWritten: false,
     calibrationProposedOffset: null,
     usedCalibrationProfile: false,
-    rationale: ['Only the written target frame was available.'],
+    rationale: ["Only the written target frame was available."],
     candidates: [],
   };
 }
@@ -296,30 +356,38 @@ function buildDefaultSelectionAnalysis(): TonalFrameSelectionAnalysis {
 export function selectAssessmentTonalFrame(
   input: SelectAssessmentTonalFrameInput,
 ): SelectAssessmentTonalFrameResult {
-  const calibrationOffset = deriveCalibrationOffset(input.calibrationProfile ?? null);
+  const calibrationOffset = deriveCalibrationOffset(
+    input.calibrationProfile ?? null,
+  );
   const candidates: TonalFrameCandidate[] = [
     {
-      kind: 'written',
-      label: 'Written target',
+      kind: "written",
+      label: "Written target",
       semitoneOffset: 0,
-      source: 'written',
+      source: "written",
       targetMelody: input.writtenTargetMelody,
     },
   ];
 
   if (calibrationOffset !== null) {
     candidates.push({
-      kind: 'calibration_transposed',
-      label: `Calibration transposed (${calibrationOffset > 0 ? '+' : ''}${calibrationOffset})`,
+      kind: "calibration_transposed",
+      label: `Calibration transposed (${calibrationOffset > 0 ? "+" : ""}${calibrationOffset})`,
       semitoneOffset: calibrationOffset,
-      source: 'calibration',
-      targetMelody: transposeTargetMelody(input.writtenTargetMelody, calibrationOffset),
+      source: "calibration",
+      targetMelody: transposeTargetMelody(
+        input.writtenTargetMelody,
+        calibrationOffset,
+      ),
     });
   }
 
   if (candidates.length === 1) {
     const selected = candidates[0];
-    const aligned = alignPerformedToTarget(input.segmentedNotes, selected.targetMelody);
+    const aligned = alignPerformedToTarget(
+      input.segmentedNotes,
+      selected.targetMelody,
+    );
     return {
       selectedTargetMelody: selected.targetMelody,
       selectedAlignedMelody: aligned.alignedMelody,
@@ -329,7 +397,10 @@ export function selectAssessmentTonalFrame(
   }
 
   const candidateAnalyses = candidates.map((candidate) => {
-    const aligned = alignPerformedToTarget(input.segmentedNotes, candidate.targetMelody);
+    const aligned = alignPerformedToTarget(
+      input.segmentedNotes,
+      candidate.targetMelody,
+    );
     const assessment = evaluateMelodyAssessment({
       targetMelody: candidate.targetMelody,
       performedMelody: aligned.alignedMelody,
@@ -361,19 +432,45 @@ export function selectAssessmentTonalFrame(
     };
   });
 
-  const written = candidateAnalyses.find((entry) => entry.candidate.kind === 'written')!;
+  const written = candidateAnalyses.find(
+    (entry) => entry.candidate.kind === "written",
+  )!;
   const transposed = candidateAnalyses.find(
-    (entry) => entry.candidate.kind === 'calibration_transposed',
+    (entry) => entry.candidate.kind === "calibration_transposed",
   )!;
 
-  const transposedClearlyExplainsPhrase =
-    transposed.analysis.totalScore >= written.analysis.totalScore + 0.03 &&
-    transposed.analysis.structuralFit >= Math.max(0.45, written.analysis.structuralFit - 0.05) &&
-    transposed.analysis.intervalFit >= Math.max(0.5, written.analysis.intervalFit - 0.08) &&
-    transposed.analysis.pitchScore >= written.analysis.pitchScore + 4;
+  // Determine raw advantage
+  const scoreDiff =
+    transposed.analysis.totalScore - written.analysis.totalScore;
 
-  const selected = transposedClearlyExplainsPhrase ? transposed : written;
+  // Strong win threshold
+  const STRONG_WIN = 0.08; // clear improvement
+  const SOFT_WIN = 0.03; // slight improvement
 
+  // Check if transposed is clearly better
+  const isStrongWin = scoreDiff >= STRONG_WIN;
+
+  // Check if transposed is slightly better but not risky
+  const isSoftWin =
+    scoreDiff >= SOFT_WIN &&
+    transposed.analysis.structuralFit >= written.analysis.structuralFit - 0.1;
+
+  // Check if written frame is clearly superior structurally
+  const writtenClearlyBetterStructurally =
+    written.analysis.structuralFit >= transposed.analysis.structuralFit + 0.15;
+
+  // Final decision
+  let useTransposedFrame = false;
+
+  if (isStrongWin) {
+    useTransposedFrame = true;
+  } else if (isSoftWin && !writtenClearlyBetterStructurally) {
+    useTransposedFrame = true;
+  } else {
+    useTransposedFrame = false;
+  }
+
+  const selected = useTransposedFrame ? transposed : written;
   const analyses = candidateAnalyses
     .map((entry) => ({
       ...entry.analysis,
@@ -381,15 +478,32 @@ export function selectAssessmentTonalFrame(
     }))
     .sort((a, b) => b.totalScore - a.totalScore);
 
-  const rationale = transposedClearlyExplainsPhrase
+  let decisionReason = "";
+
+  if (useTransposedFrame) {
+    decisionReason =
+      scoreDiff >= STRONG_WIN
+        ? "Calibration-transposed frame selected due to strong score advantage."
+        : "Calibration-transposed frame selected due to moderate score advantage with acceptable structural fit.";
+  } else {
+    decisionReason = writtenClearlyBetterStructurally
+      ? "Written frame retained due to significantly stronger structural alignment."
+      : "Written frame retained due to insufficient advantage from calibration-transposed frame.";
+  }
+
+  const rationale = useTransposedFrame
     ? [
         `Selected calibration-transposed frame because it explained the performance better than the written frame (${(transposed.analysis.totalScore * 100).toFixed(0)} vs ${(written.analysis.totalScore * 100).toFixed(0)}).`,
         `Pitch fit improved from ${written.analysis.pitchScore}% to ${transposed.analysis.pitchScore}%.`,
         `Structural fit improved from ${(written.analysis.structuralFit * 100).toFixed(0)}% to ${(transposed.analysis.structuralFit * 100).toFixed(0)}%.`,
+        `Frame decision: ${decisionReason}`,
+        `Score diff: ${(scoreDiff * 100).toFixed(0)} points.`,
       ]
     : [
         `Kept the written frame because it remained the best explanation (${(written.analysis.totalScore * 100).toFixed(0)} vs ${(transposed.analysis.totalScore * 100).toFixed(0)}).`,
         `The calibration-transposed candidate did not improve pitch and structure enough to replace the written target.`,
+        `Frame decision: ${decisionReason}`,
+        `Score diff: ${(scoreDiff * 100).toFixed(0)} points.`,
       ];
 
   return {

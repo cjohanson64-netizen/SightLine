@@ -72,7 +72,8 @@ function ensureOutcomeNodes(graph: Graph): void {
 function toExplanationOutcome(note: PitchAssessmentNote): AssessmentExplanationOutcome {
   if (
     note.displayState === 'correct' ||
-    note.displayState === 'same_note_off_center' ||
+    note.intonationBand === 'in_tune' ||
+    note.intonationBand === 'tuned' ||
     note.matchKind === 'exact' ||
     note.isCorrect
   ) {
@@ -80,7 +81,10 @@ function toExplanationOutcome(note: PitchAssessmentNote): AssessmentExplanationO
   }
 
   if (
-    note.displayState === 'transposed_consistent'
+    note.displayState === 'transposed_consistent' ||
+    note.intonationBand === 'loose_center' ||
+    note.intonationBand === 'poor_center' ||
+    note.intonationBand === 'boundary_cross'
   ) {
     return 'near_pitch';
   }

@@ -30,6 +30,9 @@ interface DominantClusterAnalysis {
   edgeTrimApplied: boolean;
   clusterRescued: boolean;
   targetConsistentAmbiguity: boolean;
+  vibratoAwareCenterApplied: boolean;
+  rawPitchCenter: number | null;
+  vibratoTrimmedFrameCount: number;
   debugReason: string;
 }
 
@@ -367,6 +370,56 @@ function trimStableCoreFrames(frames: CleanedPitchFrame[]): {
   };
 }
 
+interface VibratoAwareCenterResult {
+  center: number | null;
+  rawCenter: number | null;
+  trimmedSpread: number | null;
+  trimmedFrameCount: number;
+  applied: boolean;
+}
+
+function computeVibratoAwareCenter(
+  frames: CleanedPitchFrame[],
+  trimFraction: number = 0.12,
+): VibratoAwareCenterResult {
+  const usable = frames.filter((f) => f.cleanedMidi !== null);
+
+  if (usable.length === 0) {
+    return { center: null, rawCenter: null, trimmedSpread: null, trimmedFrameCount: 0, applied: false };
+  }
+
+  const sorted = [...usable].sort((a, b) => (a.cleanedMidi as number) - (b.cleanedMidi as number));
+  const rawCenter = weightedMedian(
+    sorted.map((f) => ({ value: f.cleanedMidi as number, weight: frameWeight(f) }))
+  );
+
+  if (sorted.length < 5) {
+    return {
+      center: rawCenter,
+      rawCenter,
+      trimmedSpread: pitchSpread(sorted.map((f) => f.cleanedMidi as number)),
+      trimmedFrameCount: sorted.length,
+      applied: false,
+    };
+  }
+
+  const cutCount = Math.max(1, Math.floor(sorted.length * trimFraction));
+  const trimmed = sorted.slice(cutCount, sorted.length - cutCount);
+  const center = weightedMedian(
+    trimmed.map((f) => ({ value: f.cleanedMidi as number, weight: frameWeight(f) }))
+  );
+  const trimmedSpreadVal = pitchSpread(trimmed.map((f) => f.cleanedMidi as number));
+  const applied = rawCenter !== null && center !== null && Math.abs(center - rawCenter) > 0.04;
+
+  return {
+    center,
+    rawCenter,
+    trimmedSpread: trimmedSpreadVal,
+    trimmedFrameCount: trimmed.length,
+    applied,
+  };
+}
+
 function choosePhraseInitialFrames(frames: CleanedPitchFrame[]): {
   frames: CleanedPitchFrame[];
   phraseInitialAdjusted: boolean;
@@ -529,6 +582,9 @@ function analyzeDominantCluster(
       edgeTrimApplied: false,
       clusterRescued: false,
       targetConsistentAmbiguity: false,
+      vibratoAwareCenterApplied: false,
+      rawPitchCenter: null,
+      vibratoTrimmedFrameCount: 0,
       debugReason: 'No voiced frames survived confidence filtering.',
     };
   }
@@ -544,15 +600,8 @@ function analyzeDominantCluster(
   const winner = candidates[0];
   const runnerUp = candidates[1];
   const clusterFrames = winner?.frames ?? [];
-  const rawRepresentativeMidi =
-    winner
-      ? weightedMedian(
-          clusterFrames.map((frame) => ({
-            value: frame.cleanedMidi as number,
-            weight: frameWeight(frame),
-          }))
-        )
-      : null;
+  const vibratoCenter = winner ? computeVibratoAwareCenter(clusterFrames) : null;
+  const rawRepresentativeMidi = vibratoCenter?.center ?? null;
   const totalCandidateScore = candidates.reduce((sum, candidate) => sum + Math.max(0, candidate.rawScore), 0);
   const dominantBucketStrength =
     winner && totalCandidateScore > 0 ? winner.rawScore / totalCandidateScore : null;
@@ -567,9 +616,9 @@ function analyzeDominantCluster(
   const confidence =
     clusterFrames.reduce((sum, frame) => sum + frame.confidence, 0) /
     Math.max(1, clusterFrames.length);
-  const stablePitchSpread = pitchSpread(
-    clusterFrames.map((frame) => frame.cleanedMidi as number)
-  );
+  const stablePitchSpread =
+    vibratoCenter?.trimmedSpread ??
+    pitchSpread(clusterFrames.map((frame) => frame.cleanedMidi as number));
   const clusterRescued =
     edgeTrimApplied &&
     clusterFrames.length >= 3 &&
@@ -595,6 +644,9 @@ function analyzeDominantCluster(
   } else if (edgeTrimApplied) {
     debugReason = 'Edge trimming reduced attack/release contamination before pitch estimation.';
   }
+  if (vibratoCenter?.applied) {
+    debugReason = `${debugReason} Vibrato-aware pitch trimming shifted center from ${vibratoCenter.rawCenter?.toFixed(2)} to ${rawRepresentativeMidi?.toFixed(2)} (${vibratoCenter.trimmedFrameCount} of ${clusterFrames.length} frames in trimmed core).`;
+  }
   if (phraseInitialSelection.phraseInitialAdjusted) {
     debugReason = `${debugReason} Phrase-initial stabilization skipped the earliest unstable onset frames.`;
   } else if (onsetStabilized.onsetAdjusted) {
@@ -617,6 +669,9 @@ function analyzeDominantCluster(
     edgeTrimApplied,
     clusterRescued,
     targetConsistentAmbiguity,
+    vibratoAwareCenterApplied: vibratoCenter?.applied ?? false,
+    rawPitchCenter: vibratoCenter?.rawCenter ?? null,
+    vibratoTrimmedFrameCount: vibratoCenter?.trimmedFrameCount ?? 0,
     debugReason,
   };
 }
@@ -961,6 +1016,9 @@ function buildSegmentedNote(
     edgeTrimApplied: stableCore.edgeTrimApplied,
     clusterRescued: stableCore.clusterRescued,
     targetConsistentAmbiguity: stableCore.targetConsistentAmbiguity,
+    vibratoAwareCenterApplied: stableCore.vibratoAwareCenterApplied,
+    rawPitchCenter: stableCore.rawPitchCenter,
+    vibratoTrimmedFrameCount: stableCore.vibratoTrimmedFrameCount,
     calibrationSupportedLocalEvidence: false,
     calibrationSupportLevel: null,
     calibrationSupportReason: null,

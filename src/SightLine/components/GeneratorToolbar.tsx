@@ -1,17 +1,7 @@
 import { useState } from "react";
-import type { ReactNode } from "react";
 import type { FolderItem } from "../hooks/useTeacherLibrary";
 
 type Mode = "teacher" | "student" | "guest";
-type SolfegeMode = "off" | "movable" | "fixed";
-type AssessmentStatus =
-  | "idle"
-  | "requesting_permission"
-  | "recording"
-  | "processing"
-  | "complete"
-  | "error";
-type CalibrationStatus = AssessmentStatus;
 
 type SaveMenuProps = {
   showUpdate: boolean;
@@ -81,12 +71,9 @@ type GeneratorToolbarProps = {
   onTitleChange: (value: string) => void;
   onGenerate: () => void;
   onRunAssessment: () => void;
-  calibrationStatus: CalibrationStatus;
-  calibrationReady: boolean;
   assessmentAccessMessage: string | null;
   assessmentAccessBlocked: boolean;
   onAssessmentUpgrade: () => void;
-  assessmentStatus: AssessmentStatus;
   assessmentDisabled: boolean;
   showUpdateSave: boolean;
   saveDisabled: boolean;
@@ -116,12 +103,9 @@ export default function GeneratorToolbar({
   onTitleChange,
   onGenerate,
   onRunAssessment,
-  calibrationStatus,
-  calibrationReady,
   assessmentAccessMessage,
   assessmentAccessBlocked,
   onAssessmentUpgrade,
-  assessmentStatus,
   assessmentDisabled,
   showUpdateSave,
   saveDisabled,
@@ -142,23 +126,6 @@ export default function GeneratorToolbar({
   const assessmentAccessDetail = assessmentAccessBlocked
     ? "Upgrade for unlimited assessments."
     : null;
-  const runAssessmentLabel =
-    calibrationStatus === "requesting_permission"
-      ? "Starting Calibration..."
-      : calibrationStatus === "recording"
-        ? "Stop Calibration"
-        : calibrationStatus === "processing"
-          ? "Analyzing Calibration..."
-          : !calibrationReady
-            ? "Start Calibration"
-            : assessmentStatus === "requesting_permission"
-              ? "Starting..."
-              : assessmentStatus === "recording"
-                ? "Stop Assessment"
-                : assessmentStatus === "processing"
-                  ? "Processing..."
-                  : "Run Assessment";
-
   return (
     <div className="GeneratorToolbar">
       <div className="ToolbarRow">
@@ -231,7 +198,7 @@ export default function GeneratorToolbar({
             onClick={onRunAssessment}
             disabled={assessmentDisabled}
           >
-            {runAssessmentLabel}
+            Begin Assessment
           </button>
           {assessmentAccessMessage ? (
             <div

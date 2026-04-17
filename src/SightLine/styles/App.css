@@ -1616,6 +1616,124 @@ body {
   overflow: visible;
 }
 
+.AssessmentWorkflowModal {
+  width: min(1040px, 96vw);
+  max-height: calc(100vh - 2rem);
+  padding: 1.1rem;
+}
+
+.AssessmentWorkflowHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.AssessmentWorkflowEyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8ea4be;
+}
+
+.AssessmentWorkflowSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.AssessmentWorkflowSection--results {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.AssessmentWorkflowSection--centered {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 320px;
+}
+
+.AssessmentWorkflowCallout {
+  border: 1px solid #223247;
+  border-radius: 8px;
+  background: #121b28;
+  padding: 0.8rem 0.9rem;
+}
+
+.AssessmentWorkflowCalloutTitle {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #dfe9f7;
+}
+
+.AssessmentWorkflowNotation {
+  min-height: 0;
+  border: 1px solid #223247;
+  border-radius: 8px;
+  background: #0c131d;
+  padding: 0.4rem;
+}
+
+.AssessmentWorkflowNotation .NotationViewer {
+  min-height: 320px;
+}
+
+.AssessmentWorkflowCountdown {
+  min-width: 4.5rem;
+  min-height: 4.5rem;
+  border-radius: 8px;
+  border: 1px solid #2a3d57;
+  background: #121b28;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #dfe9f7;
+}
+
+.AssessmentWorkflowResultsPanel {
+  margin-top: 0;
+}
+
+.AssessmentWorkflowResultsLayout {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.AssessmentWorkflowResultsNotation {
+  flex: 0 0 auto;
+}
+
+.AssessmentWorkflowResultsNotation .AssessmentWorkflowNotation {
+  max-height: min(42vh, 360px);
+  overflow: auto;
+}
+
+.AssessmentWorkflowResultsContent {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.9rem;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+}
+
+.AssessmentWorkflowResultsContent .AppAssessmentPanel {
+  margin: 0;
+}
+
+.AssessmentWorkflowResultsActions {
+  margin-top: 0.1rem;
+  padding-bottom: 0.1rem;
+}
+
 .AppModalClose {
   position: absolute;
   top: 0.6rem;

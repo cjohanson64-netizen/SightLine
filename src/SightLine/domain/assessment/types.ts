@@ -10,12 +10,19 @@ export type PitchMatchKind =
   | 'missing';
 export type PitchAssessmentDisplayState =
   | 'correct'
-  | 'same_note_off_center'
   | 'adjacent_semitone'
   | 'incorrect'
   | 'ambiguous'
   | 'low_confidence'
   | 'transposed_consistent';
+export type PitchIntonationBand =
+  | 'in_tune'
+  | 'tuned'
+  | 'loose_center'
+  | 'poor_center'
+  | 'boundary_cross'
+  | 'adjacent_close'
+  | null;
 export type GlobalRelationshipKind =
   | 'exact_match'
   | 'octave_shifted'
@@ -85,6 +92,7 @@ export interface PitchAssessmentNote {
   centerDeviationCents: number | null;
   isCorrect: boolean;
   displayState: PitchAssessmentDisplayState;
+  intonationBand: PitchIntonationBand;
   weakWindowProtectionApplied: boolean;
   isolatedErrorSoftened: boolean;
   globalOffsetCorrectionApplied: boolean;
@@ -126,7 +134,13 @@ export interface GlobalOffsetCorrectionAnalysis {
     supportCount: number;
     supportRatio: number;
     confidence: number;
+    strongConsistentBiasDetected: boolean;
     treatedAsBias: boolean;
+    appliedAsPhraseCorrection: boolean;
+    appliedNoteCount: number;
+    appliedSupportRatio: number;
+    medianResidualCents: number | null;
+    scoringImpact: string | null;
     reason: string | null;
   };
 }

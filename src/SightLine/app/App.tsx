@@ -15,9 +15,9 @@ import {
 
 import AppNavbar from "../components/AppNavbar";
 import AddStudentsModal from "../components/modals/AddStudentsModal";
+import AssessmentWorkflowModal from "../components/modals/AssessmentWorkflowModal";
 import AuthChoiceModal from "../components/modals/AuthChoiceModal";
 import BatchGenerateModal from "../components/modals/BatchGenerateModal";
-import CalibrationIntroModal from "../components/modals/CalibrationIntroModal";
 import ClassroomAccessModal from "../components/modals/ClassroomAccessModal";
 import CreatePacketFromSelectedModal from "../components/modals/CreatePacketFromSelectedModal";
 import LibraryPreviewModal from "../components/modals/LibraryPreviewModal";
@@ -260,7 +260,7 @@ function AppContent(): JSX.Element {
   const [showAddStudentsModal, setShowAddStudentsModal] =
     useState<boolean>(false);
   const [showBatchModal, setShowBatchModal] = useState<boolean>(false);
-  const [showCalibrationIntroModal, setShowCalibrationIntroModal] =
+  const [showAssessmentWorkflowModal, setShowAssessmentWorkflowModal] =
     useState<boolean>(false);
   const [, setBillingNotice] = useState<string>("");
   const [selectedAssessmentNoteIndex, setSelectedAssessmentNoteIndex] =
@@ -372,13 +372,19 @@ function AppContent(): JSX.Element {
       const note = result.assessment.notes[index];
       const segmented = result.segmentedNotes[index];
       if (
-        note?.displayState === "correct" ||
-        note?.displayState === "same_note_off_center"
+        note?.displayState === "correct" &&
+        (note?.intonationBand === "in_tune" || note?.intonationBand === "tuned")
       ) {
         return "correct";
       }
+      if (note?.displayState === "correct") {
+        return "ambiguous";
+      }
       if (note?.displayState === "transposed_consistent") {
         return "correct";
+      }
+      if (note?.intonationBand === "boundary_cross") {
+        return "ambiguous";
       }
       if (
         note?.displayState === "ambiguous" ||
@@ -701,8 +707,39 @@ function AppContent(): JSX.Element {
 
   const handleGenerateNewMelody = () => {
     micAssessment.clearAssessment();
+    calibration.clearCalibration();
     setSelectedAssessmentNoteIndex(null);
+    setShowAssessmentWorkflowModal(false);
     runWithNewSeed();
+  };
+
+  const resetAssessmentWorkflow = () => {
+    calibration.clearCalibration();
+    micAssessment.clearAssessment();
+    setSelectedAssessmentNoteIndex(null);
+  };
+
+  const openAssessmentWorkflow = () => {
+    resetAssessmentWorkflow();
+    setShowAssessmentWorkflowModal(true);
+  };
+
+  const closeAssessmentWorkflow = () => {
+    if (
+      calibration.status === "requesting_permission" ||
+      calibration.status === "recording" ||
+      calibration.status === "processing"
+    ) {
+      calibration.clearCalibration();
+    }
+    if (
+      micAssessment.status === "requesting_permission" ||
+      micAssessment.status === "recording" ||
+      micAssessment.status === "processing"
+    ) {
+      micAssessment.clearAssessment();
+    }
+    setShowAssessmentWorkflowModal(false);
   };
 
   const handleNotationKeyDownWhileStopped: React.KeyboardEventHandler<
@@ -907,15 +944,10 @@ function AppContent(): JSX.Element {
             <GeneratorPage
               currentMelody={currentMelody}
               currentSpecSnapshot={currentSpecSnapshot}
-              calibrationStatus={calibration.status}
-              calibrationReady={calibration.isReady}
-              assessmentError={micAssessment.errorMessage}
               assessmentNoteOutcomeByIndex={assessmentOutcomeByIndex}
               assessmentResult={micAssessment.result}
-              debugSemantics={projectedDebugSemantics}
               climaxNoteIndices={climaxNoteIndices}
               selectedAssessmentNoteIndex={selectedAssessmentNoteIndex}
-              assessmentStatus={micAssessment.status}
               assessmentAccessMessage={assessmentAccess.access.message}
               assessmentAccessBlocked={!assessmentAccess.access.canRun}
               assessmentPlaybackDisabled={assessmentPlaybackDisabled}
@@ -939,22 +971,7 @@ function AppContent(): JSX.Element {
               }
               onAssessmentNoteSelect={setSelectedAssessmentNoteIndex}
               onAssessmentUpgrade={() => void handleAssessmentUpgrade()}
-              onRunAssessment={() => {
-                if (calibration.status === "recording") {
-                  void calibration.stopCalibration();
-                  return;
-                }
-                if (!calibration.isReady) {
-                  setShowCalibrationIntroModal(true);
-                  return;
-                }
-                if (micAssessment.status === "recording") {
-                  void micAssessment.stopAssessment();
-                  return;
-                }
-                void micAssessment.startAssessment();
-              }}
-              onClearAssessment={micAssessment.clearAssessment}
+              onRunAssessment={openAssessmentWorkflow}
               pitchEditMode={pitchEditMode}
               playback={playback}
               projection={projection}
@@ -1070,14 +1087,32 @@ function AppContent(): JSX.Element {
         teacher={teacher}
       />
 
-      <CalibrationIntroModal
-        isOpen={showCalibrationIntroModal}
-        onClose={() => setShowCalibrationIntroModal(false)}
-        onStartCalibration={() => {
-          setShowCalibrationIntroModal(false);
-          void calibration.startCalibration();
-        }}
-        disabled={calibration.status === "requesting_permission"}
+      <AssessmentWorkflowModal
+        isOpen={showAssessmentWorkflowModal}
+        spec={currentSpecSnapshot ?? spec}
+        targetMelody={currentPatchedMelody}
+        displayNotationMusicXml={displayNotationMusicXml}
+        calibrationStatus={calibration.status}
+        calibrationResult={calibration.result}
+        calibrationError={calibration.errorMessage}
+        assessmentStatus={micAssessment.status}
+        assessmentResult={micAssessment.result}
+        assessmentError={micAssessment.errorMessage}
+        assessmentAccessMessage={assessmentAccess.access.message}
+        assessmentAccessBlocked={!assessmentAccess.access.canRun}
+        debugSemantics={projectedDebugSemantics}
+        selectedNoteIndex={selectedAssessmentNoteIndex}
+        noteOutcomeByIndex={assessmentOutcomeByIndex}
+        climaxNoteIndices={climaxNoteIndices}
+        showDeveloperDebug={teacher.subscriptionIsAdmin}
+        onClose={closeAssessmentWorkflow}
+        onSelectNote={setSelectedAssessmentNoteIndex}
+        onStartCalibration={() => calibration.startCalibration()}
+        onFinishCalibration={() => calibration.stopCalibration()}
+        onClearCalibration={calibration.clearCalibration}
+        onStartAssessment={() => micAssessment.startAssessment()}
+        onFinishAssessment={() => micAssessment.stopAssessment()}
+        onResetWorkflow={resetAssessmentWorkflow}
       />
 
       <MelodyPreferencesModal

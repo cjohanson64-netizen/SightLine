@@ -9,6 +9,7 @@ import { classifyMastery } from "@/SightLine/core/assessment/mastery";
 import {
   buildWeightedAssessmentSummary,
   classifyWeightedAssessmentNoteState,
+  getWeightedAssessmentNoteScore,
 } from "@/SightLine/core/assessmentLogs/scoring";
 import DebugSemanticsPanel from "./DebugSemanticsPanel";
 
@@ -20,7 +21,9 @@ interface AssessmentPanelProps {
   selectedNoteIndex: number | null;
   showDeveloperDebug: boolean;
   onSelectNote: (index: number | null) => void;
-  onClear: () => void;
+  onClear?: () => void;
+  showClearButton?: boolean;
+  className?: string;
 }
 
 function classifyWeightedNoteState(
@@ -52,13 +55,17 @@ function noteOutcome(
   segmented: SegmentedPerformedNote | undefined,
 ): "correct" | "near" | "incorrect" | "ambiguous" {
   const weightedState = classifyWeightedNoteState(note, segmented);
-  if (weightedState === "correct") {
+  if (weightedState === "correct" || weightedState === "in_tune" || weightedState === "tuned") {
     return "correct";
   }
-  if (weightedState === "same_note_off_center") {
-    return "correct";
+  if (
+    weightedState === "loose_center" ||
+    weightedState === "poor_center" ||
+    weightedState === "boundary_cross"
+  ) {
+    return "ambiguous";
   }
-  if (weightedState === "adjacent_semitone") {
+  if (weightedState === "adjacent_close") {
     return "incorrect";
   }
   // transposed_consistent means the system explicitly accepted the note as musically
@@ -101,10 +108,22 @@ function noteStatusLabel(
   if (note?.displayState === "transposed_consistent") {
     return "Consistent key shift";
   }
-  if (note?.displayState === "same_note_off_center") {
-    return "Right note, off-center";
+  if (note?.intonationBand === "in_tune") {
+    return "In tune";
   }
-  if (note?.displayState === "adjacent_semitone") {
+  if (note?.intonationBand === "tuned") {
+    return "Tuned";
+  }
+  if (note?.intonationBand === "loose_center") {
+    return "Loose center";
+  }
+  if (note?.intonationBand === "poor_center") {
+    return "Poor center";
+  }
+  if (note?.intonationBand === "boundary_cross") {
+    return "Boundary cross";
+  }
+  if (note?.intonationBand === "adjacent_close" || note?.displayState === "adjacent_semitone") {
     return "Neighboring semitone";
   }
   const outcome = noteOutcome(note, segmented);
@@ -131,15 +150,19 @@ function describeNote(
   note: PitchAssessmentNote | undefined,
   segmented: SegmentedPerformedNote | undefined,
 ): string {
-  if (note?.displayState === "same_note_off_center") {
-    const cents = Math.abs(note.centerDeviationCents ?? 0);
-    if ((note.centerDeviationCents ?? 0) < 0) {
-      return `You sang the right note, but it sat about ${cents} cents low.`;
-    }
-    return `You sang the right note, but it sat about ${cents} cents high.`;
+  if (note?.intonationBand === "boundary_cross") {
+    return "You crossed into the neighboring semitone, but the pitch center stayed close to the note boundary.";
   }
-  if (note?.displayState === "adjacent_semitone") {
+  if (note?.intonationBand === "adjacent_close" || note?.displayState === "adjacent_semitone") {
     return "You landed on the neighboring semitone instead of the target note.";
+  }
+  if (
+    note?.intonationBand === "in_tune" ||
+    note?.intonationBand === "tuned" ||
+    note?.intonationBand === "loose_center" ||
+    note?.intonationBand === "poor_center"
+  ) {
+    return note.interpretationReason ?? "You sang the right note class.";
   }
   if (note?.isCorrect) {
     return "Correct note.";
@@ -186,6 +209,8 @@ export default function AssessmentPanel({
   showDeveloperDebug,
   onSelectNote,
   onClear,
+  showClearButton = true,
+  className,
 }: AssessmentPanelProps): JSX.Element | null {
   if (status === "idle" && !result && !errorMessage) {
     return null;
@@ -208,9 +233,13 @@ export default function AssessmentPanel({
     ? buildWeightedAssessmentSummary(result)
     : null;
   const mastery = result ? classifyMastery(result.assessment) : null;
+  const selectedWeight =
+    selectedNoteIndex !== null
+      ? getWeightedAssessmentNoteScore(selectedNote, selectedSegmentedNote)
+      : null;
 
   return (
-    <section className="AppAssessmentPanel">
+    <section className={`AppAssessmentPanel${className ? ` ${className}` : ""}`}>
       <div className="AppAssessmentPanelHeader">
         <div>
           <h3>Assessment Results</h3>
@@ -219,7 +248,7 @@ export default function AssessmentPanel({
             <p className="AppAssessmentError">{errorMessage}</p>
           ) : null}
         </div>
-        {(result || errorMessage) && status !== "recording" ? (
+        {showClearButton && onClear && (result || errorMessage) && status !== "recording" ? (
           <button
             type="button"
             className="AppHistoryButton AppProjectionToggleButton"
@@ -333,6 +362,10 @@ export default function AssessmentPanel({
                     ? `${Math.round(selectedSegmentedNote.confidence * 100)}%`
                     : "n/a"}
                 </p>
+                <p className="AppHistoryLabel">
+                  Intonation band: {selectedNote?.intonationBand ?? "n/a"} | Weight:{" "}
+                  {selectedWeight !== null ? selectedWeight.toFixed(2) : "n/a"}
+                </p>
                 {typeof selectedCenterDeviationCents === "number" ? (
                   <p className="AppHistoryLabel">
                     Note center offset:{" "}
@@ -371,15 +404,15 @@ export default function AssessmentPanel({
             <h4>Legend</h4>
             <p className="AppHistoryLabel">
               <span className="AppAssessmentLegendSwatch AppAssessmentLegendSwatch--correct" />{" "}
-              Correct note, same-note intonation drift, or consistent key shift
+              In tune, tuned, or accepted transposed note
             </p>
             <p className="AppHistoryLabel">
               <span className="AppAssessmentLegendSwatch AppAssessmentLegendSwatch--ambiguous" />{" "}
-              Accepted despite unclear signal, or weak signal
+              Loose center, poor center, boundary cross, or uncertain signal
             </p>
             <p className="AppHistoryLabel">
               <span className="AppAssessmentLegendSwatch AppAssessmentLegendSwatch--incorrect" />{" "}
-              Neighboring semitone miss or incorrect note
+              Neighboring semitone hit or incorrect note
             </p>
             <p className="AppHistoryLabel">
               Click any colored note on the staff to inspect it.
@@ -394,6 +427,17 @@ export default function AssessmentPanel({
                   <h4>Target Windows</h4>
                   <ul className="AppAssessmentList">
                     {result.segmentedNotes.map((note, index) => (
+                      (() => {
+                        const assessedNote = result.assessment.notes[index];
+                        const weightedState = classifyWeightedNoteState(
+                          assessedNote,
+                          note,
+                        );
+                        const weightedScore = getWeightedAssessmentNoteScore(
+                          assessedNote,
+                          note,
+                        );
+                        return (
                       <li
                         key={`${note.targetIndex}-${note.windowStartMs}-${index}`}
                       >
@@ -415,6 +459,10 @@ export default function AssessmentPanel({
                         Confidence {note.confidence.toFixed(2)} | Voiced{" "}
                         {note.voicedFrameCount} | Used {note.usedFrameCount}
                         <br />
+                        Note class {assessedNote?.matchKind ?? "n/a"} | Intonation band{" "}
+                        {assessedNote?.intonationBand ?? "n/a"} | Weighted state{" "}
+                        {weightedState} | Weight {weightedScore.toFixed(2)}
+                        <br />
                         Calibration support:{" "}
                         {note.calibrationSupportLevel ?? "none"}
                         {" | trusted: "}
@@ -425,6 +473,8 @@ export default function AssessmentPanel({
                         <br />
                         {note.debugReason}
                       </li>
+                        );
+                      })()
                     ))}
                   </ul>
                 </div>
@@ -621,6 +671,44 @@ export default function AssessmentPanel({
                       ? "yes"
                       : "no"}
                   </p>
+                  <p className="AppHistoryLabel">
+                    Strong repeated bias:{" "}
+                    {result.assessment.globalOffsetCorrection.sessionPitchBias
+                      .strongConsistentBiasDetected
+                      ? "yes"
+                      : "no"}{" "}
+                    | Phrase-level adjustment applied:{" "}
+                    {result.assessment.globalOffsetCorrection.sessionPitchBias
+                      .appliedAsPhraseCorrection
+                      ? "yes"
+                      : "no"}
+                  </p>
+                  <p className="AppHistoryLabel">
+                    Bias-adjusted notes:{" "}
+                    {
+                      result.assessment.globalOffsetCorrection.sessionPitchBias
+                        .appliedNoteCount
+                    }{" "}
+                    (
+                    {Math.round(
+                      result.assessment.globalOffsetCorrection.sessionPitchBias
+                        .appliedSupportRatio * 100,
+                    )}
+                    %) | Median residual:{" "}
+                    {result.assessment.globalOffsetCorrection.sessionPitchBias
+                      .medianResidualCents ?? "n/a"}{" "}
+                    cents
+                  </p>
+                  {result.assessment.globalOffsetCorrection.sessionPitchBias
+                    .scoringImpact ? (
+                    <p className="AppHistoryLabel">
+                      Scoring effect:{" "}
+                      {
+                        result.assessment.globalOffsetCorrection.sessionPitchBias
+                          .scoringImpact
+                      }
+                    </p>
+                  ) : null}
                   {result.assessment.globalOffsetCorrection.acceptedReason ? (
                     <p className="AppHistoryLabel">
                       Accepted because:{" "}

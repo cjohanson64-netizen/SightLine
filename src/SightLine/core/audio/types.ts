@@ -54,6 +54,9 @@ export interface SegmentedPerformedNote {
   calibrationSupportedLocalEvidence: boolean;
   calibrationSupportLevel: 'strong' | 'weak' | 'rejected' | null;
   calibrationSupportReason: string | null;
+  vibratoAwareCenterApplied: boolean;
+  rawPitchCenter: number | null;
+  vibratoTrimmedFrameCount: number;
   status: SegmentedNoteStatus;
   debugReason: string;
 }
