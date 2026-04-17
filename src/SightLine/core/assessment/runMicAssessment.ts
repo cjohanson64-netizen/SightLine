@@ -6,6 +6,7 @@ import { detectPitchFrames } from '../audio/detectPitchFrames';
 import { segmentPerformedMelody } from '../audio/segmentPerformedMelody';
 import type { MicAssessmentRunResult } from '../audio/types';
 import { evaluateMelodyAssessment } from './evaluateMelodyAssessment';
+import { selectAssessmentTonalFrame } from './selectAssessmentTonalFrame';
 import { buildAssessmentScoreSummary } from '../assessmentLogs/scoring';
 
 interface RunMicAssessmentInput {
@@ -70,9 +71,25 @@ function isWeakWindowCandidate(note: MicAssessmentRunResult['segmentedNotes'][nu
     note.status === 'ambiguous' ||
     note.targetConsistentAmbiguity ||
     note.usedFrameCount <= 1 ||
-    note.confidence < 0.5 ||
-    (note.usedFrameCount <= 2 && note.confidence < 0.64) ||
-    (note.usedFrameCount <= 2 && spread > 1.1)
+    note.confidence < 0.58 ||
+    (note.usedFrameCount <= 2 && note.confidence < 0.68) ||
+    (note.usedFrameCount <= 3 && spread > 1.25)
+  );
+}
+
+function hasMusicallyUsableWeakEvidence(
+  note: MicAssessmentRunResult['segmentedNotes'][number] | undefined,
+): boolean {
+  if (!note || note.midi === null || note.pitchCenter === null) {
+    return false;
+  }
+
+  const spread = note.stablePitchSpread ?? note.pitchSpread ?? Number.POSITIVE_INFINITY;
+  return (
+    note.confidence >= 0.43 &&
+    (note.usedFrameCount >= 2 || note.voicedFrameCount >= 3) &&
+    spread <= 1.3 &&
+    (note.targetConsistentAmbiguity || (note.dominantBucketStrength ?? 0) >= 0.4)
   );
 }
 
@@ -81,28 +98,69 @@ function applyWeakWindowInterpretation(
   segmentedNotes: MicAssessmentRunResult['segmentedNotes'],
 ): MicAssessmentRunResult['assessment'] {
   const notes = assessment.notes.map((note) => ({ ...note }));
+  const OFF_CENTER_CENTS_THRESHOLD = 18;
 
   notes.forEach((note, index) => {
-    if (note.correctnessLocked || note.absDelta === 0) {
-      note.displayState = 'correct';
-      note.weakWindowProtectionApplied = false;
-      note.isolatedErrorSoftened = false;
-      note.interpretationReason = null;
-      return;
-    }
-
-    if (note.matchKind === 'near') {
-      note.displayState = 'near';
-      return;
-    }
+    const segmented = segmentedNotes[index];
+    const centerDeviationCents =
+      typeof segmented?.pitchCenter === 'number' &&
+      typeof note.comparisonTargetMidi === 'number'
+        ? Math.round((segmented.pitchCenter - note.comparisonTargetMidi) * 100)
+        : null;
+    note.centerDeviationCents = centerDeviationCents;
 
     if (note.displayState === 'transposed_consistent') {
       note.weakWindowProtectionApplied = false;
       note.isolatedErrorSoftened = false;
+      note.interpretationReason =
+        note.interpretationReason ??
+        'This note was accepted because the phrase stayed consistent in a shifted key center.';
       return;
     }
 
-    const segmented = segmentedNotes[index];
+    if (note.correctnessLocked || note.absDelta === 0) {
+      const sameNoteOffCenter =
+        centerDeviationCents !== null &&
+        Math.abs(centerDeviationCents) >= OFF_CENTER_CENTS_THRESHOLD;
+      note.displayState = sameNoteOffCenter ? 'same_note_off_center' : 'correct';
+      note.weakWindowProtectionApplied = false;
+      note.isolatedErrorSoftened = false;
+      note.interpretationReason = sameNoteOffCenter
+        ? centerDeviationCents < 0
+          ? 'You sang the right note, but the center sat a little low.'
+          : 'You sang the right note, but the center sat a little high.'
+        : null;
+      return;
+    }
+
+    if (note.matchKind === 'adjacent_semitone') {
+      // A rounded MIDI of ±1 from target doesn't always mean the singer landed on the
+      // wrong pitch class. The continuous pitch center can drift 50–65 cents from the
+      // target and still represent the correct note sung slightly out of tune. Only treat
+      // this as a true semitone error when the center clearly crossed into adjacent
+      // territory (>65 cents from target). Below that, call it same_note_off_center so
+      // normal intonation variation doesn't carry the same weight as a genuine pitch miss.
+      const nearBoundary =
+        centerDeviationCents !== null && Math.abs(centerDeviationCents) <= 65;
+
+      if (nearBoundary) {
+        note.displayState = 'same_note_off_center';
+        note.interpretationReason =
+          centerDeviationCents < 0
+            ? 'You sang the right note, but the center sat a little low.'
+            : 'You sang the right note, but the center sat a little high.';
+      } else {
+        note.displayState = 'adjacent_semitone';
+        note.interpretationReason =
+          note.scoringDelta === -1
+            ? 'You landed on the neighboring lower semitone instead of the target note.'
+            : note.scoringDelta === 1
+              ? 'You landed on the neighboring higher semitone instead of the target note.'
+              : 'You landed on a neighboring semitone instead of the target note.';
+      }
+      return;
+    }
+
     const weakWindow =
       (note.absDelta ?? Number.POSITIVE_INFINITY) >= 1 &&
       isWeakWindowCandidate(segmented);
@@ -120,7 +178,7 @@ function applyWeakWindowInterpretation(
       note.displayState =
         segmented?.status === 'weak' ||
         segmented?.usedFrameCount <= 1 ||
-        (segmented?.confidence ?? 1) < 0.5
+        (segmented?.confidence ?? 1) < 0.46
           ? 'low_confidence'
           : 'ambiguous';
       note.weakWindowProtectionApplied = true;
@@ -130,9 +188,20 @@ function applyWeakWindowInterpretation(
           : 'Window evidence was unstable, so the miss was softened instead of treated as fully incorrect.';
     }
 
+    if (
+      !weakWindow &&
+      (note.absDelta ?? Number.POSITIVE_INFINITY) >= 1 &&
+      hasMusicallyUsableWeakEvidence(segmented)
+    ) {
+      note.displayState = 'ambiguous';
+      note.weakWindowProtectionApplied = true;
+      note.interpretationReason =
+        'Pitch evidence was breathy or lightly focused, but still musically usable enough that this note was softened instead of treated as a hard miss.';
+    }
+
     if (isolatedWeakMiss) {
       note.displayState =
-        (segmented?.confidence ?? 1) < 0.58 || (segmented?.usedFrameCount ?? 99) <= 1
+        (segmented?.confidence ?? 1) < 0.5 || (segmented?.usedFrameCount ?? 99) <= 1
           ? 'low_confidence'
           : 'ambiguous';
       note.weakWindowProtectionApplied = true;
@@ -172,9 +241,9 @@ function buildPerformanceValidity(
   const unstableWindowCount = segmentedNotes.filter(
     (note) =>
       note.status === 'missing' ||
-      note.status === 'weak' ||
-      note.status === 'ambiguous' ||
-      note.confidence < 0.5
+      (note.status === 'weak' && !hasMusicallyUsableWeakEvidence(note)) ||
+      (note.status === 'ambiguous' && !note.targetConsistentAmbiguity) ||
+      note.confidence < 0.42
   ).length;
   const coverage = usableDetectedNotes / targetNotes;
   const weakRatio = unstableWindowCount / targetNotes;
@@ -279,7 +348,18 @@ export async function runMicAssessment(
     throw new Error("I couldn't segment any stable sung notes from that recording.");
   }
 
-  const { alignedMelody, targetIndices } = alignPerformedToTarget(segmentedNotes, input.targetMelody);
+  const tonalFrameSelection = selectAssessmentTonalFrame({
+    writtenTargetMelody: input.targetMelody,
+    segmentedNotes,
+    mode: input.mode,
+    calibrationProfile: usableCalibrationProfile,
+  });
+  const {
+    selectedAlignedMelody: alignedMelody,
+    selectedTargetIndices: targetIndices,
+    selectedTargetMelody,
+    analysis: tonalFrameAnalysis,
+  } = tonalFrameSelection;
 
   if (alignedMelody.length === 0) {
     throw new Error('No performed melody could be aligned to the target phrase.');
@@ -305,9 +385,14 @@ export async function runMicAssessment(
   if (usableCalibrationProfile) {
     warnings.push('Full-scale calibration was used as a soft listening guide for this assessment.');
   }
+  if (tonalFrameAnalysis.selectedKind === 'calibration_transposed') {
+    warnings.push(
+      `Assessment matched a calibration-informed target shifted by ${tonalFrameAnalysis.selectedSemitoneOffset > 0 ? '+' : ''}${tonalFrameAnalysis.selectedSemitoneOffset} semitone${Math.abs(tonalFrameAnalysis.selectedSemitoneOffset) === 1 ? '' : 's'}.`
+    );
+  }
 
   const rawAssessment = evaluateMelodyAssessment({
-    targetMelody: input.targetMelody,
+    targetMelody: selectedTargetMelody,
     performedMelody: alignedMelody,
     performedDurationsMs: segmentedNotes.map((note) =>
       note.midi !== null && note.durationMs > 0 ? note.durationMs : null
@@ -320,13 +405,13 @@ export async function runMicAssessment(
     ),
     performedWindowStatuses: segmentedNotes.map((note) => note.status),
     mode: input.mode,
-    calibrationOffsetHint: effectiveCalibrationOffset,
+    calibrationOffsetHint: null,
     calibrationSignalQuality: input.calibrationProfile?.signalQuality ?? null,
   });
-  const interpretedAssessment = applyWeakWindowInterpretation(
-    rawAssessment,
-    segmentedNotes,
-  );
+  const interpretedAssessment = applyWeakWindowInterpretation({
+    ...rawAssessment,
+    tonalFrame: tonalFrameAnalysis,
+  }, segmentedNotes);
   const scoredAssessment = {
     ...interpretedAssessment,
     scores: buildAssessmentScoreSummary({

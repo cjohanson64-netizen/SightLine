@@ -55,20 +55,23 @@ function noteOutcome(
   if (weightedState === "correct") {
     return "correct";
   }
-  if (weightedState === "near") {
-    return "near";
+  if (weightedState === "same_note_off_center") {
+    return "correct";
+  }
+  if (weightedState === "adjacent_semitone") {
+    return "incorrect";
   }
   // transposed_consistent means the system explicitly accepted the note as musically
   // coherent (e.g. consistent interval pattern in a shifted tonal frame). That is a
-  // positive outcome — show it in the same green tier as "near", not as a warning.
+  // positive outcome — show it in the same green tier as other accepted notes.
   if (weightedState === "transposed_consistent") {
-    return "near";
+    return "correct";
   }
   // targetConsistentAmbiguity means the signal was ambiguous but the ambiguous pitch
   // matched what was expected — the system accepted it. Show it green alongside other
   // accepted notes, not amber alongside genuinely unclear ones.
   if (segmented?.targetConsistentAmbiguity) {
-    return "near";
+    return "correct";
   }
   if (weightedState === "low_confidence" || weightedState === "ambiguous") {
     return "ambiguous";
@@ -98,12 +101,15 @@ function noteStatusLabel(
   if (note?.displayState === "transposed_consistent") {
     return "Consistent key shift";
   }
+  if (note?.displayState === "same_note_off_center") {
+    return "Right note, off-center";
+  }
+  if (note?.displayState === "adjacent_semitone") {
+    return "Neighboring semitone";
+  }
   const outcome = noteOutcome(note, segmented);
   if (outcome === "correct") {
     return "Correct";
-  }
-  if (outcome === "near") {
-    return "Slightly off";
   }
   // Distinguish the two reasons a note can land in the amber tier:
   // - targetConsistentAmbiguity: signal was ambiguous but the pitch matched — accepted, not failed
@@ -125,17 +131,18 @@ function describeNote(
   note: PitchAssessmentNote | undefined,
   segmented: SegmentedPerformedNote | undefined,
 ): string {
+  if (note?.displayState === "same_note_off_center") {
+    const cents = Math.abs(note.centerDeviationCents ?? 0);
+    if ((note.centerDeviationCents ?? 0) < 0) {
+      return `You sang the right note, but it sat about ${cents} cents low.`;
+    }
+    return `You sang the right note, but it sat about ${cents} cents high.`;
+  }
+  if (note?.displayState === "adjacent_semitone") {
+    return "You landed on the neighboring semitone instead of the target note.";
+  }
   if (note?.isCorrect) {
     return "Correct note.";
-  }
-  if (note?.matchKind === "near") {
-    if (note.scoringDelta === -1) {
-      return "You sang this slightly too low.";
-    }
-    if (note.scoringDelta === 1) {
-      return "You sang this slightly too high.";
-    }
-    return "This note was slightly off.";
   }
   if (
     segmented?.status === "ambiguous" &&
@@ -192,6 +199,7 @@ export default function AssessmentPanel({
     result && selectedNoteIndex !== null
       ? result.segmentedNotes[selectedNoteIndex]
       : undefined;
+  const selectedCenterDeviationCents = selectedNote?.centerDeviationCents ?? null;
   const selectedOutcome =
     selectedNoteIndex !== null
       ? noteOutcome(selectedNote, selectedSegmentedNote)
@@ -325,6 +333,13 @@ export default function AssessmentPanel({
                     ? `${Math.round(selectedSegmentedNote.confidence * 100)}%`
                     : "n/a"}
                 </p>
+                {typeof selectedCenterDeviationCents === "number" ? (
+                  <p className="AppHistoryLabel">
+                    Note center offset:{" "}
+                    {selectedCenterDeviationCents > 0 ? "+" : ""}
+                    {selectedCenterDeviationCents} cents
+                  </p>
+                ) : null}
                 {selectedNote?.globalOffsetCorrectionApplied &&
                 selectedNote.appliedGlobalOffset !== null ? (
                   <p className="AppHistoryLabel">
@@ -356,7 +371,7 @@ export default function AssessmentPanel({
             <h4>Legend</h4>
             <p className="AppHistoryLabel">
               <span className="AppAssessmentLegendSwatch AppAssessmentLegendSwatch--correct" />{" "}
-              Correct, slightly off, or consistent key shift
+              Correct note, same-note intonation drift, or consistent key shift
             </p>
             <p className="AppHistoryLabel">
               <span className="AppAssessmentLegendSwatch AppAssessmentLegendSwatch--ambiguous" />{" "}
@@ -364,7 +379,7 @@ export default function AssessmentPanel({
             </p>
             <p className="AppHistoryLabel">
               <span className="AppAssessmentLegendSwatch AppAssessmentLegendSwatch--incorrect" />{" "}
-              Incorrect note
+              Neighboring semitone miss or incorrect note
             </p>
             <p className="AppHistoryLabel">
               Click any colored note on the staff to inspect it.
@@ -446,7 +461,64 @@ export default function AssessmentPanel({
                 ) : null}
 
                 <div className="AppAssessmentCard">
+                  <h4>Tonal Frame</h4>
+                  <p className="AppHistoryLabel">
+                    Selected frame: {result.assessment.tonalFrame.selectedLabel} |
+                    Offset:{" "}
+                    {result.assessment.tonalFrame.selectedSemitoneOffset > 0
+                      ? "+"
+                      : ""}
+                    {result.assessment.tonalFrame.selectedSemitoneOffset}
+                  </p>
+                  <p className="AppHistoryLabel">
+                    Calibration proposed:{" "}
+                    {result.assessment.tonalFrame.calibrationProposedOffset ===
+                    null
+                      ? "none"
+                      : `${result.assessment.tonalFrame.calibrationProposedOffset > 0 ? "+" : ""}${result.assessment.tonalFrame.calibrationProposedOffset}`}{" "}
+                    | Used calibration profile:{" "}
+                    {result.assessment.tonalFrame.usedCalibrationProfile
+                      ? "yes"
+                      : "no"}
+                  </p>
+                  {result.assessment.tonalFrame.rationale.map((reason, index) => (
+                    <p
+                      key={`tonal-frame-rationale-${index}`}
+                      className="AppHistoryLabel"
+                    >
+                      {reason}
+                    </p>
+                  ))}
+                  {result.assessment.tonalFrame.candidates.length > 0 ? (
+                    <ul className="AppAssessmentList">
+                      {result.assessment.tonalFrame.candidates.map((candidate) => (
+                        <li key={`tonal-frame-candidate-${candidate.kind}`}>
+                          {candidate.label}: pitch {candidate.pitchScore}% |
+                          local {(candidate.localPitchFit * 100).toFixed(0)}% |
+                          structural {(candidate.structuralFit * 100).toFixed(0)}% |
+                          interval {(candidate.intervalFit * 100).toFixed(0)}% |
+                          contour {(candidate.contourFit * 100).toFixed(0)}% |
+                          cadence {(candidate.cadenceFit * 100).toFixed(0)}% |
+                          rescue {(candidate.rescuePressure * 100).toFixed(0)}% |
+                          total {(candidate.totalScore * 100).toFixed(0)}% |
+                          accepted {candidate.accepted ? "yes" : "no"}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+
+                <div className="AppAssessmentCard">
                   <h4>Phrase Offset</h4>
+                  <p className="AppHistoryLabel">
+                    Global relationship: {result.assessment.summary.globalRelationship}
+                    {result.assessment.summary.transpositionSemitoneOffset !== null
+                      ? ` | Semitone offset: ${result.assessment.summary.transpositionSemitoneOffset > 0 ? "+" : ""}${result.assessment.summary.transpositionSemitoneOffset}`
+                      : ""}
+                    {result.assessment.summary.transpositionPitchClassOffset !== null
+                      ? ` | Pitch-class offset: ${result.assessment.summary.transpositionPitchClassOffset}`
+                      : ""}
+                  </p>
                   <p className="AppHistoryLabel">
                     Candidate offset:{" "}
                     {result.assessment.globalOffsetCorrection.candidateOffset ??
@@ -478,6 +550,27 @@ export default function AssessmentPanel({
                     {result.assessment.globalOffsetCorrection
                       .calibrationOffsetHint ?? "none"}
                   </p>
+                  {result.assessment.globalOffsetCorrection.consideredCandidates
+                    .length > 0 ? (
+                    <ul className="AppAssessmentList">
+                      {result.assessment.globalOffsetCorrection.consideredCandidates.map(
+                        (candidate) => (
+                          <li key={`offset-candidate-${candidate.offset}`}>
+                            Offset {candidate.offset > 0 ? "+" : ""}
+                            {candidate.offset}: exact {candidate.exactSupportCount} | support{" "}
+                            {candidate.supportCount} (
+                            {Math.round(candidate.supportRatio * 100)}%) | corrected avg{" "}
+                            {Math.round(candidate.correctedAverageScore * 100)}% | improvement{" "}
+                            {candidate.improvement.toFixed(2)} | accepted{" "}
+                            {candidate.accepted ? "yes" : "no"}
+                            {candidate.rejectedReason
+                              ? ` | ${candidate.rejectedReason}`
+                              : ""}
+                          </li>
+                        ),
+                      )}
+                    </ul>
+                  ) : null}
                   <p className="AppHistoryLabel">
                     Raw fit:{" "}
                     {result.assessment.globalOffsetCorrection.rawScore.toFixed(
@@ -588,7 +681,7 @@ export default function AssessmentPanel({
                             {result.alignedTargetIndices[index] + 1}
                             {typeof assessedNote?.normalizedExpectedMidi ===
                             "number"
-                              ? ` | raw expected ${assessedNote.rawNormalizedExpectedMidi ?? "n/a"} | raw delta ${assessedNote.rawScoringDelta ?? "n/a"} | corrected expected ${assessedNote.normalizedExpectedMidi} | corrected delta ${assessedNote.scoringDelta ?? "n/a"} | abs delta ${assessedNote.absDelta ?? "n/a"} | normalized ${assessedNote.normalizedScoringUsed ? "yes" : "no"} | tolerance ${assessedNote.toleranceApplied ? "yes" : "no"} | correctness locked ${assessedNote.correctnessLocked ? "yes" : "no"}`
+                              ? ` | match ${assessedNote.matchKind} | display ${assessedNote.displayState} | raw expected ${assessedNote.rawNormalizedExpectedMidi ?? "n/a"} | raw delta ${assessedNote.rawScoringDelta ?? "n/a"} | corrected expected ${assessedNote.normalizedExpectedMidi} | corrected delta ${assessedNote.scoringDelta ?? "n/a"} | abs delta ${assessedNote.absDelta ?? "n/a"} | center deviation ${assessedNote.centerDeviationCents ?? "n/a"} cents | normalized ${assessedNote.normalizedScoringUsed ? "yes" : "no"} | tolerance ${assessedNote.toleranceApplied ? "yes" : "no"} | correctness locked ${assessedNote.correctnessLocked ? "yes" : "no"}`
                               : ""}
                             {assessedNote?.globalOffsetCorrectionApplied
                               ? ` | phrase offset ${assessedNote.appliedGlobalOffset ?? "n/a"}`
@@ -765,6 +858,21 @@ export default function AssessmentPanel({
                       : "no"}
                   </p>
                   <p className="AppHistoryLabel">
+                    Strong pitch ratio:{" "}
+                    {Math.round(
+                      (mastery?.explanationSignals.strongPitchRatio ?? 0) * 100,
+                    )}
+                    % | Softened acceptance ratio:{" "}
+                    {Math.round(
+                      (mastery?.explanationSignals.softenedAcceptanceRatio ?? 0) *
+                        100,
+                    )}
+                    % | Contour without pitch:{" "}
+                    {mastery?.explanationSignals.contourSupportWithoutPitch
+                      ? "yes"
+                      : "no"}
+                  </p>
+                  <p className="AppHistoryLabel">
                     Contour recognizable:{" "}
                     {mastery?.explanationSignals.contourRecognizable
                       ? "yes"
@@ -773,8 +881,21 @@ export default function AssessmentPanel({
                     {mastery?.explanationSignals.tonalDriftButConsistent
                       ? "yes"
                       : "no"}{" "}
+                    | Capped by pitch floor:{" "}
+                    {mastery?.cappedByPitchFloor ? "yes" : "no"}{" "}
                     | Explanation only:{" "}
                     {mastery?.explanationUsesRubricTextOnly ? "yes" : "no"}
+                  </p>
+                  {mastery?.capReason ? (
+                    <p className="AppHistoryLabel">
+                      Cap reason: {mastery.capReason}
+                    </p>
+                  ) : null}
+                  <p className="AppHistoryLabel">
+                    Final mastery band: {mastery?.level ?? "n/a"} (
+                    {mastery?.label ?? "n/a"}) | Final mastery %
+                    {" "}
+                    {mastery?.percentage ?? "n/a"}
                   </p>
                 </div>
 

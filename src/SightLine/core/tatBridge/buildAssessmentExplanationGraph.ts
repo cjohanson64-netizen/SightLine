@@ -70,15 +70,27 @@ function ensureOutcomeNodes(graph: Graph): void {
 }
 
 function toExplanationOutcome(note: PitchAssessmentNote): AssessmentExplanationOutcome {
-  if (note.displayState === 'correct' || note.matchKind === 'exact' || note.isCorrect) {
+  if (
+    note.displayState === 'correct' ||
+    note.displayState === 'same_note_off_center' ||
+    note.matchKind === 'exact' ||
+    note.isCorrect
+  ) {
     return 'correct';
   }
 
-  if (note.displayState === 'near' || note.matchKind === 'near') {
+  if (
+    note.displayState === 'transposed_consistent'
+  ) {
     return 'near_pitch';
   }
 
-  if (note.displayState === 'incorrect' || note.matchKind === 'incorrect') {
+  if (
+    note.displayState === 'adjacent_semitone' ||
+    note.displayState === 'incorrect' ||
+    note.matchKind === 'adjacent_semitone' ||
+    note.matchKind === 'incorrect'
+  ) {
     return 'incorrect_pitch';
   }
 

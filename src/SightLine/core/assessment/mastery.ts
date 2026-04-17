@@ -12,6 +12,9 @@ export interface MasteryExplanationSignals {
   flowMostlySteady: boolean;
   contourRecognizable: boolean;
   tonalDriftButConsistent: boolean;
+  strongPitchRatio: number;
+  softenedAcceptanceRatio: number;
+  contourSupportWithoutPitch: boolean;
 }
 
 export interface MasteryClassification {
@@ -21,6 +24,8 @@ export interface MasteryClassification {
   explanation: string;
   explanationSignals: MasteryExplanationSignals;
   explanationUsesRubricTextOnly: boolean;
+  cappedByPitchFloor: boolean;
+  capReason: string | null;
 }
 
 export const MASTERY_SCALE: MasteryScaleEntry[] = [
@@ -77,14 +82,40 @@ function buildMasteryExplanationSignals(
         ? 0
         : 1;
 
+  const pitchEvidenceTotal = Math.max(1, result.summary.targetNoteCount);
+  const strongPitchCredits = result.notes.reduce((sum, note) => {
+    if (note.displayState === 'correct' || note.displayState === 'transposed_consistent') {
+      return sum + 1;
+    }
+    if (note.displayState === 'same_note_off_center') {
+      return sum + 0.98;
+    }
+    return sum;
+  }, 0);
+  const softenedAcceptanceCount = result.notes.filter(
+    (note) =>
+      note.displayState === 'ambiguous' ||
+      note.displayState === 'low_confidence' ||
+      note.weakWindowProtectionApplied ||
+      note.intervalRecoveryApplied,
+  ).length;
+  const strongPitchRatio = strongPitchCredits / pitchEvidenceTotal;
+  const softenedAcceptanceRatio = softenedAcceptanceCount / pitchEvidenceTotal;
+  const contourRecognizable =
+    contourAccuracy >= 0.6 || result.summary.contourFullyCorrect;
+
   return {
-    pitchMostlyCorrect: result.scores.pitchScore >= 78,
+    pitchMostlyCorrect:
+      result.scores.pitchScore >= 78 && strongPitchRatio >= 0.68,
     rhythmMostlyCorrect: result.scores.rhythmScore >= 72,
     flowMostlySteady: result.rhythm.flow.score >= 0.62,
-    contourRecognizable: contourAccuracy >= 0.6 || result.summary.contourFullyCorrect,
+    contourRecognizable,
     tonalDriftButConsistent:
       result.tonalState.kind === 'recentered_new_tonic' &&
       result.tonalState.structuralConsistency.stronglyConsistent,
+    strongPitchRatio: clampPercentage(strongPitchRatio * 100) / 100,
+    softenedAcceptanceRatio: clampPercentage(softenedAcceptanceRatio * 100) / 100,
+    contourSupportWithoutPitch: contourRecognizable && strongPitchRatio < 0.68,
   };
 }
 
@@ -123,17 +154,77 @@ function buildMasteryExplanation(
   return 'Pitch, rhythm, and flow showed some partial success, but the phrase still needs support.';
 }
 
+function applyMasteryPitchFloor(
+  mappedLevel: number,
+  signals: MasteryExplanationSignals,
+): { level: number; reason: string | null } {
+  if (mappedLevel < 3.5) {
+    return { level: mappedLevel, reason: null };
+  }
+
+  if (mappedLevel >= 4.0) {
+    if (signals.strongPitchRatio < 0.5) {
+      return {
+        level: 2.0,
+        reason:
+          'Top mastery was capped because contour and flow were present, but strong pitch success was too low.',
+      };
+    }
+    if (signals.strongPitchRatio < 0.68 || signals.softenedAcceptanceRatio > 0.34) {
+      return {
+        level: 2.5,
+        reason:
+          'Top mastery was capped because too much of the phrase depended on softened or uncertain pitch acceptance.',
+      };
+    }
+    if (signals.strongPitchRatio < 0.8 || signals.softenedAcceptanceRatio > 0.2) {
+      return {
+        level: 3.5,
+        reason:
+          'Top mastery was capped until more notes were supported by strong pitch evidence.',
+      };
+    }
+  }
+
+  if (mappedLevel >= 3.5) {
+    if (signals.strongPitchRatio < 0.55) {
+      return {
+        level: 2.5,
+        reason:
+          'Upper mastery was capped because contour support outweighed strong pitch evidence.',
+      };
+    }
+    if (signals.strongPitchRatio < 0.68 || signals.softenedAcceptanceRatio > 0.34) {
+      return {
+        level: 3.0,
+        reason:
+          'Upper mastery was capped because too many notes were only softly accepted.',
+      };
+    }
+  }
+
+  return { level: mappedLevel, reason: null };
+}
+
 export function classifyMastery(result: MelodyAssessmentResult): MasteryClassification {
   const melodicPercentage = clampPercentage(result.scores.melodicScore);
   const mastery = percentageToMastery(melodicPercentage);
   const explanationSignals = buildMasteryExplanationSignals(result);
+  const capped = applyMasteryPitchFloor(mastery.level, explanationSignals);
+  const finalLevel = capped.level;
+  const finalLabel = masteryLevelToLabel(finalLevel);
+  const finalPercentage =
+    MASTERY_SCALE.find((entry) => entry.level === finalLevel)?.percentage ??
+    mastery.percentage;
 
   return {
-    level: mastery.level,
-    label: mastery.label,
-    percentage: mastery.percentage,
+    level: finalLevel,
+    label: finalLabel,
+    percentage: finalPercentage,
     explanation: buildMasteryExplanation(result, explanationSignals),
     explanationSignals,
     explanationUsesRubricTextOnly: true,
+    cappedByPitchFloor: capped.reason !== null,
+    capReason: capped.reason,
   };
 }

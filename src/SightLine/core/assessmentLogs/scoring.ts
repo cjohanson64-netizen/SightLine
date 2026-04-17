@@ -7,7 +7,8 @@ function roundFit(value: number): number {
 
 export type WeightedAssessmentNoteState =
   | 'correct'
-  | 'near'
+  | 'same_note_off_center'
+  | 'adjacent_semitone'
   | 'transposed_consistent'
   | 'low_confidence'
   | 'ambiguous'
@@ -15,7 +16,8 @@ export type WeightedAssessmentNoteState =
 
 export interface WeightedAssessmentScoreWeights {
   correct: number;
-  near: number;
+  same_note_off_center: number;
+  adjacent_semitone: number;
   transposed_consistent: number;
   low_confidence: number;
   ambiguous: number;
@@ -24,10 +26,11 @@ export interface WeightedAssessmentScoreWeights {
 
 export const DEFAULT_WEIGHTED_ASSESSMENT_SCORE_WEIGHTS: WeightedAssessmentScoreWeights = {
   correct: 1,
-  near: 1,
-  transposed_consistent: 0.95,
-  low_confidence: 0.95,
-  ambiguous: 0.85,
+  same_note_off_center: 0.98,
+  adjacent_semitone: 0.55,
+  transposed_consistent: 0.93,
+  low_confidence: 0.7,
+  ambiguous: 0.62,
   incorrect: 0,
 };
 
@@ -39,7 +42,8 @@ export interface WeightedAssessmentSummary {
   percentage: number;
   counts: {
     correct: number;
-    near: number;
+    same_note_off_center: number;
+    adjacent_semitone: number;
     transposed_consistent: number;
     low_confidence: number;
     ambiguous: number;
@@ -66,8 +70,11 @@ export function classifyWeightedAssessmentNoteState(
   if (note?.displayState === 'correct') {
     return 'correct';
   }
-  if (note?.displayState === 'near') {
-    return 'near';
+  if (note?.displayState === 'same_note_off_center') {
+    return 'same_note_off_center';
+  }
+  if (note?.displayState === 'adjacent_semitone') {
+    return 'adjacent_semitone';
   }
   if (note?.displayState === 'transposed_consistent') {
     return 'transposed_consistent';
@@ -80,6 +87,9 @@ export function classifyWeightedAssessmentNoteState(
   }
   if (note?.isCorrect) {
     return 'correct';
+  }
+  if (note?.matchKind === 'adjacent_semitone') {
+    return 'adjacent_semitone';
   }
   if (segmented?.status === 'weak') {
     return 'low_confidence';
@@ -119,8 +129,10 @@ export function getWeightedAssessmentNoteScore(
   switch (state) {
     case 'correct':
       return Math.max(weights.correct, intervalRecoveryCredit);
-    case 'near':
-      return Math.max(weights.near, intervalRecoveryCredit);
+    case 'same_note_off_center':
+      return Math.max(weights.same_note_off_center, intervalRecoveryCredit);
+    case 'adjacent_semitone':
+      return Math.max(weights.adjacent_semitone, intervalRecoveryCredit);
     case 'transposed_consistent':
       return Math.max(weights.transposed_consistent, intervalRecoveryCredit);
     case 'low_confidence':
@@ -148,7 +160,8 @@ export function buildWeightedAssessmentSummaryFromAssessment(
 ): WeightedAssessmentSummary {
   const counts = {
     correct: 0,
-    near: 0,
+    same_note_off_center: 0,
+    adjacent_semitone: 0,
     transposed_consistent: 0,
     low_confidence: 0,
     ambiguous: 0,
@@ -180,7 +193,8 @@ export function buildWeightedAssessmentSummaryFromAssessment(
     contourComparableCount > 0
       ? input.assessment.summary.contourCorrectCount / contourComparableCount
       : 0;
-  const nearRatio = totalPossible > 0 ? counts.near / totalPossible : 0;
+  const sameNoteOffCenterRatio =
+    totalPossible > 0 ? counts.same_note_off_center / totalPossible : 0;
   const ambiguousRatio = totalPossible > 0 ? counts.ambiguous / totalPossible : 0;
   const incorrectRatio = totalPossible > 0 ? counts.incorrect / totalPossible : 0;
   const largeErrorRatio =
@@ -193,19 +207,19 @@ export function buildWeightedAssessmentSummaryFromAssessment(
     incorrectRatio <= 0.35 &&
     largeErrorRatio <= 0.28;
   const nearMatchPhraseBoost =
-    phraseStable && nearRatio >= 0.3
-      ? Math.min(0.3, counts.near * 0.02)
+    phraseStable && sameNoteOffCenterRatio >= 0.3
+      ? Math.min(0.18, counts.same_note_off_center * 0.01)
       : 0;
   const mildSessionBias =
     input.assessment.globalOffsetCorrection.sessionPitchBias.treatedAsBias &&
     Math.abs(input.assessment.globalOffsetCorrection.sessionPitchBias.offset ?? 0) === 1 &&
     input.assessment.globalOffsetCorrection.phraseAlreadyMostlyAcceptable;
   const sessionBiasBoost =
-    mildSessionBias && counts.near >= 2
+    mildSessionBias && counts.same_note_off_center >= 2
       ? Math.min(
-          0.18,
-          counts.near *
-            0.01 *
+          0.08,
+          counts.same_note_off_center *
+            0.005 *
             Math.max(0.5, input.assessment.globalOffsetCorrection.sessionPitchBias.confidence)
         )
       : 0;

@@ -4,7 +4,7 @@ import { readAssessmentUsageCount } from './trackAssessmentUsage';
 export const FREE_ASSESSMENTS_PER_DAY = 3;
 // Temporary switch: leave usage counting intact, but disable free-tier blocking for today.
 // Flip back to `true` to restore the daily assessment limit.
-const ENFORCE_DAILY_FREE_ASSESSMENT_LIMIT = true;
+const ENFORCE_DAILY_FREE_ASSESSMENT_LIMIT = false;
 
 interface GetAssessmentAccessInput {
   identityKey: string;

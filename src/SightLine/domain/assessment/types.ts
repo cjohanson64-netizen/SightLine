@@ -2,10 +2,16 @@ import type { MelodyEvent } from '@/SightLine/domain/music';
 
 export type ContourDirection = 'up' | 'down' | 'same';
 export type AssessmentComparisonMode = 'literal' | 'octave_flexible' | 'transposition_aware';
-export type PitchMatchKind = 'exact' | 'near' | 'ambiguous' | 'incorrect' | 'missing';
+export type PitchMatchKind =
+  | 'exact'
+  | 'adjacent_semitone'
+  | 'ambiguous'
+  | 'incorrect'
+  | 'missing';
 export type PitchAssessmentDisplayState =
   | 'correct'
-  | 'near'
+  | 'same_note_off_center'
+  | 'adjacent_semitone'
   | 'incorrect'
   | 'ambiguous'
   | 'low_confidence'
@@ -76,6 +82,7 @@ export interface PitchAssessmentNote {
   normalizedScoringUsed: boolean;
   comparisonTargetMidi: number | null;
   comparisonSemitoneDelta: number | null;
+  centerDeviationCents: number | null;
   isCorrect: boolean;
   displayState: PitchAssessmentDisplayState;
   weakWindowProtectionApplied: boolean;
@@ -103,6 +110,17 @@ export interface GlobalOffsetCorrectionAnalysis {
   phraseAlreadyMostlyAcceptable: boolean;
   acceptedReason: string | null;
   rejectedReason: string | null;
+  consideredCandidates: Array<{
+    offset: number;
+    exactSupportCount: number;
+    supportCount: number;
+    supportRatio: number;
+    correctedAverageScore: number;
+    improvement: number;
+    calibrationSupportedCandidate: boolean;
+    accepted: boolean;
+    rejectedReason: string | null;
+  }>;
   sessionPitchBias: {
     offset: number | null;
     supportCount: number;
@@ -334,6 +352,7 @@ export interface MelodyAssessmentResult {
   scores: AssessmentScoreSummary;
   validity: PerformanceValidityAssessment;
   globalOffsetCorrection: GlobalOffsetCorrectionAnalysis;
+  tonalFrame: TonalFrameSelectionAnalysis;
   future: MelodyAssessmentFutureFields;
 }
 
@@ -354,4 +373,36 @@ export interface GlobalRelationshipAnalysis {
   semitoneDelta: number | null;
   pitchClassDelta: number | null;
   phraseOffsetLocked: boolean;
+}
+
+export type TonalFrameKind = 'written' | 'calibration_transposed';
+
+export interface TonalFrameCandidateAnalysis {
+  kind: TonalFrameKind;
+  label: string;
+  semitoneOffset: number;
+  source: 'written' | 'calibration';
+  targetKeyId: string | null;
+  pitchScore: number;
+  localPitchFit: number;
+  structuralFit: number;
+  intervalFit: number;
+  contourFit: number;
+  cadenceFit: number;
+  rescuePressure: number;
+  calibrationSupport: number;
+  totalScore: number;
+  accepted: boolean;
+  rationale: string[];
+}
+
+export interface TonalFrameSelectionAnalysis {
+  selectedKind: TonalFrameKind;
+  selectedLabel: string;
+  selectedSemitoneOffset: number;
+  comparedAgainstWritten: boolean;
+  calibrationProposedOffset: number | null;
+  usedCalibrationProfile: boolean;
+  rationale: string[];
+  candidates: TonalFrameCandidateAnalysis[];
 }

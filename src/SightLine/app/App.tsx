@@ -371,14 +371,16 @@ function AppContent(): JSX.Element {
     return currentPatchedMelody.map((_, index) => {
       const note = result.assessment.notes[index];
       const segmented = result.segmentedNotes[index];
-      if (note?.displayState === "correct") {
+      if (
+        note?.displayState === "correct" ||
+        note?.displayState === "same_note_off_center"
+      ) {
         return "correct";
       }
-      if (note?.displayState === "near") {
-        return "near";
+      if (note?.displayState === "transposed_consistent") {
+        return "correct";
       }
       if (
-        note?.displayState === "transposed_consistent" ||
         note?.displayState === "ambiguous" ||
         note?.displayState === "low_confidence"
       ) {
@@ -459,7 +461,7 @@ function AppContent(): JSX.Element {
             outcome === "correct"
               ? "#1ecf87"
               : outcome === "near"
-                ? "#f1d24f"
+                ? "#1ecf87"
                 : outcome === "incorrect"
                   ? "#e25555"
                   : outcome === "ambiguous"

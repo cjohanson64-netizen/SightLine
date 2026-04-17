@@ -816,7 +816,10 @@ function resolvePitchMatchKind(
     correctedExpectedMidi !== null ? performed.midi - correctedExpectedMidi : null;
   const absDelta =
     typeof scoringDelta === 'number' ? Math.abs(scoringDelta) : null;
-  const isExact = semitoneDelta === 0;
+  // User-facing pitch judgment should follow the final accepted comparison target,
+  // not the raw unnormalized delta. A consistently transposed phrase can therefore
+  // still land in the exact bucket once normalization or phrase correction aligns it.
+  const isExact = absDelta === 0;
 
   if (isExact) {
     return {
@@ -834,12 +837,12 @@ function resolvePitchMatchKind(
 
   if (absDelta === 1) {
     return {
-      matchKind: 'near',
+      matchKind: 'adjacent_semitone',
       semitoneDelta,
       normalizedExpectedMidi: correctedExpectedMidi,
       scoringDelta,
       absDelta,
-      toleranceApplied: true,
+      toleranceApplied: false,
       comparisonTargetMidi,
       comparisonSemitoneDelta,
       isCorrect: false,
@@ -901,12 +904,18 @@ function buildPitchAssessments(
         pitchMatch.normalizedExpectedMidi !== target.midi,
       comparisonTargetMidi: pitchMatch.comparisonTargetMidi,
       comparisonSemitoneDelta: pitchMatch.comparisonSemitoneDelta,
+      centerDeviationCents: null,
       isCorrect: pitchMatch.isCorrect,
       displayState:
         pitchMatch.matchKind === 'exact'
-          ? 'correct'
-          : pitchMatch.matchKind === 'near'
-            ? 'near'
+          ? (pitchMatch.normalizedExpectedMidi !== null &&
+              target !== null &&
+              pitchMatch.normalizedExpectedMidi !== target.midi &&
+              (globalRelationship.kind === 'globally_transposed' || phraseCorrectionOffset !== 0)
+              ? 'transposed_consistent'
+              : 'correct')
+          : pitchMatch.matchKind === 'adjacent_semitone'
+            ? 'adjacent_semitone'
             : 'incorrect',
       weakWindowProtectionApplied: false,
       isolatedErrorSoftened: false,
@@ -935,7 +944,8 @@ function scoreTolerancePoints(delta: number | null): number {
 
 function detectDominantGlobalOffset(
   notes: PitchAssessmentNote[],
-  input: EvaluateMelodyAssessmentInput
+  input: EvaluateMelodyAssessmentInput,
+  globalRelationship: GlobalRelationshipAnalysis,
 ): GlobalOffsetCorrectionAnalysis {
   const eligible = notes.filter(
     (note) => note.target && note.performed && typeof note.scoringDelta === 'number'
@@ -970,10 +980,25 @@ function detectDominantGlobalOffset(
     phraseAlreadyMostlyAcceptable,
     acceptedReason: null,
     rejectedReason: reason,
+    consideredCandidates: [],
     sessionPitchBias,
   });
 
-  if (eligible.length < 5) {
+  // Calibration tells us the singer's tonal center relative to the target key.
+  // If present and reliable, it provides phrase-level evidence for a specific offset
+  // that is independent of how cleanly individual notes were detected. This lets us
+  // lower the minimum eligible count and apply more lenient thresholds for that
+  // specific candidate — without changing how the system handles un-calibrated runs.
+  const calibrationHintRounded =
+    typeof input.calibrationOffsetHint === 'number' &&
+    input.calibrationOffsetHint !== 0 &&
+    input.calibrationSignalQuality !== 'poor' &&
+    input.calibrationSignalQuality !== null
+      ? Math.round(input.calibrationOffsetHint)
+      : null;
+  const minimumEligibleCount = calibrationHintRounded !== null ? 3 : 5;
+
+  if (eligible.length < minimumEligibleCount) {
     return emptyResult(
       'Not enough eligible notes for phrase-level offset analysis.',
       0,
@@ -990,9 +1015,26 @@ function detectDominantGlobalOffset(
     );
   }
 
-  const candidateOffsets = [-12, -1, 1, 12];
+  const observedOffsets = eligible
+    .map((note) => note.scoringDelta)
+    .filter((delta): delta is number => typeof delta === 'number')
+    .map((delta) => Math.round(delta))
+    .filter((delta) => delta !== 0 && Math.abs(delta) <= 12);
+  const candidateOffsets = [...new Set([
+    ...observedOffsets,
+    globalRelationship.semitoneDelta !== null ? Math.round(globalRelationship.semitoneDelta) : null,
+    // Calibration hint is direct evidence of the singer's tonal center offset.
+    // Ensure it is always evaluated as a candidate even if few observed deltas match it.
+    calibrationHintRounded,
+    -12,
+    -1,
+    1,
+    12,
+  ].filter((value): value is number => typeof value === 'number' && value !== 0))]
+    .sort((a, b) => Math.abs(a) - Math.abs(b));
   let bestCandidate: {
     offset: number;
+    exactSupportCount: number;
     supportCount: number;
     supportRatio: number;
     improvement: number;
@@ -1001,6 +1043,7 @@ function detectDominantGlobalOffset(
     calibrationSupportedCandidate: boolean;
     acceptedReason: string;
   } | null = null;
+  const consideredCandidates: GlobalOffsetCorrectionAnalysis['consideredCandidates'] = [];
 
   const rawScore = eligible.reduce(
     (sum, note) => sum + scoreTolerancePoints(note.scoringDelta),
@@ -1054,8 +1097,13 @@ function detectDominantGlobalOffset(
   let rejectedReason: string | null = null;
 
   for (const offset of candidateOffsets) {
-    const supportCount = eligible.filter(
+    const exactSupportCount = eligible.filter(
       (note) => note.scoringDelta === offset
+    ).length;
+    const supportCount = eligible.filter(
+      (note) =>
+        typeof note.scoringDelta === 'number' &&
+        scoreTolerancePoints((note.scoringDelta ?? 0) - offset) >= 0.85
     ).length;
     const supportRatio = supportCount / eligible.length;
     const correctedScore = eligible.reduce(
@@ -1068,11 +1116,11 @@ function detectDominantGlobalOffset(
       eligible.filter((note) => scoreTolerancePoints((note.scoringDelta ?? 0) - offset) >= 0.85)
         .length / eligible.length;
     const calibrationSupportedCandidate =
-      typeof input.calibrationOffsetHint === 'number' &&
-      Math.abs(input.calibrationOffsetHint - offset) <= 0.35 &&
-      input.calibrationSignalQuality !== 'poor' &&
-      input.calibrationSignalQuality !== null;
+      calibrationHintRounded !== null &&
+      Math.abs((input.calibrationOffsetHint ?? 0) - offset) <= 0.5;
     const isSmallOffset = Math.abs(offset) === 1;
+
+    // Standard thresholds — conservative to avoid false corrections in same-key assessment.
     const minimumSupportCount = Math.max(
       isSmallOffset ? 5 : 4,
       Math.ceil(eligible.length * (isSmallOffset ? 0.72 : 0.6))
@@ -1081,58 +1129,118 @@ function detectDominantGlobalOffset(
     const minimumImprovement = isSmallOffset ? 1.75 : 1;
     const minimumAverageGain = isSmallOffset ? 0.14 : 0.09;
     const minimumCorrectedAcceptableRatio = isSmallOffset ? 0.88 : 0.75;
+
+    // Calibration-adjusted thresholds — applied only when calibration independently
+    // confirms this offset as the singer's tonal center. The thresholds are softer
+    // because calibration provides out-of-band evidence that is not derived from
+    // the pitch deltas themselves, so the in-band evidence does not need to be
+    // as clean to reach the same conclusion.
+    const calibMinSupportCount = calibrationSupportedCandidate
+      ? Math.max(3, Math.ceil(eligible.length * (isSmallOffset ? 0.55 : 0.42)))
+      : minimumSupportCount;
+    const calibMinSupportRatio = calibrationSupportedCandidate
+      ? (isSmallOffset ? 0.55 : 0.42)
+      : minimumSupportRatio;
+    const calibMinImprovement = calibrationSupportedCandidate
+      ? (isSmallOffset ? 0.9 : 0.5)
+      : minimumImprovement;
+    const calibMinAverageGain = calibrationSupportedCandidate
+      ? (isSmallOffset ? 0.08 : 0.05)
+      : minimumAverageGain;
+    const calibMinCorrectedAcceptableRatio = calibrationSupportedCandidate
+      ? (isSmallOffset ? 0.65 : 0.52)
+      : minimumCorrectedAcceptableRatio;
+
     const needsStrongerEvidenceBecausePhraseIsAcceptable =
       phraseAlreadyMostlyAcceptable &&
       (improvement < (isSmallOffset ? 2.5 : 1.5) ||
         correctedAverageScore - rawAverageScore < (isSmallOffset ? 0.18 : 0.12));
 
     const qualifies =
-      supportCount >= minimumSupportCount &&
-      supportRatio >= minimumSupportRatio &&
-      improvement >= minimumImprovement &&
-      correctedAverageScore - rawAverageScore >= minimumAverageGain &&
-      correctedAcceptableRatio >= minimumCorrectedAcceptableRatio &&
+      supportCount >= calibMinSupportCount &&
+      supportRatio >= calibMinSupportRatio &&
+      improvement >= calibMinImprovement &&
+      correctedAverageScore - rawAverageScore >= calibMinAverageGain &&
+      correctedAcceptableRatio >= calibMinCorrectedAcceptableRatio &&
       !needsStrongerEvidenceBecausePhraseIsAcceptable;
 
     if (qualifies) {
       bestCandidate = {
         offset,
+        exactSupportCount,
         supportCount,
         supportRatio: roundFit(supportRatio),
         improvement: roundFit(improvement),
         correctedScore: roundFit(correctedScore),
         correctedAverageScore: roundFit(correctedAverageScore),
         calibrationSupportedCandidate,
-        acceptedReason: isSmallOffset
-          ? 'Applied only after strong repeated support and a clearly meaningful improvement beyond the already-acceptable baseline.'
-          : 'Applied because the phrase is materially better explained by a strong consistent offset.',
+        acceptedReason: calibrationSupportedCandidate
+          ? `Applied because calibration confirmed a consistent tonal-center shift of ${offset > 0 ? '+' : ''}${offset} semitone${Math.abs(offset) === 1 ? '' : 's'} and note-level support was sufficient.`
+          : isSmallOffset
+            ? 'Applied only after strong repeated support and a clearly meaningful improvement beyond the already-acceptable baseline.'
+            : 'Applied because the phrase is materially better explained by a strong consistent offset.',
       };
+      consideredCandidates.push({
+        offset,
+        exactSupportCount,
+        supportCount,
+        supportRatio: roundFit(supportRatio),
+        correctedAverageScore: roundFit(correctedAverageScore),
+        improvement: roundFit(improvement),
+        calibrationSupportedCandidate,
+        accepted: true,
+        rejectedReason: null,
+      });
       continue;
     }
 
-    if (!rejectedReason && isSmallOffset && sessionPitchBias.treatedAsBias && sessionPitchBias.offset === offset) {
-      rejectedReason = sessionPitchBias.reason;
-    } else if (!rejectedReason && needsStrongerEvidenceBecausePhraseIsAcceptable) {
-      rejectedReason =
+    let candidateRejectedReason: string | null = null;
+    if (isSmallOffset && sessionPitchBias.treatedAsBias && sessionPitchBias.offset === offset) {
+      candidateRejectedReason = sessionPitchBias.reason;
+    } else if (needsStrongerEvidenceBecausePhraseIsAcceptable) {
+      candidateRejectedReason =
         'Phrase-level correction was rejected because the phrase was already mostly acceptable without it.';
-    } else if (!rejectedReason && supportRatio < minimumSupportRatio) {
-      rejectedReason = 'Phrase-level correction was rejected because support ratio was too weak.';
-    } else if (!rejectedReason && improvement < minimumImprovement) {
-      rejectedReason = 'Phrase-level correction was rejected because the improvement over the raw phrase was too small.';
-    } else if (!rejectedReason && correctedAcceptableRatio < minimumCorrectedAcceptableRatio) {
-      rejectedReason =
-        'Phrase-level correction was rejected because the corrected frame still did not resolve enough notes cleanly.';
+    } else if (supportRatio < calibMinSupportRatio) {
+      candidateRejectedReason = calibrationSupportedCandidate
+        ? `Phrase-level correction was rejected: support ratio ${(supportRatio * 100).toFixed(0)}% was below calibration-adjusted floor of ${(calibMinSupportRatio * 100).toFixed(0)}%.`
+        : 'Phrase-level correction was rejected because support ratio was too weak.';
+    } else if (improvement < calibMinImprovement) {
+      candidateRejectedReason = 'Phrase-level correction was rejected because the improvement over the raw phrase was too small.';
+    } else if (correctedAcceptableRatio < calibMinCorrectedAcceptableRatio) {
+      candidateRejectedReason = calibrationSupportedCandidate
+        ? `Phrase-level correction was rejected: corrected acceptable ratio ${(correctedAcceptableRatio * 100).toFixed(0)}% was below calibration-adjusted floor of ${(calibMinCorrectedAcceptableRatio * 100).toFixed(0)}%.`
+        : 'Phrase-level correction was rejected because the corrected frame still did not resolve enough notes cleanly.';
+    }
+
+    consideredCandidates.push({
+      offset,
+      exactSupportCount,
+      supportCount,
+      supportRatio: roundFit(supportRatio),
+      correctedAverageScore: roundFit(correctedAverageScore),
+      improvement: roundFit(improvement),
+      calibrationSupportedCandidate,
+      accepted: false,
+      rejectedReason: candidateRejectedReason,
+    });
+
+    if (!rejectedReason && candidateRejectedReason) {
+      rejectedReason = candidateRejectedReason;
     }
   }
 
   if (!bestCandidate) {
-    return emptyResult(
+    const empty = emptyResult(
       rejectedReason ?? 'No phrase-level offset candidate met the conservative acceptance criteria.',
       rawScore,
       rawAverageScore,
       phraseAlreadyMostlyAcceptable,
       sessionPitchBias
     );
+    return {
+      ...empty,
+      consideredCandidates,
+    };
   }
 
   return {
@@ -1151,6 +1259,7 @@ function detectDominantGlobalOffset(
     phraseAlreadyMostlyAcceptable,
     acceptedReason: bestCandidate.acceptedReason,
     rejectedReason: null,
+    consideredCandidates,
     sessionPitchBias,
   };
 }
@@ -2047,6 +2156,191 @@ function applyTransposedConsistencyInterpretation(
   });
 }
 
+// ─── Dual tonal-frame evaluation ─────────────────────────────────────────────
+// When calibration data is present we evaluate two competing interpretations of
+// the performance — the written key (offset = 0) and the calibrated key — and
+// select whichever explains the phrase better. This makes calibration a primary
+// reference rather than a rescue case that only fires when detection fails.
+
+interface TonalFrameScore {
+  offset: number;
+  totalScore: number;
+  avgPitchFit: number;
+  acceptableRatio: number;
+  exactMatchRatio: number;
+}
+
+interface PrimaryTonalFrameDecision {
+  selectedOffset: number;
+  source: 'written' | 'calibrated';
+  writtenFrame: TonalFrameScore;
+  calibratedFrame: TonalFrameScore;
+  eligibleCount: number;
+  intervalConsistency: number;
+  reason: string;
+}
+
+function computeTonalFrameScore(
+  eligible: PitchAssessmentNote[],
+  offset: number,
+): TonalFrameScore {
+  const totalScore = eligible.reduce(
+    (sum, note) => sum + scoreTolerancePoints((note.scoringDelta ?? 0) - offset),
+    0,
+  );
+  const avgPitchFit = eligible.length > 0 ? totalScore / eligible.length : 0;
+  const acceptableCount = eligible.filter(
+    (note) => scoreTolerancePoints((note.scoringDelta ?? 0) - offset) >= 0.85,
+  ).length;
+  const acceptableRatio = eligible.length > 0 ? acceptableCount / eligible.length : 0;
+  const exactMatchCount = eligible.filter(
+    (note) => Math.round((note.scoringDelta ?? 0) - offset) === 0,
+  ).length;
+  const exactMatchRatio = eligible.length > 0 ? exactMatchCount / eligible.length : 0;
+  return {
+    offset,
+    totalScore: roundFit(totalScore),
+    avgPitchFit: roundFit(avgPitchFit),
+    acceptableRatio: roundFit(acceptableRatio),
+    exactMatchRatio: roundFit(exactMatchRatio),
+  };
+}
+
+function selectPrimaryTonalFrame(
+  rawNotes: PitchAssessmentNote[],
+  intervals: IntervalAssessmentSpan[],
+  input: EvaluateMelodyAssessmentInput,
+): PrimaryTonalFrameDecision | null {
+  // Requires calibration data of at least fair quality with a non-zero offset hint.
+  const calibrationHintRounded =
+    typeof input.calibrationOffsetHint === 'number' &&
+    input.calibrationOffsetHint !== 0 &&
+    input.calibrationSignalQuality !== 'poor' &&
+    input.calibrationSignalQuality !== null
+      ? Math.round(input.calibrationOffsetHint)
+      : null;
+
+  if (calibrationHintRounded === null) {
+    return null;
+  }
+
+  const eligible = rawNotes.filter(
+    (note) => note.target && note.performed && typeof note.scoringDelta === 'number',
+  );
+
+  if (eligible.length < 3) {
+    return null;
+  }
+
+  const writtenFrame = computeTonalFrameScore(eligible, 0);
+  const calibratedFrame = computeTonalFrameScore(eligible, calibrationHintRounded);
+
+  // Interval consistency is offset-invariant: if the singer transposed the whole
+  // phrase, adjacent intervals are still correct even though absolute pitch differs.
+  // High consistency means the singer performed a recognizable melodic shape.
+  const comparableIntervals = intervals.filter(
+    (span) => span.expectedSemitones !== null && span.performedSemitones !== null,
+  );
+  const intervalConsistency =
+    comparableIntervals.length > 0
+      ? comparableIntervals.filter((span) => span.isCorrect).length / comparableIntervals.length
+      : 0;
+
+  const calibrationGain = calibratedFrame.avgPitchFit - writtenFrame.avgPitchFit;
+  const acceptableGain = calibratedFrame.acceptableRatio - writtenFrame.acceptableRatio;
+
+  // If the written frame already explains the phrase well, leave the existing
+  // detection path to handle any remaining small bias correction.
+  const writtenAlreadyAcceptable =
+    writtenFrame.avgPitchFit >= 0.8 || writtenFrame.acceptableRatio >= 0.7;
+  if (writtenAlreadyAcceptable) {
+    return null;
+  }
+
+  // Good calibration signal = out-of-band evidence is more reliable, so we can
+  // require slightly less in-band note support before committing to the frame.
+  const isGoodCalibration = input.calibrationSignalQuality === 'good';
+  const gainThreshold = isGoodCalibration ? 0.12 : 0.18;
+  const acceptableGainThreshold = isGoodCalibration ? 0.12 : 0.15;
+  const minAcceptableRatio = isGoodCalibration ? 0.50 : 0.55;
+
+  if (
+    calibrationGain < gainThreshold ||
+    acceptableGain < acceptableGainThreshold ||
+    calibratedFrame.acceptableRatio < minAcceptableRatio
+  ) {
+    return null;
+  }
+
+  const sign = calibrationHintRounded > 0 ? '+' : '';
+  return {
+    selectedOffset: calibrationHintRounded,
+    source: 'calibrated',
+    writtenFrame,
+    calibratedFrame,
+    eligibleCount: eligible.length,
+    intervalConsistency: roundFit(intervalConsistency),
+    reason: `Calibrated tonal frame (${sign}${calibrationHintRounded} semitone${Math.abs(calibrationHintRounded) === 1 ? '' : 's'}) selected as primary reference: resolved ${(calibratedFrame.acceptableRatio * 100).toFixed(0)}% of notes vs ${(writtenFrame.acceptableRatio * 100).toFixed(0)}% in written key (avg-fit gain ${(calibrationGain * 100).toFixed(0)}pp).`,
+  };
+}
+
+function buildCalibrationFrameCorrection(
+  decision: PrimaryTonalFrameDecision,
+  rawNotes: PitchAssessmentNote[],
+  input: EvaluateMelodyAssessmentInput,
+): GlobalOffsetCorrectionAnalysis {
+  const eligible = rawNotes.filter(
+    (note) => note.target && note.performed && typeof note.scoringDelta === 'number',
+  );
+  const { calibratedFrame, writtenFrame } = decision;
+  const supportCount = eligible.filter(
+    (note) => scoreTolerancePoints((note.scoringDelta ?? 0) - decision.selectedOffset) >= 0.85,
+  ).length;
+  const supportRatio = eligible.length > 0 ? supportCount / eligible.length : 0;
+  const exactSupportCount = eligible.filter(
+    (note) => Math.round((note.scoringDelta ?? 0) - decision.selectedOffset) === 0,
+  ).length;
+
+  return {
+    candidateOffset: decision.selectedOffset,
+    supportCount,
+    supportRatio: roundFit(supportRatio),
+    applied: true,
+    calibrationOffsetHint: input.calibrationOffsetHint ?? null,
+    calibrationContributed: true,
+    calibrationSupportedCandidate: true,
+    rawScore: writtenFrame.totalScore,
+    correctedScore: calibratedFrame.totalScore,
+    improvement: roundFit(calibratedFrame.totalScore - writtenFrame.totalScore),
+    rawAverageScore: writtenFrame.avgPitchFit,
+    correctedAverageScore: calibratedFrame.avgPitchFit,
+    phraseAlreadyMostlyAcceptable: false,
+    acceptedReason: decision.reason,
+    rejectedReason: null,
+    consideredCandidates: [
+      {
+        offset: decision.selectedOffset,
+        exactSupportCount,
+        supportCount,
+        supportRatio: roundFit(supportRatio),
+        correctedAverageScore: calibratedFrame.avgPitchFit,
+        improvement: roundFit(calibratedFrame.totalScore - writtenFrame.totalScore),
+        calibrationSupportedCandidate: true,
+        accepted: true,
+        rejectedReason: null,
+      },
+    ],
+    sessionPitchBias: {
+      offset: null,
+      supportCount: 0,
+      supportRatio: 0,
+      confidence: 0,
+      treatedAsBias: false,
+      reason: null,
+    },
+  };
+}
+
 export function evaluateMelodyAssessment(
   input: EvaluateMelodyAssessmentInput
 ): MelodyAssessmentResult {
@@ -2061,19 +2355,45 @@ export function evaluateMelodyAssessment(
     mode,
     globalRelationship
   );
-  const globalOffsetCorrection = detectDominantGlobalOffset(rawNotes, input);
-  const notes = globalOffsetCorrection.applied && globalOffsetCorrection.candidateOffset !== null
-    ? buildPitchAssessments(
-        targetMelody,
-        performedMelody,
-        mode,
-        globalRelationship,
-        globalOffsetCorrection.candidateOffset,
-        rawNotes
-      )
-    : rawNotes;
+  // Intervals and contours are computed early so selectPrimaryTonalFrame can use
+  // interval consistency as evidence of melodic coherence before any offset is applied.
+  // (Intervals are offset-invariant, so this is safe to do on raw notes.)
   const intervals = buildIntervalAssessments(targetMelody, performedMelody);
   const contours = buildContourAssessments(targetMelody, performedMelody);
+
+  const tonalFrameDecision = selectPrimaryTonalFrame(rawNotes, intervals, input);
+
+  let globalOffsetCorrection: GlobalOffsetCorrectionAnalysis;
+  let notes: PitchAssessmentNote[];
+
+  if (tonalFrameDecision?.source === 'calibrated') {
+    // Calibrated frame wins — use it directly as the primary reference. This avoids
+    // the detection path's conservative thresholds and treats calibration as the
+    // first-class tonal center rather than a rescue case.
+    notes = buildPitchAssessments(
+      targetMelody,
+      performedMelody,
+      mode,
+      globalRelationship,
+      tonalFrameDecision.selectedOffset,
+      rawNotes
+    );
+    globalOffsetCorrection = buildCalibrationFrameCorrection(tonalFrameDecision, rawNotes, input);
+  } else {
+    // Fall through to the standard detection path (same-key bias correction,
+    // calibration-boosted thresholds, etc.).
+    globalOffsetCorrection = detectDominantGlobalOffset(rawNotes, input, globalRelationship);
+    notes = globalOffsetCorrection.applied && globalOffsetCorrection.candidateOffset !== null
+      ? buildPitchAssessments(
+          targetMelody,
+          performedMelody,
+          mode,
+          globalRelationship,
+          globalOffsetCorrection.candidateOffset,
+          rawNotes
+        )
+      : rawNotes;
+  }
   const firstDivergence = findFirstDivergence(notes, intervals, contours);
   const recovery = assessRecovery(notes, intervals, contours, firstDivergence, globalRelationship.kind);
   const tonalState = assessTonalState(
@@ -2155,6 +2475,16 @@ export function evaluateMelodyAssessment(
       reason: 'Validity is finalized after microphone-run scoring.',
     },
     globalOffsetCorrection,
+    tonalFrame: {
+      selectedKind: 'written',
+      selectedLabel: 'Written target',
+      selectedSemitoneOffset: 0,
+      comparedAgainstWritten: false,
+      calibrationProposedOffset: null,
+      usedCalibrationProfile: false,
+      rationale: ['Assessment used the written target frame.'],
+      candidates: [],
+    },
     future: {
       interval: null,
       tonal: null,

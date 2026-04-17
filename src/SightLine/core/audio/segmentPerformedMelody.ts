@@ -230,7 +230,13 @@ function cleanPitchFrames(
     const next = frames[index + 1] ?? null;
     let cleanedMidi = frame.midi;
     let rejectedReason: CleanedPitchFrame['rejectedReason'] = null;
-    const dynamicConfidenceFloor = frame.rms <= noiseFloor * 1.75 ? minConfidence + 0.15 : minConfidence;
+    // Breathier voices often produce usable pitch with slightly weaker confidence.
+    // Keep the floor conservative near the noise floor, but relax it a little when
+    // the signal has enough energy to still carry clear musical intent.
+    const dynamicConfidenceFloor =
+      frame.rms <= noiseFloor * 1.75
+        ? minConfidence + 0.15
+        : Math.max(0.41, minConfidence - 0.04);
 
     if (frame.rms <= noiseFloor * 1.2) {
       cleanedMidi = null;
@@ -262,14 +268,26 @@ function cleanPitchFrames(
       }
     }
 
+    const localPitchSupport =
+      prev?.midi !== null && next?.midi !== null && Math.abs(prev.midi - next.midi) <= 1
+        ? median([prev.midi, next.midi])
+        : null;
+
     if (
       cleanedMidi !== null &&
       ((prev?.midi === null && next?.midi === null) ||
         (prev?.confidence ?? 0) < minConfidence * 0.8 && (next?.confidence ?? 0) < minConfidence * 0.8) &&
-      frame.confidence < 0.72
+      frame.confidence < 0.64
     ) {
-      cleanedMidi = null;
-      rejectedReason = 'unstable_support';
+      const pitchStillLocallyCoherent =
+        localPitchSupport !== null &&
+        Math.abs((frame.midi ?? cleanedMidi) - localPitchSupport) <= 0.85 &&
+        frame.rms > noiseFloor * 1.35;
+
+      if (!pitchStillLocallyCoherent) {
+        cleanedMidi = null;
+        rejectedReason = 'unstable_support';
+      }
     }
 
     return {
@@ -281,6 +299,42 @@ function cleanPitchFrames(
       rejectedReason,
     };
   });
+}
+
+function selectAnalysisVoicedFrames(
+  relevantFrames: CleanedPitchFrame[],
+  minConfidence: number,
+): { frames: CleanedPitchFrame[]; breathyFallbackApplied: boolean } {
+  const primaryFrames = relevantFrames.filter(
+    (frame) => frame.voiced && frame.cleanedMidi !== null && frame.confidence >= minConfidence,
+  );
+
+  if (primaryFrames.length >= 2) {
+    return { frames: primaryFrames, breathyFallbackApplied: false };
+  }
+
+  const fallbackFloor = Math.max(0.41, minConfidence - 0.04);
+  const relaxedFrames = relevantFrames.filter(
+    (frame) => frame.voiced && frame.cleanedMidi !== null && frame.confidence >= fallbackFloor,
+  );
+
+  if (relaxedFrames.length >= 2) {
+    return { frames: relaxedFrames, breathyFallbackApplied: true };
+  }
+
+  return { frames: primaryFrames, breathyFallbackApplied: false };
+}
+
+function hasBreathyUsableStableCore(
+  stableCore: DominantClusterAnalysis,
+  spread: number | null,
+): boolean {
+  return (
+    stableCore.usedFrames.length >= 2 &&
+    stableCore.confidence >= 0.46 &&
+    (stableCore.stablePitchSpread ?? spread ?? Number.POSITIVE_INFINITY) <= 1.05 &&
+    (stableCore.dominantBucketStrength ?? 0) >= 0.46
+  );
 }
 
 function pitchSpread(values: number[]): number | null {
@@ -831,9 +885,8 @@ function buildSegmentedNote(
       frame.timeMs >= window.startMs - slackMs &&
       frame.timeMs <= window.endMs + slackMs
   );
-  const voicedFrames = relevantFrames.filter(
-    (frame) => frame.voiced && frame.cleanedMidi !== null && frame.confidence >= minConfidence
-  );
+  const voicedFrameSelection = selectAnalysisVoicedFrames(relevantFrames, minConfidence);
+  const voicedFrames = voicedFrameSelection.frames;
   const analysisExpectedMidi =
     typeof window.target.midi === 'number' && typeof expectedMidiOffset === 'number'
       ? window.target.midi + expectedMidiOffset
@@ -849,6 +902,7 @@ function buildSegmentedNote(
     voicedFrames[voicedFrames.length - 1] ??
     null;
   const expectedPitch = window.target.pitch ?? null;
+  const breathyUsableStableCore = hasBreathyUsableStableCore(stableCore, spread);
 
   let status: SegmentedPerformedNote['status'] = 'clear';
   let debugReason = stableCore.debugReason;
@@ -856,7 +910,10 @@ function buildSegmentedNote(
   if (!estimatedMidi || voicedFrames.length === 0) {
     status = 'missing';
     debugReason = 'No stable voiced frames landed inside this target window.';
-  } else if (stableCore.usedFrames.length < 2 || stableCore.confidence < 0.55) {
+  } else if (
+    (stableCore.usedFrames.length < 2 || stableCore.confidence < 0.55) &&
+    !breathyUsableStableCore
+  ) {
     status = 'weak';
     debugReason = `${stableCore.debugReason} Stable evidence is still limited or low-confidence.`;
   } else if (
@@ -867,6 +924,8 @@ function buildSegmentedNote(
     debugReason = stableCore.targetConsistentAmbiguity
       ? 'Stable-core analysis remained ambiguous, but the winning center still stayed target-consistent.'
       : 'Stable-core analysis still found competing or widely spread pitch centers.';
+  } else if (voicedFrameSelection.breathyFallbackApplied) {
+    debugReason = `${stableCore.debugReason} A breathy-signal fallback kept moderately confident frames so musically usable pitch would not be discarded too early.`;
   }
 
   const provisionalNote: SegmentedPerformedNote = {

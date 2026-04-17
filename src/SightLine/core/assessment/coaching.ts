@@ -42,7 +42,10 @@ function getPrimaryStrength(
   if (result.assessment.rhythm.flow.score >= 0.7) {
     return 'You kept the phrase moving steadily.';
   }
-  if (weightedSummary.counts.near >= Math.max(2, Math.ceil(result.assessment.summary.targetNoteCount / 4))) {
+  if (
+    weightedSummary.counts.same_note_off_center >=
+    Math.max(2, Math.ceil(result.assessment.summary.targetNoteCount / 4))
+  ) {
     return 'Many of your notes were close to the target pitch.';
   }
   return 'You kept parts of the phrase together.';
@@ -61,12 +64,23 @@ function getPrimaryImprovement(
   if (result.assessment.rhythm.flow.kind === 'interrupted' || result.assessment.rhythm.flow.kind === 'fragmented') {
     return 'Several pauses interrupted the flow.';
   }
-  const nearSharp = result.assessment.notes.filter((note) => note.matchKind === 'near' && note.scoringDelta === 1).length;
-  const nearFlat = result.assessment.notes.filter((note) => note.matchKind === 'near' && note.scoringDelta === -1).length;
-  if (nearSharp >= Math.max(2, weightedSummary.counts.near / 2) || nearFlat >= Math.max(2, weightedSummary.counts.near / 2)) {
-    return nearSharp >= nearFlat
-      ? 'A few notes were slightly high.'
-      : 'A few notes were slightly low.';
+  const offCenterSharp = result.assessment.notes.filter(
+    (note) =>
+      note.displayState === 'same_note_off_center' &&
+      (note.centerDeviationCents ?? 0) > 0,
+  ).length;
+  const offCenterFlat = result.assessment.notes.filter(
+    (note) =>
+      note.displayState === 'same_note_off_center' &&
+      (note.centerDeviationCents ?? 0) < 0,
+  ).length;
+  if (
+    offCenterSharp >= Math.max(2, weightedSummary.counts.same_note_off_center / 2) ||
+    offCenterFlat >= Math.max(2, weightedSummary.counts.same_note_off_center / 2)
+  ) {
+    return offCenterSharp >= offCenterFlat
+      ? 'A few notes were slightly high within the right note.'
+      : 'A few notes were slightly low within the right note.';
   }
   if (result.assessment.scores.rhythmScore + 6 < result.assessment.scores.pitchScore) {
     return 'The rhythm pattern became uneven in places.';
@@ -93,7 +107,10 @@ function getPracticeSuggestion(
   if (result.assessment.rhythm.flow.kind === 'interrupted' || result.assessment.scores.rhythmScore + 6 < result.assessment.scores.pitchScore) {
     return 'Clap the rhythm first, then sing it again.';
   }
-  if (weightedSummary.counts.near >= Math.max(2, Math.ceil(result.assessment.summary.targetNoteCount / 4))) {
+  if (
+    weightedSummary.counts.same_note_off_center >=
+    Math.max(2, Math.ceil(result.assessment.summary.targetNoteCount / 4))
+  ) {
     return 'Sing the phrase more slowly and center each note before moving on.';
   }
   if (result.assessment.firstDivergence && result.assessment.recovery.kind && result.assessment.recovery.kind !== 'no_recovery') {
