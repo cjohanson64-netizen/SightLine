@@ -234,7 +234,7 @@ export default function GeneratorPage({
               selectedNoteIndex={selectedAssessmentNoteIndex}
               noteOutcomeByIndex={assessmentNoteOutcomeByIndex}
               climaxNoteIndices={climaxNoteIndices}
-              showClimaxMarkers={Boolean(assessmentResult)}
+              showClimaxMarkers={false}
               onNoteSelect={(index) => onAssessmentNoteSelect(index)}
               zoom={projection.isProjectionMode ? 2.5 : 1}
               projectionMode={projection.isProjectionMode}
@@ -242,6 +242,9 @@ export default function GeneratorPage({
               solfegeColorizeLyrics={solfege.solfegeColorizeMode !== "off"}
               solfegeOverlayNoteheads={
                 solfege.solfegeMode !== "off" && solfege.solfegeOverlayMode
+              }
+              enableGlowEffects={
+                playback.playbackHighlightIndex !== null || pitchEditMode
               }
               onKeyDown={handleNotationKeyDown}
               focusTitle={

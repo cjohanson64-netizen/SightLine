@@ -133,37 +133,38 @@ function buildMasteryExplanationSignals(
 
 function buildMasteryExplanation(
   result: MelodyAssessmentResult,
+  level: number,
   signals: MasteryExplanationSignals
 ): string {
   if (result.summary.performedNoteCount === 0) {
     return 'There was not enough usable sung input to assess this attempt.';
   }
 
-  if (signals.pitchMostlyCorrect && signals.rhythmMostlyCorrect && signals.flowMostlySteady) {
-    return 'Your pitches and rhythm were mostly correct, and the flow stayed steady.';
+  if (level >= 4) {
+    return 'Excellent work. Your pitch and rhythm were both strong.';
   }
 
-  if (signals.tonalDriftButConsistent) {
-    return 'You shifted away from the original key, but stayed musically consistent.';
+  if (level >= 3.5) {
+    return 'Strong work. Most of your notes and rhythm patterns were accurate.';
   }
 
-  if (signals.pitchMostlyCorrect && !signals.rhythmMostlyCorrect) {
-    return signals.flowMostlySteady
-      ? 'Your pitches were mostly correct, but the rhythm was less steady.'
-      : 'Your pitches were mostly correct, but rhythm and flow were interrupted.';
+  if (level >= 3) {
+    return 'Good work. You got a lot right, with a few notes or rhythms to improve.';
   }
 
-  if (!signals.pitchMostlyCorrect && signals.contourRecognizable) {
-    return signals.flowMostlySteady
-      ? 'The melody shape was recognizable, but many pitches were not exact yet.'
-      : 'The melody shape was recognizable, though pauses interrupted the flow.';
+  if (level >= 2.5) {
+    return 'You’re on the right track. Some parts were strong, and some need more practice.';
   }
 
-  if (!signals.contourRecognizable) {
-    return 'The melody shape was hard to recognize in this attempt.';
+  if (level >= 2) {
+    return 'Some parts were correct, but this melody needs more practice.';
   }
 
-  return 'Pitch, rhythm, and flow showed some partial success, but the phrase still needs support.';
+  if (signals.tonalDriftButConsistent || signals.contourRecognizable) {
+    return 'This melody needs more practice. Focus on matching the notes and rhythm more carefully.';
+  }
+
+  return 'This melody needs more practice. Focus on matching the notes and rhythm more carefully.';
 }
 
 function applyMasteryPitchFloor(
@@ -233,7 +234,7 @@ export function classifyMastery(result: MelodyAssessmentResult): MasteryClassifi
     level: finalLevel,
     label: finalLabel,
     percentage: finalPercentage,
-    explanation: buildMasteryExplanation(result, explanationSignals),
+    explanation: buildMasteryExplanation(result, finalLevel, explanationSignals),
     explanationSignals,
     explanationUsesRubricTextOnly: true,
     cappedByPitchFloor: capped.reason !== null,

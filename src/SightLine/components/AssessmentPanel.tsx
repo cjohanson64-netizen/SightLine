@@ -99,105 +99,169 @@ function formatDetectedPitch(
   return "Not clearly detected";
 }
 
+function simplifyPitchLabel(pitch: string | null | undefined): string {
+  if (!pitch) {
+    return "n/a";
+  }
+  const match = pitch.match(/^([A-G](?:#|b)?)/);
+  return match?.[1] ?? pitch;
+}
+
+function getDirectionLabel(
+  note: PitchAssessmentNote | undefined,
+  segmented: SegmentedPerformedNote | undefined,
+): "high" | "low" | null {
+  const cents = note?.centerDeviationCents ?? null;
+  if (typeof cents === "number" && Math.abs(cents) >= 5) {
+    return cents > 0 ? "high" : "low";
+  }
+
+  if (typeof note?.scoringDelta === "number" && note.scoringDelta !== 0) {
+    return note.scoringDelta > 0 ? "high" : "low";
+  }
+
+  if (
+    typeof segmented?.pitchCenter === "number" &&
+    typeof segmented?.expectedMidi === "number"
+  ) {
+    const delta = segmented.pitchCenter - segmented.expectedMidi;
+    if (Math.abs(delta) >= 0.08) {
+      return delta > 0 ? "high" : "low";
+    }
+  }
+
+  return null;
+}
+
 function noteStatusLabel(
   note: PitchAssessmentNote | undefined,
   segmented: SegmentedPerformedNote | undefined,
 ): string {
-  // Check displayState and signal fields before the outcome so that accepted-context
-  // notes get their own label even when their outcome tier is shared with other states.
   if (note?.displayState === "transposed_consistent") {
-    return "Consistent key shift";
+    return "Strong pitch";
   }
   if (note?.intonationBand === "in_tune") {
-    return "In tune";
+    return "Strong pitch";
   }
   if (note?.intonationBand === "tuned") {
-    return "Tuned";
+    return "Strong pitch";
   }
   if (note?.intonationBand === "loose_center") {
-    return "Loose center";
+    return "Almost there";
   }
   if (note?.intonationBand === "poor_center") {
-    return "Poor center";
+    return "Needs tuning";
   }
   if (note?.intonationBand === "boundary_cross") {
-    return "Boundary cross";
+    return "Close";
   }
   if (note?.intonationBand === "adjacent_close" || note?.displayState === "adjacent_semitone") {
-    return "Neighboring semitone";
+    return "Close";
   }
   const outcome = noteOutcome(note, segmented);
   if (outcome === "correct") {
-    return "Correct";
+    return "Strong pitch";
   }
-  // Distinguish the two reasons a note can land in the amber tier:
-  // - targetConsistentAmbiguity: signal was ambiguous but the pitch matched — accepted, not failed
-  // - low_confidence / weak signal: pitch evidence was too soft to be certain
-  // - plain ambiguous: genuinely unclear pitch center
   if (segmented?.targetConsistentAmbiguity) {
-    return "Accepted";
+    return "Strong pitch";
   }
   if (classifyWeightedNoteState(note, segmented) === "low_confidence") {
-    return "Weak signal";
+    return "Unclear";
   }
   if (outcome === "ambiguous") {
     return "Unclear";
   }
-  return "Incorrect";
+  return "Needs correction";
 }
 
 function describeNote(
   note: PitchAssessmentNote | undefined,
   segmented: SegmentedPerformedNote | undefined,
 ): string {
+  const direction = getDirectionLabel(note, segmented);
+
+  if (note?.displayState === "transposed_consistent") {
+    return "Right note, nicely in tune.";
+  }
+  if (note?.intonationBand === "in_tune") {
+    return "Right note, nicely in tune.";
+  }
+  if (note?.intonationBand === "tuned") {
+    if (direction === "low") {
+      return "Right note, just slightly low.";
+    }
+    if (direction === "high") {
+      return "Right note, just slightly high.";
+    }
+    return "Right note and well tuned.";
+  }
+  if (note?.intonationBand === "loose_center") {
+    if (direction === "low") {
+      return "You sang the correct pitch, just a little low.";
+    }
+    if (direction === "high") {
+      return "You sang the correct pitch, just a little high.";
+    }
+    return "You sang the correct pitch clearly.";
+  }
+  if (note?.intonationBand === "poor_center") {
+    if (direction === "low") {
+      return "Right note, but a little out of tune and low.";
+    }
+    if (direction === "high") {
+      return "Right note, but a little out of tune and high.";
+    }
+    return "Right note, but a little out of tune.";
+  }
   if (note?.intonationBand === "boundary_cross") {
-    return "You crossed into the neighboring semitone, but the pitch center stayed close to the note boundary.";
+    if (direction === "low") {
+      return "You landed on a note close to the correct pitch, a little low.";
+    }
+    if (direction === "high") {
+      return "You landed on a note close to the correct pitch, a little high.";
+    }
+    return "You landed on a note close to the correct pitch.";
   }
   if (note?.intonationBand === "adjacent_close" || note?.displayState === "adjacent_semitone") {
-    return "You landed on the neighboring semitone instead of the target note.";
-  }
-  if (
-    note?.intonationBand === "in_tune" ||
-    note?.intonationBand === "tuned" ||
-    note?.intonationBand === "loose_center" ||
-    note?.intonationBand === "poor_center"
-  ) {
-    return note.interpretationReason ?? "You sang the right note class.";
+    if (direction === "low") {
+      return "You landed on a note close to the correct pitch, a little low.";
+    }
+    if (direction === "high") {
+      return "You landed on a note close to the correct pitch, a little high.";
+    }
+    return "You landed on a note close to the correct pitch.";
   }
   if (note?.isCorrect) {
-    return "Correct note.";
+    return "Right note, nicely in tune.";
   }
   if (
     segmented?.status === "ambiguous" &&
     segmented.targetConsistentAmbiguity
   ) {
-    return "The pitch wasn't perfectly defined, but it matched what was expected here.";
+    return "You sang the correct pitch clearly.";
   }
   if (segmented?.status === "ambiguous") {
-    return "This note was unclear because the pitch center was unstable.";
+    return "This note was close, but not clear enough to judge confidently.";
   }
   if (segmented?.status === "weak") {
-    return "This note had a weak signal — the pitch was hard to detect clearly.";
+    return "This note needs a clearer sound to assess well.";
   }
   if (!note?.performed || note.matchKind === "missing") {
-    return "This note was unclear because a strong pitch was not detected.";
+    return "This note was hard to hear clearly.";
   }
-  if (note.interpretationReason) {
-    return note.interpretationReason;
+  if (classifyWeightedNoteState(note, segmented) === "low_confidence") {
+    return "This note was hard to hear clearly.";
   }
-  if (note.scoringDelta === -1) {
-    return "You sang this slightly too low.";
+  if (note?.displayState === "ambiguous") {
+    return "This note was close, but not clear enough to judge confidently.";
   }
-  if (note.scoringDelta === 1) {
-    return "You sang this slightly too high.";
+  if (direction === "low") {
+    return "This note was below the target pitch.";
   }
-  if (typeof note.scoringDelta === "number" && note.scoringDelta < 0) {
-    return "You sang this note too low.";
+  if (direction === "high") {
+    return "This note was above the target pitch.";
   }
-  if (typeof note.scoringDelta === "number" && note.scoringDelta > 0) {
-    return "You sang this note too high.";
-  }
-  return "You sang the wrong pitch on this note.";
+  return "This note missed the target pitch.";
 }
 
 export default function AssessmentPanel({
@@ -224,7 +288,6 @@ export default function AssessmentPanel({
     result && selectedNoteIndex !== null
       ? result.segmentedNotes[selectedNoteIndex]
       : undefined;
-  const selectedCenterDeviationCents = selectedNote?.centerDeviationCents ?? null;
   const selectedOutcome =
     selectedNoteIndex !== null
       ? noteOutcome(selectedNote, selectedSegmentedNote)
@@ -233,10 +296,6 @@ export default function AssessmentPanel({
     ? buildWeightedAssessmentSummary(result)
     : null;
   const mastery = result ? classifyMastery(result.assessment) : null;
-  const selectedWeight =
-    selectedNoteIndex !== null
-      ? getWeightedAssessmentNoteScore(selectedNote, selectedSegmentedNote)
-      : null;
 
   return (
     <section className={`AppAssessmentPanel${className ? ` ${className}` : ""}`}>
@@ -283,40 +342,7 @@ export default function AssessmentPanel({
             <p className="AppHistoryLabel">
               <strong>Rhythm: {result.assessment.scores.rhythmScore}%</strong>
             </p>
-            {result.warnings.map((warning) => (
-              <p key={warning} className="AppAssessmentWarning">
-                {warning}
-              </p>
-            ))}
           </div>
-
-          {debugSemantics.strengths.length > 0 ? (
-            <div className="AppAssessmentCard">
-              <h4>Strengths</h4>
-              {debugSemantics.strengths.map((insight, index) => (
-                <p
-                  key={`${insight.category}-strength-${index}`}
-                  className="AppHistoryLabel"
-                >
-                  {insight.message}
-                </p>
-              ))}
-            </div>
-          ) : null}
-
-          {debugSemantics.weaknesses.length > 0 ? (
-            <div className="AppAssessmentCard">
-              <h4>Weaknesses</h4>
-              {debugSemantics.weaknesses.map((insight, index) => (
-                <p
-                  key={`${insight.category}-weakness-${index}`}
-                  className="AppHistoryLabel"
-                >
-                  {insight.message}
-                </p>
-              ))}
-            </div>
-          ) : null}
 
           {debugSemantics.recommendation ? (
             <div className="AppAssessmentCard">
@@ -344,50 +370,32 @@ export default function AssessmentPanel({
                   Note {selectedNoteIndex + 1}
                 </p>
                 <p className="AppHistoryLabel">
-                  Assessment: {noteStatusLabel(selectedNote, selectedSegmentedNote)}
+                  <strong>Result:</strong>{" "}
+                  {noteStatusLabel(selectedNote, selectedSegmentedNote)}
                 </p>
                 <p className="AppHistoryLabel">
-                  Expected:{" "}
-                  {selectedNote?.target?.pitch ??
-                    selectedSegmentedNote?.expectedPitch ??
-                    "n/a"}
+                  <strong>Target note:</strong>{" "}
+                  {simplifyPitchLabel(
+                    selectedNote?.target?.pitch ??
+                      selectedSegmentedNote?.expectedPitch ??
+                      "n/a",
+                  )}
                 </p>
                 <p className="AppHistoryLabel">
-                  You sang:{" "}
-                  {formatDetectedPitch(selectedNote, selectedSegmentedNote)}
+                  <strong>You sang:</strong>{" "}
+                  {simplifyPitchLabel(
+                    formatDetectedPitch(selectedNote, selectedSegmentedNote),
+                  )}
                 </p>
                 <p className="AppHistoryLabel">
-                  Confidence:{" "}
+                  <strong>Confidence:</strong>{" "}
                   {selectedSegmentedNote
                     ? `${Math.round(selectedSegmentedNote.confidence * 100)}%`
                     : "n/a"}
                 </p>
-                <p className="AppHistoryLabel">
-                  Intonation band: {selectedNote?.intonationBand ?? "n/a"} | Weight:{" "}
-                  {selectedWeight !== null ? selectedWeight.toFixed(2) : "n/a"}
-                </p>
-                {typeof selectedCenterDeviationCents === "number" ? (
-                  <p className="AppHistoryLabel">
-                    Note center offset:{" "}
-                    {selectedCenterDeviationCents > 0 ? "+" : ""}
-                    {selectedCenterDeviationCents} cents
-                  </p>
-                ) : null}
-                {selectedNote?.globalOffsetCorrectionApplied &&
-                selectedNote.appliedGlobalOffset !== null ? (
-                  <p className="AppHistoryLabel">
-                    Phrase correction:{" "}
-                    {selectedNote.appliedGlobalOffset > 0 ? "+" : ""}
-                    {selectedNote.appliedGlobalOffset} semitone
-                    {Math.abs(selectedNote.appliedGlobalOffset) === 1
-                      ? ""
-                      : "s"}
-                  </p>
-                ) : null}
                 <p className="AppAssessmentNoteExplanation">
-                  <strong>
-                    {describeNote(selectedNote, selectedSegmentedNote)}
-                  </strong>
+                  <strong>Feedback:</strong>{" "}
+                  {describeNote(selectedNote, selectedSegmentedNote)}
                 </p>
                 <button
                   type="button"
@@ -404,15 +412,15 @@ export default function AssessmentPanel({
             <h4>Legend</h4>
             <p className="AppHistoryLabel">
               <span className="AppAssessmentLegendSwatch AppAssessmentLegendSwatch--correct" />{" "}
-              In tune, tuned, or accepted transposed note
+              Green: Correct pitch
             </p>
             <p className="AppHistoryLabel">
               <span className="AppAssessmentLegendSwatch AppAssessmentLegendSwatch--ambiguous" />{" "}
-              Loose center, poor center, boundary cross, or uncertain signal
+              Yellow: Close or slightly out of tune
             </p>
             <p className="AppHistoryLabel">
               <span className="AppAssessmentLegendSwatch AppAssessmentLegendSwatch--incorrect" />{" "}
-              Neighboring semitone hit or incorrect note
+              Red: Needs correction
             </p>
             <p className="AppHistoryLabel">
               Click any colored note on the staff to inspect it.

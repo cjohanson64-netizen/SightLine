@@ -471,7 +471,7 @@ function AppContent(): JSX.Element {
                 : outcome === "incorrect"
                   ? "#e25555"
                   : outcome === "ambiguous"
-                    ? "#e89a2b"
+                    ? "#ffd54a"
                     : undefined;
           return acc;
         },

@@ -145,11 +145,11 @@
   cursor: pointer;
 }
 
-.NotationViewer-notehead--selectable:hover {
+.NotationViewer-notehead--glowable.NotationViewer-notehead--selectable:hover {
   filter: drop-shadow(0 0 4px rgba(34, 60, 95, 0.35));
 }
 
-.NotationViewer-notehead--selected {
+.NotationViewer-notehead--glowable.NotationViewer-notehead--selected {
   filter: drop-shadow(0 0 4px rgba(17, 23, 34, 0.55)) drop-shadow(0 0 8px rgba(70, 110, 170, 0.5));
 }
 
@@ -195,6 +195,6 @@
 .NotationViewer-notehead--ambiguous ellipse,
 .NotationViewer-notehead--ambiguous circle,
 .NotationViewer-notehead--ambiguous polygon {
-  fill: #e89a2b !important;
-  stroke: #e89a2b !important;
+  fill: #ffd54a !important;
+  stroke: #ffd54a !important;
 }

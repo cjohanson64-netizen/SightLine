@@ -314,7 +314,7 @@ export default function AssessmentWorkflowModal({
         selectedNoteIndex={selectedNoteIndex}
         noteOutcomeByIndex={showAssessmentStyling ? noteOutcomeByIndex : []}
         climaxNoteIndices={showAssessmentStyling ? climaxNoteIndices : []}
-        showClimaxMarkers={showAssessmentStyling && Boolean(assessmentResult)}
+        showClimaxMarkers={false}
         onNoteSelect={showAssessmentStyling ? onSelectNote : undefined}
         focusTitle={
           showAssessmentStyling
@@ -466,8 +466,7 @@ export default function AssessmentWorkflowModal({
                 Calibration complete
               </p>
               <p className="AppHistoryLabel">
-                {calibrationResult?.profile.summary ??
-                  "SightLine has a stable pitch reference for your voice."}
+                A short scale was used to find a comfortable key for your voice.
               </p>
               {startingPitchLabel ? (
                 <p className="AppHistoryLabel">
@@ -475,7 +474,7 @@ export default function AssessmentWorkflowModal({
                 </p>
               ) : null}
               <p className="AppHistoryLabel">
-                Sing the melody after the short countdown.
+                We’ll check your singing in a key that fit your voice.
               </p>
             </div>
             {renderMelodyPreview(false)}

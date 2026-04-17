@@ -20,6 +20,7 @@ interface NotationViewerProps {
   noteOutcomeByIndex?: Array<'correct' | 'near' | 'incorrect' | 'ambiguous' | null>;
   climaxNoteIndices?: number[];
   showClimaxMarkers?: boolean;
+  enableGlowEffects?: boolean;
   onNoteSelect?: (index: number) => void;
 }
 
@@ -408,12 +409,15 @@ function applySolfegeNoteheadColors(container: HTMLElement): void {
 function applyNotationDecorations(
   container: HTMLElement,
   solfegeColorizeLyrics: boolean,
-  solfegeOverlayNoteheads: boolean
+  solfegeOverlayNoteheads: boolean,
+  enableGlowEffects: boolean
 ): void {
   if (solfegeColorizeLyrics) {
     applySolfegeLyricColors(container);
   }
-  applyHighlightedNoteheadShadows(container);
+  if (enableGlowEffects) {
+    applyHighlightedNoteheadShadows(container);
+  }
   if (solfegeOverlayNoteheads) {
     applySolfegeNoteheadColors(container);
   }
@@ -424,6 +428,7 @@ function decorateSelectableNoteheads(
   selectableNoteCount: number,
   selectedNoteIndex: number | null,
   noteOutcomeByIndex: Array<'correct' | 'near' | 'incorrect' | 'ambiguous' | null>,
+  enableGlowEffects: boolean,
   onNoteSelect?: (index: number) => void
 ): void {
   let noteheads = Array.from(container.querySelectorAll('svg g.vf-notehead'));
@@ -448,11 +453,15 @@ function decorateSelectableNoteheads(
       'NotationViewer-notehead--near',
       'NotationViewer-notehead--incorrect',
       'NotationViewer-notehead--ambiguous',
+      'NotationViewer-notehead--glowable',
       'NotationViewer-notehead--selected'
     );
     const outcome = noteOutcomeByIndex[index];
     if (outcome) {
       svgNode.classList.add(`NotationViewer-notehead--${outcome}`);
+    }
+    if (enableGlowEffects) {
+      svgNode.classList.add('NotationViewer-notehead--glowable');
     }
     if (selectedNoteIndex === index) {
       svgNode.classList.add('NotationViewer-notehead--selected');
@@ -554,15 +563,22 @@ function scheduleNotationDecorations(
   noteOutcomeByIndex: Array<'correct' | 'near' | 'incorrect' | 'ambiguous' | null>,
   climaxNoteIndices: number[],
   showClimaxMarkers: boolean,
+  enableGlowEffects: boolean,
   onNoteSelect?: (index: number) => void
 ): void {
   const seq = renderSeqRef.current;
-  applyNotationDecorations(container, solfegeColorizeLyrics, solfegeOverlayNoteheads);
+  applyNotationDecorations(
+    container,
+    solfegeColorizeLyrics,
+    solfegeOverlayNoteheads,
+    enableGlowEffects
+  );
   decorateSelectableNoteheads(
     container,
     selectableNoteCount,
     selectedNoteIndex,
     noteOutcomeByIndex,
+    enableGlowEffects,
     onNoteSelect
   );
   decorateClimaxNoteheads(container, climaxNoteIndices, showClimaxMarkers);
@@ -570,12 +586,18 @@ function scheduleNotationDecorations(
     if (seq !== renderSeqRef.current || !container.isConnected) {
       return;
     }
-    applyNotationDecorations(container, solfegeColorizeLyrics, solfegeOverlayNoteheads);
+    applyNotationDecorations(
+      container,
+      solfegeColorizeLyrics,
+      solfegeOverlayNoteheads,
+      enableGlowEffects
+    );
     decorateSelectableNoteheads(
       container,
       selectableNoteCount,
       selectedNoteIndex,
       noteOutcomeByIndex,
+      enableGlowEffects,
       onNoteSelect
     );
     decorateClimaxNoteheads(container, climaxNoteIndices, showClimaxMarkers);
@@ -583,12 +605,18 @@ function scheduleNotationDecorations(
       if (seq !== renderSeqRef.current || !container.isConnected) {
         return;
       }
-      applyNotationDecorations(container, solfegeColorizeLyrics, solfegeOverlayNoteheads);
+      applyNotationDecorations(
+        container,
+        solfegeColorizeLyrics,
+        solfegeOverlayNoteheads,
+        enableGlowEffects
+      );
       decorateSelectableNoteheads(
         container,
         selectableNoteCount,
         selectedNoteIndex,
         noteOutcomeByIndex,
+        enableGlowEffects,
         onNoteSelect
       );
       decorateClimaxNoteheads(container, climaxNoteIndices, showClimaxMarkers);
@@ -613,6 +641,7 @@ export default function NotationViewer({
   noteOutcomeByIndex = [],
   climaxNoteIndices = [],
   showClimaxMarkers = false,
+  enableGlowEffects = false,
   onNoteSelect
 }: NotationViewerProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -729,6 +758,7 @@ export default function NotationViewer({
           noteOutcomeByIndex,
           climaxNoteIndices,
           showClimaxMarkers,
+          enableGlowEffects,
           onNoteSelect
         );
       })
@@ -749,7 +779,8 @@ export default function NotationViewer({
     phraseLengthMeasures,
     containerWidth,
     solfegeColorizeLyrics,
-    solfegeOverlayNoteheads
+    solfegeOverlayNoteheads,
+    enableGlowEffects
   ]);
 
   useEffect(() => {
@@ -768,6 +799,7 @@ export default function NotationViewer({
       noteOutcomeByIndex,
       climaxNoteIndices,
       showClimaxMarkers,
+      enableGlowEffects,
       onNoteSelect
     );
   }, [
@@ -782,6 +814,7 @@ export default function NotationViewer({
     noteOutcomeByIndex,
     climaxNoteIndices,
     showClimaxMarkers,
+    enableGlowEffects,
     onNoteSelect
   ]);
 

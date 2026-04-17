@@ -664,8 +664,8 @@ body {
 }
 
 .AppAssessmentNoteBadge--ambiguous {
-  background: rgba(232, 154, 43, 0.2);
-  color: #ffd0a2;
+  background: rgba(255, 213, 74, 0.2);
+  color: #ffe79a;
 }
 
 .AppAssessmentNoteExplanation {
@@ -696,7 +696,7 @@ body {
 }
 
 .AppAssessmentLegendSwatch--ambiguous {
-  background: #e89a2b;
+  background: #ffd54a;
 }
 
 .AppAssessmentDebug {

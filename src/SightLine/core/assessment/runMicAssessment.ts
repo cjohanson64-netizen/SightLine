@@ -867,12 +867,12 @@ export async function runMicAssessment(
   }
   if (usableCalibrationProfile) {
     warnings.push(
-      "Full-scale calibration was used as a soft listening guide for this assessment.",
+      "A short scale was used to find a comfortable key for your voice.",
     );
   }
   if (tonalFrameAnalysis.selectedKind === "calibration_transposed") {
     warnings.push(
-      `Assessment matched a calibration-informed target shifted by ${tonalFrameAnalysis.selectedSemitoneOffset > 0 ? "+" : ""}${tonalFrameAnalysis.selectedSemitoneOffset} semitone${Math.abs(tonalFrameAnalysis.selectedSemitoneOffset) === 1 ? "" : "s"}.`,
+      "Your performance was checked in the key that best matched your singing.",
     );
   }
 
