@@ -1,27 +1,27 @@
 # SightLine
 
-**SightLine** is an intelligent sight-singing exercise generator designed for music teachers and students.
+**SightLine** is an intelligent sight-singing exercise generator for music teachers and students.
 
-It produces structurally sound, musically singable melodic lines on demand — grounded in harmonic grammar, phrase contour planning, and controlled melodic motion.
+It produces structurally sound, musically singable melodic lines on demand, grounded in harmonic grammar, phrase contour planning, and controlled melodic motion.
 
-SightLine is built to generate usable material quickly, while still allowing teachers to export and refine exercises when desired.
+SightLine is designed to generate usable material quickly while still allowing teachers to export and refine exercises as needed.
 
 ---
 
-## 🎯 Purpose
+## Purpose
 
 SightLine helps teachers:
 
-* Generate sight-singing exercises on the fly
-* Customize constraints (range, cadence type, rhythm, illegal intervals, etc.)
-* Export MusicXML for editing in notation software
+* Generate sight-singing exercises on demand
+* Customize constraints such as range, cadence type, rhythm, and interval rules
+* Export MusicXML for use in notation software
 * Maintain classical harmonic integrity
 
-It also supports students who want structured melodic practice with musically sensible lines.
+It also supports students by providing structured melodic practice built on musically coherent material.
 
 ---
 
-## ✨ Core Features
+## Core Features
 
 ### Structured Phrase Planning
 
@@ -33,7 +33,7 @@ It also supports students who want structured melodic practice with musically se
 
 * Tonnetz-based neighbor selection
 * Functional role filtering (T → PD → D → T)
-* 3-chord cadence-tail enforcement:
+* Enforced cadence-tail patterns:
 
   * Authentic: 2–5–1, 1–5–1, 4–5–1
   * Plagal: 1–4–1, 6–4–1
@@ -43,15 +43,15 @@ It also supports students who want structured melodic practice with musically se
 
 * Rhythm templates selected before pitch realization
 * No dotted rhythms (by design)
-* On-beat EE pairs only
-* User rhythm distribution support (EE, Q, H, W)
+* On-beat eighth-note pairs only
+* User-defined rhythm distribution (EE, Q, H, W)
 
 ### Node–Edge Melody Model
 
-* Pass 3: Structural anchor selection (nodes)
-* Pass 4: Intentional edge composition between anchors
+* Pass 3: structural anchor selection (nodes)
+* Pass 4: intentional motion between anchors (edges)
 * Stepwise bias with controlled third usage
-* Limited large leaps per phrase (configurable)
+* Configurable limits on large leaps
 
 ### Constraint System
 
@@ -59,34 +59,34 @@ It also supports students who want structured melodic practice with musically se
 * Illegal melodic intervals
 * Illegal degree-to-degree transitions
 * Tessitura enforcement
-* Max leap control
+* Maximum leap control
 * Dominant tendency resolution
 
-### Export + Playback
+### Export and Playback
 
 * MusicXML export for notation editing
-* Deterministic seed-based generation
-* Playback validation to match rendered notation
+* Deterministic, seed-based generation
+* Playback validation aligned with rendered notation
 
 ---
 
-## 🧠 Architecture Overview
+## Architecture Overview
 
 SightLine uses a structured multi-pass generation pipeline:
 
-### Pass 0 – Normalize & Validate
+### Pass 0 – Normalize and Validate
 
 * Validate user inputs
-* Set defaults
+* Apply defaults
 * Normalize rhythm weights
 
 ### Pass 1 – Harmony Spine
 
-* Generate half-measure harmony slots
+* Generate half-measure harmonic structure
 * Apply functional filtering
 * Enforce cadence-tail patterns
 
-### Pass 2 – Phrase Plan + Rhythm Grid
+### Pass 2 – Phrase Plan and Rhythm Grid
 
 * Determine contour arc and climax
 * Lock rhythmic structure early
@@ -94,37 +94,37 @@ SightLine uses a structured multi-pass generation pipeline:
 
 ### Pass 3 – Structural Skeleton Pitching
 
-* Choose anchor pitches aligned with contour and harmony
+* Select anchor pitches aligned with contour and harmony
 * Enforce tessitura and leap constraints
 
 ### Pass 4 – Edge Composition
 
-* Compose intentional motion between anchors
-* Stepwise smoothing
-* EE melodic laws
+* Compose motion between anchors
+* Apply stepwise smoothing
+* Enforce eighth-note motion rules
 
 ### Pass 5 – Constraint Cleanup
 
-* Apply illegal degree/interval rules
-* Enforce dominant tendency
-* Leap budgeting per phrase
-* Final authority sweep
+* Apply illegal degree and interval rules
+* Enforce dominant tendency resolution
+* Apply leap budgeting per phrase
+* Final validation pass
 
 ### Pass 6 – Playback Projection
 
 * Convert notation to playback timing
-* Assert structural integrity
+* Validate structural integrity
 
 ---
 
-## ⚙️ Installation
+## Installation
 
 ```bash
 npm install
 npm run dev
 ```
 
-Build production bundle:
+Build the production bundle:
 
 ```bash
 npm run build
@@ -132,54 +132,50 @@ npm run build
 
 ---
 
-## 🛠 Usage
+## Usage
 
-1. Select key, mode, range, cadence type, and phrase length.
-2. Adjust rhythm distribution and constraints if desired.
-3. Generate exercise.
-4. Export MusicXML for notation editing if needed.
+1. Select key, mode, range, cadence type, and phrase length
+2. Adjust rhythm distribution and constraints as needed
+3. Generate an exercise
+4. Export MusicXML for further editing if desired
 
 SightLine is designed so that:
 
-* Most exercises are usable immediately.
-* Minor tweaks can be made in notation software if desired.
+* Most exercises are usable immediately
+* Minor refinements can be made in notation software when needed
 
 ---
 
-## 🎼 Design Philosophy
+## Design Philosophy
 
 SightLine does not attempt to replace the teacher.
 
-It aims to generate:
+It generates melodies that are:
 
 * Structurally sound
 * Singable
 * Harmonically coherent
 
-melodies that serve as strong starting points.
-
-Perfection is not the goal.
-Usability and editability are.
+The goal is not perfection, but usability and editability.
 
 ---
 
-## 🔮 Future Directions
+## Future Directions
 
-Potential enhancements:
+Potential enhancements include:
 
 * Motivic development detection
 * Adjustable stylistic profiles
 * Expanded rhythmic vocabulary
 * Student practice mode with feedback
-* Multi-voice counterpoint mode
+* Multi-voice counterpoint support
 
 ---
 
-## 📜 License
+## License
 
 Copyright (c) 2026 Carl Biggers-Johanson
 
 All rights reserved.
 
-This software and associated documentation files (the "Software") may not be copied, modified, distributed, or used without explicit permission from the copyright holder.
-
+This software and associated documentation files may not be copied, modified, distributed, or used without explicit permission from the copyright holder.
