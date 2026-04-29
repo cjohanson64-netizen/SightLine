@@ -1,5 +1,6 @@
 import type { ExerciseSpec, HarmonyEvent, MelodyEvent, PhraseSpec, RhythmWeights } from '@/SightLine/domain/music';
 import { KEY_TO_PC } from '../midi';
+import { midiToDegree, modeScale, nextScaleStepMidi } from '../scale';
 import type { TonnetzGraph } from '../tonnetz/buildTonnetz';
 import { generatePhrasePlan, type PhrasePlan } from './phrasePlanner';
 import { generatePhraseGrid, type PhraseGridPlan } from './phraseGridPlanner';
@@ -30,17 +31,16 @@ import {
   chordToneCandidatesInRange,
   collectCandidateMidisFromPcs,
   degreeCandidatesInRange,
-  midiToDegree,
   nearestAllowedPcWithinLeapCap,
   nearestChordToneMidi,
   nearestMidiWithPcInRange,
   nearestPcWithinLeapCap,
-  nextScaleStepMidi,
   pitchOctaveForMidi,
   toOctave,
   toPitchName,
   toPitchString
 } from './melody/utils';
+export { modeScale } from '../scale';
 
 export type {
   MeasureTemplateId,
@@ -219,10 +219,6 @@ function divisionsToDuration(divisions: number): string {
     return 'eighth';
   }
   return 'quarter';
-}
-
-export function modeScale(mode: ExerciseSpec['mode']): number[] {
-  return mode === 'major' ? [0, 2, 4, 5, 7, 9, 11] : [0, 2, 3, 5, 7, 8, 10];
 }
 
 function cadenceTail(cadence: PhraseSpec['cadence']): [number, number] {

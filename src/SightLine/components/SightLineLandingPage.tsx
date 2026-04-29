@@ -48,8 +48,8 @@ const useCaseCards = [
     body: "Give different sections level-appropriate material without extra prep burden.",
   },
   {
-    title: "Assessment prep",
-    body: "Generate varied practice that mirrors the format and demand of classroom checks.",
+    title: "Practice prep",
+    body: "Generate varied material that supports warm-ups, rehearsal routines, and classroom checks.",
   },
   {
     title: "Melodic analysis tasks",

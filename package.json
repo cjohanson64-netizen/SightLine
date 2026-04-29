@@ -12,6 +12,7 @@
     "@supabase/supabase-js": "^2.98.0",
     "bcryptjs": "^3.0.3",
     "opensheetmusicdisplay": "^1.9.7",
+    "pitchy": "^4.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.30.3",

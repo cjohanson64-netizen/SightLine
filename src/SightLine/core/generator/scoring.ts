@@ -1,5 +1,6 @@
 import type { AssayMetric, ExerciseSpec, MelodyEvent } from '@/SightLine/domain/music';
 import { KEY_TO_PC } from '../midi';
+import { modeScale } from '../scale';
 import { getCadenceTransitionSpec, type CadenceType } from './cadenceVoiceLeading';
 
 export interface CandidateScore {
@@ -51,10 +52,6 @@ function rhythmActualPercents(melody: MelodyEvent[]): { whole: number; half: num
 
 function sign(value: number): number {
   return value > 0 ? 1 : value < 0 ? -1 : 0;
-}
-
-function modeScale(mode: 'major' | 'minor'): number[] {
-  return mode === 'major' ? [0, 2, 4, 5, 7, 9, 11] : [0, 2, 3, 5, 7, 8, 10];
 }
 
 function cadenceComplianceForPhraseEnds(melody: MelodyEvent[], spec: ExerciseSpec): number {

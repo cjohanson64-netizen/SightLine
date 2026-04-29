@@ -15,7 +15,7 @@ import {
   renderPlaybackPass11,
   validateAllMustPass10,
 } from "./melodyPipelineCore";
-import { midiToDegree } from "./melody/utils";
+import { midiToDegree } from "../scale";
 
 export interface ApplyPhraseMelodyConstraintsInput {
   beatsPerMeasure: number;

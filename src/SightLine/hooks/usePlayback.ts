@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { midiToFrequency, toOctave } from "../core/midi";
+import { applyPitchPatch, type PitchPatchEntry } from "../core/scale";
 import type { MelodyEvent } from "@/SightLine/domain/music";
-
-type PitchPatchEntry = { midi: number; pitch: string; octave?: number };
 
 function scheduleBeep(
   audioContext: AudioContext,
@@ -31,29 +30,6 @@ function scheduleBeep(
   gainNode.connect(audioContext.destination);
   oscillator.start(startTime);
   oscillator.stop(endTime);
-}
-
-function applyPitchPatch(
-  melody: MelodyEvent[],
-  patch: Record<string, PitchPatchEntry>,
-  noteKey: (event: MelodyEvent, index: number) => string,
-): MelodyEvent[] {
-  return melody.map((event, index) => {
-    if (event.isAttack === false) return event;
-    const key = noteKey(event, index);
-    const override = patch[key];
-    if (!override) return event;
-    return {
-      ...event,
-      midi: override.midi,
-      pitch: override.pitch,
-      octave: override.octave ?? toOctave(override.midi),
-      isEdited: true,
-      editedMidi: override.midi,
-      editedPitch: override.pitch,
-      originalMidi: event.midi,
-    };
-  });
 }
 
 export function usePlayback(
@@ -99,7 +75,11 @@ export function usePlayback(
     const beatSeconds = 60 / Math.max(30, Math.min(240, tempoBpm));
     const startTime = audioContext.currentTime + 0.05;
     const bpm = Math.max(1, beatsPerMeasure || 4);
-    const patchedMelody = applyPitchPatch(currentMelody, pitchPatch, noteKey);
+    const patchedMelody = applyPitchPatch(currentMelody, pitchPatch, {
+      noteKeyFn: noteKey,
+      octaveForMidi: toOctave,
+      includeEditMetadata: true,
+    });
 
     const playableEvents = patchedMelody
       .map((event, melodyIndex) => ({ event, melodyIndex }))

@@ -85,7 +85,6 @@ export function useGeneratorEngine({
       setCurrentSpecSnapshot(null);
       setDebugSemantics({
         targetNotes: [],
-        assessmentExplanations: [],
         phraseSummaries: [],
         strengths: [],
         weaknesses: [],
@@ -104,7 +103,6 @@ export function useGeneratorEngine({
     setDebugSemantics(
       output.artifact.debugSemantics ?? {
         targetNotes: [],
-        assessmentExplanations: [],
         phraseSummaries: [],
         strengths: [],
         weaknesses: [],

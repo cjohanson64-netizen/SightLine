@@ -137,35 +137,20 @@ export default function DashboardPage({
           )}
         </div>
         <div className="AppDashboardCard">
-          <h3>Recent Assessments</h3>
-          {mode !== "teacher" ? (
-            <p className="AppHistoryLabel">Teacher assessment logs appear here.</p>
-          ) : teacher.recentAssessmentLogsStatus === "loading" ? (
-            <p className="AppHistoryLabel">Loading recent assessments...</p>
-          ) : teacher.recentAssessmentLogsError ? (
-            <p className="AppHistoryLabel">{teacher.recentAssessmentLogsError}</p>
-          ) : teacher.recentAssessmentLogs.length === 0 ? (
-            <p className="AppHistoryLabel">No assessment logs yet.</p>
+          <h3>Library Snapshot</h3>
+          {mode === "teacher" ? (
+            <>
+              <p className="AppHistoryLabel">
+                Active class: {teacher.selectedFolder?.name ?? "None selected"}
+              </p>
+              <p className="AppHistoryLabel">
+                Pending submissions: {teacher.studentSubmissions.length}
+              </p>
+            </>
           ) : (
-            <ul className="AppHistoryList">
-              {teacher.recentAssessmentLogs.map((log) => (
-                <li key={log.id}>
-                  <p className="AppHistoryLabel">
-                    {log.student_id ? `${log.student_id} · ` : ""}
-                    {log.exercise_title}
-                  </p>
-                  <p className="AppHistoryLabel">
-                    {log.weighted_score} / {log.total_possible} ({log.percent}%) · {log.assessment_mode}
-                  </p>
-                  {log.summary_text ? (
-                    <p className="AppHistoryLabel">{log.summary_text}</p>
-                  ) : null}
-                  <p className="AppHistoryLabel">
-                    {formatSavedDate(log.created_at)}
-                  </p>
-                </li>
-              ))}
-            </ul>
+            <p className="AppHistoryLabel">
+              Teacher library and classroom snapshots appear here in teacher mode.
+            </p>
           )}
         </div>
       </div>

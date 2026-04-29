@@ -12,7 +12,6 @@ metadataNode = <{ id: "artifact-metadata", type: "artifact-metadata", label: "Ex
 
 baseArtifact := @seed
   -> @graft.meta(metadataNode, "source", "SightLine")
-  -> @graft.meta(metadataNode, "stage", assessmentStage)
   -> @graft.meta(metadataNode, "seed", exerciseSeed)
   -> @graft.meta(metadataNode, "phraseCount", phraseCount)
   -> @graft.meta(metadataNode, "melodyNoteCount", melodyNoteCount)
@@ -22,8 +21,6 @@ exerciseArtifact := @compose([
   specGraph,
   harmonyGraph,
   melodyGraph,
-  performedMelodyGraph,
-  assessmentExplanationGraph,
   analysisGraph
 ], merge: artifactRoot)
   <> @project(format: "graph")

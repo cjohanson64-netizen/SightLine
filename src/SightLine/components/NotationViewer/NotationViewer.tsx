@@ -15,13 +15,9 @@ interface NotationViewerProps {
   solfegeActive?: boolean;
   solfegeColorizeLyrics?: boolean;
   solfegeOverlayNoteheads?: boolean;
-  selectableNoteCount?: number;
-  selectedNoteIndex?: number | null;
-  noteOutcomeByIndex?: Array<'correct' | 'near' | 'incorrect' | 'ambiguous' | null>;
   climaxNoteIndices?: number[];
   showClimaxMarkers?: boolean;
   enableGlowEffects?: boolean;
-  onNoteSelect?: (index: number) => void;
 }
 
 const SOLFEGE_COLOR_MAP: Record<string, string> = {
@@ -423,54 +419,6 @@ function applyNotationDecorations(
   }
 }
 
-function decorateSelectableNoteheads(
-  container: HTMLElement,
-  selectableNoteCount: number,
-  selectedNoteIndex: number | null,
-  noteOutcomeByIndex: Array<'correct' | 'near' | 'incorrect' | 'ambiguous' | null>,
-  enableGlowEffects: boolean,
-  onNoteSelect?: (index: number) => void
-): void {
-  let noteheads = Array.from(container.querySelectorAll('svg g.vf-notehead'));
-  if (noteheads.length === 0) {
-    noteheads = Array.from(container.querySelectorAll('svg .vf-notehead'));
-  }
-
-  const ordered = noteheads
-    .map((node) => {
-      const x = safeCenterX(node);
-      return x === null ? null : { node, x };
-    })
-    .filter((entry): entry is { node: Element; x: number } => entry !== null)
-    .sort((a, b) => a.x - b.x)
-    .slice(0, selectableNoteCount);
-
-  ordered.forEach(({ node }, index) => {
-    const svgNode = node as SVGElement;
-    svgNode.classList.add('NotationViewer-notehead', 'NotationViewer-notehead--selectable');
-    svgNode.classList.remove(
-      'NotationViewer-notehead--correct',
-      'NotationViewer-notehead--near',
-      'NotationViewer-notehead--incorrect',
-      'NotationViewer-notehead--ambiguous',
-      'NotationViewer-notehead--glowable',
-      'NotationViewer-notehead--selected'
-    );
-    const outcome = noteOutcomeByIndex[index];
-    if (outcome) {
-      svgNode.classList.add(`NotationViewer-notehead--${outcome}`);
-    }
-    if (enableGlowEffects) {
-      svgNode.classList.add('NotationViewer-notehead--glowable');
-    }
-    if (selectedNoteIndex === index) {
-      svgNode.classList.add('NotationViewer-notehead--selected');
-    }
-    svgNode.style.cursor = onNoteSelect ? 'pointer' : 'default';
-    svgNode.onclick = onNoteSelect ? () => onNoteSelect(index) : null;
-  });
-}
-
 function getOrderedNoteheads(container: HTMLElement): SVGElement[] {
   let noteheads = Array.from(container.querySelectorAll('svg g.vf-notehead'));
   if (noteheads.length === 0) {
@@ -558,13 +506,9 @@ function scheduleNotationDecorations(
   renderSeqRef: MutableRefObject<number>,
   solfegeColorizeLyrics: boolean,
   solfegeOverlayNoteheads: boolean,
-  selectableNoteCount: number,
-  selectedNoteIndex: number | null,
-  noteOutcomeByIndex: Array<'correct' | 'near' | 'incorrect' | 'ambiguous' | null>,
   climaxNoteIndices: number[],
   showClimaxMarkers: boolean,
-  enableGlowEffects: boolean,
-  onNoteSelect?: (index: number) => void
+  enableGlowEffects: boolean
 ): void {
   const seq = renderSeqRef.current;
   applyNotationDecorations(
@@ -572,14 +516,6 @@ function scheduleNotationDecorations(
     solfegeColorizeLyrics,
     solfegeOverlayNoteheads,
     enableGlowEffects
-  );
-  decorateSelectableNoteheads(
-    container,
-    selectableNoteCount,
-    selectedNoteIndex,
-    noteOutcomeByIndex,
-    enableGlowEffects,
-    onNoteSelect
   );
   decorateClimaxNoteheads(container, climaxNoteIndices, showClimaxMarkers);
   requestAnimationFrame(() => {
@@ -592,14 +528,6 @@ function scheduleNotationDecorations(
       solfegeOverlayNoteheads,
       enableGlowEffects
     );
-    decorateSelectableNoteheads(
-      container,
-      selectableNoteCount,
-      selectedNoteIndex,
-      noteOutcomeByIndex,
-      enableGlowEffects,
-      onNoteSelect
-    );
     decorateClimaxNoteheads(container, climaxNoteIndices, showClimaxMarkers);
     requestAnimationFrame(() => {
       if (seq !== renderSeqRef.current || !container.isConnected) {
@@ -610,14 +538,6 @@ function scheduleNotationDecorations(
         solfegeColorizeLyrics,
         solfegeOverlayNoteheads,
         enableGlowEffects
-      );
-      decorateSelectableNoteheads(
-        container,
-        selectableNoteCount,
-        selectedNoteIndex,
-        noteOutcomeByIndex,
-        enableGlowEffects,
-        onNoteSelect
       );
       decorateClimaxNoteheads(container, climaxNoteIndices, showClimaxMarkers);
     });
@@ -636,13 +556,9 @@ export default function NotationViewer({
   solfegeActive = false,
   solfegeColorizeLyrics = false,
   solfegeOverlayNoteheads = false,
-  selectableNoteCount = 0,
-  selectedNoteIndex = null,
-  noteOutcomeByIndex = [],
   climaxNoteIndices = [],
   showClimaxMarkers = false,
-  enableGlowEffects = false,
-  onNoteSelect
+  enableGlowEffects = false
 }: NotationViewerProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
@@ -753,13 +669,9 @@ export default function NotationViewer({
           renderSeqRef,
           solfegeColorizeLyrics,
           solfegeOverlayNoteheads,
-          selectableNoteCount,
-          selectedNoteIndex,
-          noteOutcomeByIndex,
           climaxNoteIndices,
           showClimaxMarkers,
-          enableGlowEffects,
-          onNoteSelect
+          enableGlowEffects
         );
       })
       .catch(() => {
@@ -794,13 +706,9 @@ export default function NotationViewer({
       renderSeqRef,
       solfegeColorizeLyrics,
       solfegeOverlayNoteheads,
-      selectableNoteCount,
-      selectedNoteIndex,
-      noteOutcomeByIndex,
       climaxNoteIndices,
       showClimaxMarkers,
-      enableGlowEffects,
-      onNoteSelect
+      enableGlowEffects
     );
   }, [
     musicXml,
@@ -809,13 +717,9 @@ export default function NotationViewer({
     solfegeOverlayNoteheads,
     projectionMode,
     headerControls,
-    selectableNoteCount,
-    selectedNoteIndex,
-    noteOutcomeByIndex,
     climaxNoteIndices,
     showClimaxMarkers,
-    enableGlowEffects,
-    onNoteSelect
+    enableGlowEffects
   ]);
 
   return (

@@ -1,5 +1,6 @@
 import type { ExerciseSpec, HarmonyEvent } from '@/SightLine/domain/music';
 import { KEY_TO_PC } from '../midi';
+import { modeScale } from '../scale';
 import { createRng } from '../../utils/rng';
 import type { Rng } from '../../utils/rng';
 import type { TonnetzGraph } from '../tonnetz/buildTonnetz';
@@ -10,10 +11,6 @@ import {
   isSemanticCadentialWholeNoteEligible,
   type HarmonicRhythmPattern,
 } from "./harmonicRhythm";
-
-function modeScale(mode: ExerciseSpec['mode']): number[] {
-  return mode === 'major' ? [0, 2, 4, 5, 7, 9, 11] : [0, 2, 3, 5, 7, 8, 10];
-}
 
 function degreeQuality(mode: ExerciseSpec['mode'], degree: number): HarmonyEvent['quality'] {
   if (mode === 'major') {

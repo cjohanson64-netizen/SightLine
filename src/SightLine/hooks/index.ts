@@ -2,6 +2,7 @@ export { useAuth } from "./useAuth";
 export type { AuthUserView } from "./useAuth";
 
 export { usePlayback } from "./usePlayback";
+export { useAssessmentRecorder } from "./useAssessmentRecorder";
 
 export { useProjection } from "./useProjection";
 

@@ -1,6 +1,5 @@
 import type {
   ArtifactGraph,
-  DebugProjectedAssessmentExplanation,
   DebugProjectedMelodyFunction,
   DebugProjectedTargetNote,
   DebugSemanticsProjection,
@@ -30,14 +29,6 @@ function relationTargets(
     .map((edge) => edge.to);
 }
 
-function relationTarget(
-  graph: ArtifactGraph,
-  from: string,
-  kind: string
-): string | null {
-  return graph.edges.find((edge) => edge.from === from && edge.kind === kind)?.to ?? null;
-}
-
 export function projectDebugSemantics(graph: ArtifactGraph): DebugSemanticsProjection {
   const nodesById = buildNodeMap(graph);
 
@@ -64,28 +55,8 @@ export function projectDebugSemantics(graph: ArtifactGraph): DebugSemanticsProje
     })
     .filter((note): note is DebugProjectedTargetNote => note !== null);
 
-  const assessmentExplanations: DebugProjectedAssessmentExplanation[] = relationTargets(
-    graph,
-    'assessment-explanations',
-    'contains'
-  ).map((explanationId) => {
-    const outcomeNodeId = relationTarget(graph, explanationId, 'hasOutcome');
-    const outcome =
-      dataAs<{ outcome?: DebugProjectedAssessmentExplanation['outcome'] }>(
-        outcomeNodeId ? nodesById.get(outcomeNodeId) : undefined
-      )?.outcome ?? 'ambiguous';
-
-    return {
-      explanationId,
-      targetNoteId: relationTarget(graph, explanationId, 'explainsTarget'),
-      performedNoteId: relationTarget(graph, explanationId, 'explainsPerformed'),
-      outcome
-    };
-  });
-
   return {
     targetNotes,
-    assessmentExplanations,
     phraseSummaries: projectPhraseSemanticsSummaries(targetNotes),
     strengths: [],
     weaknesses: [],

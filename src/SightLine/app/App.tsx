@@ -15,7 +15,6 @@ import {
 
 import AppNavbar from "../components/AppNavbar";
 import AddStudentsModal from "../components/modals/AddStudentsModal";
-import AssessmentWorkflowModal from "../components/modals/AssessmentWorkflowModal";
 import AuthChoiceModal from "../components/modals/AuthChoiceModal";
 import BatchGenerateModal from "../components/modals/BatchGenerateModal";
 import ClassroomAccessModal from "../components/modals/ClassroomAccessModal";
@@ -25,22 +24,17 @@ import MelodyPreferencesModal from "../components/modals/MelodyPreferencesModal"
 import StudentSignInModal from "../components/modals/StudentSignInModal";
 
 import {
-  KEY_TO_PC,
-  midiToPc,
   midiToPitch,
   noteKey,
   pitchOctaveForMidi,
   prefersFlatsForKey,
   toOctave,
 } from "../core/midi";
+import { applyPitchPatch, type PitchPatchEntry } from "../core/scale";
 import { toMusicXmlFromMelody } from "../core/projection/toMusicXml";
 import { defaultSpec, normalizeUserConstraintsInSpec } from "../core/spec";
-import { saveAssessmentLog } from "../core/assessmentLogs/saveAssessmentLog";
-import type { MicAssessmentRunResult } from "@/SightLine/core/audio/types";
 import type { DebugSemanticsProjection } from "@/SightLine/domain/artifact";
 import type { ExerciseSpec, MelodyEvent } from "@/SightLine/domain/music";
-import { projectPracticeRecommendation } from "../core/tatBridge/projectPracticeRecommendation";
-import { projectSemanticInsights } from "../core/tatBridge/projectSemanticInsights";
 import "../styles/App.css";
 
 import { useAuth } from "../hooks/useAuth";
@@ -51,9 +45,7 @@ import { useStudentSession } from "../hooks/useStudentSession";
 import { useTeacherLibrary } from "../hooks/useTeacherLibrary";
 import { useGeneratorActions } from "../hooks/useGeneratorActions";
 import { usePitchEdit } from "../hooks/usePitchEdit";
-import { useMicAssessment } from "../hooks/useMicAssessment";
-import { useAssessmentAccess } from "../hooks/useAssessmentAccess";
-import { useAssessmentCalibration } from "../hooks/useAssessmentCalibration";
+import { useModalState } from "../hooks/useModalState";
 import ClassAccessPage from "../pages/ClassAccessPage";
 import GuidePage from "../pages/GuidePage";
 import GeneratorPage from "../pages/GeneratorPage";
@@ -62,100 +54,13 @@ import GeneratorPage from "../pages/GeneratorPage";
 // Local types
 // ---------------------------------------------------------------------------
 
-interface PitchPatchEntry {
-  midi: number;
-  pitch: string;
-  octave?: number;
-}
-
-type AssessmentNoteOutcome =
-  | "correct"
-  | "near"
-  | "incorrect"
-  | "ambiguous"
-  | null;
-
 const EMPTY_DEBUG_SEMANTICS: DebugSemanticsProjection = {
   targetNotes: [],
-  assessmentExplanations: [],
   phraseSummaries: [],
   strengths: [],
   weaknesses: [],
   recommendation: null,
 };
-
-// ---------------------------------------------------------------------------
-// Pure helpers (kept local because they depend on domain types)
-// ---------------------------------------------------------------------------
-
-function modeScale(mode: ExerciseSpec["mode"]): number[] {
-  return mode === "major" ? [0, 2, 4, 5, 7, 9, 11] : [0, 2, 3, 5, 7, 8, 10];
-}
-function midiToDegree(midi: number, keyScale: number[]): number {
-  const idx = keyScale.indexOf(midiToPc(midi));
-  return idx === -1 ? 1 : idx + 1;
-}
-
-function applyPitchPatch(
-  melody: MelodyEvent[],
-  patch: Record<string, PitchPatchEntry>,
-): MelodyEvent[] {
-  return melody.map((event, index) => {
-    if (event.isAttack === false) return event;
-    const override = patch[noteKey(event, index)];
-    if (!override) return event;
-    return {
-      ...event,
-      midi: override.midi,
-      pitch: override.pitch,
-      octave: override.octave ?? pitchOctaveForMidi(override.midi),
-      isEdited: true,
-    };
-  });
-}
-
-function nextScaleStepMidi(
-  currentMidi: number,
-  direction: 1 | -1,
-  keyScale: number[],
-): number | null {
-  for (
-    let midi = currentMidi + direction;
-    midi >= 0 && midi <= 127;
-    midi += direction
-  ) {
-    if (keyScale.includes(midiToPc(midi))) return midi;
-  }
-  return null;
-}
-
-function allPcCandidatesInRange(
-  pc: number,
-  minMidi: number,
-  maxMidi: number,
-): number[] {
-  const result: number[] = [];
-  for (let midi = minMidi; midi <= maxMidi; midi++) {
-    if (midiToPc(midi) === pc) result.push(midi);
-  }
-  return result;
-}
-
-function tessituraRange(specInput: ExerciseSpec): {
-  minMidi: number;
-  maxMidi: number;
-} {
-  const tonicPc = KEY_TO_PC[specInput.key] ?? 0;
-  const scale = modeScale(specInput.mode).map((step) => (tonicPc + step) % 12);
-  const lowPc = scale[(specInput.range.lowDegree - 1 + 700) % 7] ?? tonicPc;
-  const highPc = scale[(specInput.range.highDegree - 1 + 700) % 7] ?? tonicPc;
-  const lowMidi = (specInput.range.lowOctave + 1) * 12 + lowPc;
-  const highMidi = (specInput.range.highOctave + 1) * 12 + highPc;
-  return {
-    minMidi: Math.min(lowMidi, highMidi),
-    maxMidi: Math.max(lowMidi, highMidi),
-  };
-}
 
 function isIllegalTransition(
   prevDegree: number,
@@ -220,12 +125,6 @@ function AppContent(): JSX.Element {
     normalizeSpec: normalizeUserConstraintsInSpec,
     extractMelodyEvents,
   });
-  const assessmentAccess = useAssessmentAccess({
-    mode,
-    authUserId: auth.authUser?.id ?? null,
-    studentSession: student.studentSession,
-    hasActiveSubscription: teacher.hasActiveSubscription,
-  });
 
   // ── Local UI state ────────────────────────────────────────────────────────
   const [spec, setSpec] = useState<ExerciseSpec>(defaultSpec);
@@ -249,22 +148,7 @@ function AppContent(): JSX.Element {
     "idle" | "saving" | "saved" | "error"
   >("idle");
   const [saveMessage, setSaveMessage] = useState<string>("");
-  const [showAuthChoiceModal, setShowAuthChoiceModal] =
-    useState<boolean>(false);
-  const [showStudentSignInModal, setShowStudentSignInModal] =
-    useState<boolean>(false);
-  const [showMelodyPreferencesModal, setShowMelodyPreferencesModal] =
-    useState<boolean>(false);
-  const [showClassroomAccessModal, setShowClassroomAccessModal] =
-    useState<boolean>(false);
-  const [showAddStudentsModal, setShowAddStudentsModal] =
-    useState<boolean>(false);
-  const [showBatchModal, setShowBatchModal] = useState<boolean>(false);
-  const [showAssessmentWorkflowModal, setShowAssessmentWorkflowModal] =
-    useState<boolean>(false);
   const [, setBillingNotice] = useState<string>("");
-  const [selectedAssessmentNoteIndex, setSelectedAssessmentNoteIndex] =
-    useState<number | null>(null);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const notationContainerRef = useRef<HTMLDivElement | null>(null);
@@ -300,184 +184,25 @@ function AppContent(): JSX.Element {
         : { ...event, pitch: midiToPitch(event.midi, { preferFlats, key: activeSpec.key, mode: activeSpec.mode }) },
     );
   }, [currentMelody, pitchPatch, currentSpecSnapshot, spec]);
-
-  const handleAssessmentCompleted = async (
-    nextResult: MicAssessmentRunResult,
-  ) => {
-    assessmentAccess.recordAssessmentUse();
-    try {
-      await saveAssessmentLog({
-        authUserId: auth.authUser?.id ?? null,
-        teacherId: auth.authUser?.id ?? null,
-        classId:
-          mode === "student"
-            ? (student.studentSession?.classroom.id ?? null)
-            : teacher.selectedFolderId || null,
-        studentToken: student.studentSession?.token ?? null,
-        studentId: student.studentSession?.classroom.student_id ?? null,
-        folderId:
-          mode === "student"
-            ? (student.studentSession?.classroom.id ?? null)
-            : teacher.selectedFolderId || null,
-        assignmentId: null,
-        exerciseId: mode === "teacher" ? teacher.activeExerciseId : null,
-        exerciseTitle: currentSpecSnapshot?.title ?? spec.title,
-        seed,
-        result: nextResult,
-      });
-    } catch (logError) {
-      console.error("Failed to save assessment log", logError);
-    } finally {
-      calibration.clearCalibration();
-    }
-  };
-
-  const calibration = useAssessmentCalibration(currentPatchedMelody);
-
-  const micAssessment = useMicAssessment({
-    targetMelody: currentPatchedMelody,
-    calibrationProfile: calibration.result?.profile ?? null,
-    access: {
-      canRun: assessmentAccess.access.canRun,
-      blockedMessage: assessmentAccess.access.blockedMessage,
-      onAssessmentCompleted: handleAssessmentCompleted,
-    },
-  });
-
-  const assessmentPlaybackDisabled =
-    calibration.status === "requesting_permission" ||
-    calibration.status === "recording" ||
-    calibration.status === "processing" ||
-    micAssessment.status === "requesting_permission" ||
-    micAssessment.status === "recording" ||
-    micAssessment.status === "processing";
+  const modalState = useModalState();
 
   const playback = usePlayback(
     currentMelody,
     pitchPatch,
     noteKey,
     currentBeatsPerMeasure,
-    { blocked: assessmentPlaybackDisabled },
+    { blocked: false },
   );
   const projection = useProjection(notationContainerRef);
   const interactionDisabled = playback.isPlaying;
-
-  const assessmentOutcomeByIndex = useMemo<AssessmentNoteOutcome[]>(() => {
-    const result = micAssessment.result;
-    if (!result) {
-      return [];
-    }
-
-    return currentPatchedMelody.map((_, index) => {
-      const note = result.assessment.notes[index];
-      const segmented = result.segmentedNotes[index];
-      if (
-        note?.displayState === "correct" &&
-        (note?.intonationBand === "in_tune" || note?.intonationBand === "tuned")
-      ) {
-        return "correct";
-      }
-      if (note?.displayState === "correct") {
-        return "ambiguous";
-      }
-      if (note?.displayState === "transposed_consistent") {
-        return "correct";
-      }
-      if (note?.intonationBand === "boundary_cross") {
-        return "ambiguous";
-      }
-      if (
-        note?.displayState === "ambiguous" ||
-        note?.displayState === "low_confidence"
-      ) {
-        return "ambiguous";
-      }
-      if (note?.isCorrect) {
-        return "correct";
-      }
-      if (
-        segmented &&
-        (segmented.status === "ambiguous" ||
-          segmented.status === "weak" ||
-          segmented.targetConsistentAmbiguity)
-      ) {
-        return "ambiguous";
-      }
-      if (note?.target || segmented) {
-        return "incorrect";
-      }
-      return null;
-    });
-  }, [micAssessment.result, currentPatchedMelody]);
-
-  const semanticInsightOutcomes = useMemo<
-    Array<"correct" | "near_pitch" | "incorrect_pitch" | "ambiguous" | null>
-  >(
-    () =>
-      assessmentOutcomeByIndex.map((outcome) =>
-        outcome === "near"
-          ? "near_pitch"
-          : outcome === "incorrect"
-            ? "incorrect_pitch"
-            : outcome,
-      ),
-    [assessmentOutcomeByIndex],
-  );
-
-  const projectedDebugSemantics = useMemo<DebugSemanticsProjection>(
-    () => {
-      const semanticInsights = projectSemanticInsights({
-        targetNotes: debugSemantics.targetNotes,
-        assessmentExplanations: debugSemantics.assessmentExplanations,
-        phraseSummaries: debugSemantics.phraseSummaries,
-        noteOutcomes: semanticInsightOutcomes,
-      });
-
-      return {
-        ...debugSemantics,
-        ...semanticInsights,
-        recommendation: projectPracticeRecommendation({
-          targetNotes: debugSemantics.targetNotes,
-          assessmentExplanations: debugSemantics.assessmentExplanations,
-          strengths: semanticInsights.strengths,
-          weaknesses: semanticInsights.weaknesses,
-        }),
-      };
-    },
-    [debugSemantics, semanticInsightOutcomes],
-  );
+  const projectedDebugSemantics = debugSemantics;
 
   const climaxNoteIndices = useMemo<number[]>(
     () =>
-      micAssessment.result
-        ? projectedDebugSemantics.targetNotes.flatMap((note, index) =>
-            note.functions.includes("climax") ? [index] : [],
-          )
-        : [],
-    [micAssessment.result, projectedDebugSemantics.targetNotes],
-  );
-
-  const assessmentNoteColorsByIndex = useMemo<
-    Record<number, string | undefined>
-  >(
-    () =>
-      assessmentOutcomeByIndex.reduce<Record<number, string | undefined>>(
-        (acc, outcome, index) => {
-          acc[index] =
-            outcome === "correct"
-              ? "#1ecf87"
-              : outcome === "near"
-                ? "#1ecf87"
-                : outcome === "incorrect"
-                  ? "#e25555"
-                  : outcome === "ambiguous"
-                    ? "#ffd54a"
-                    : undefined;
-          return acc;
-        },
-        {},
+      projectedDebugSemantics.targetNotes.flatMap((note, index) =>
+        note.functions.includes("climax") ? [index] : [],
       ),
-    [assessmentOutcomeByIndex],
+    [projectedDebugSemantics.targetNotes],
   );
 
   const selectedAttack = renderableAttacks[selectionIndex] ?? null;
@@ -503,7 +228,6 @@ function AppContent(): JSX.Element {
       currentSpecSnapshot as unknown as Record<string, unknown>,
       currentPatchedMelody,
       {
-        noteColorsByIndex: assessmentNoteColorsByIndex,
         ...(playback.playbackHighlightIndex !== null
           ? {
               highlightedMelodyIndex: playback.playbackHighlightIndex,
@@ -521,7 +245,6 @@ function AppContent(): JSX.Element {
     currentSpecSnapshot,
     currentMelody,
     currentPatchedMelody,
-    assessmentNoteColorsByIndex,
     playback.playbackHighlightIndex,
     selectedMelodyIndex,
     pitchEditMode,
@@ -561,19 +284,6 @@ function AppContent(): JSX.Element {
         : `Edited: MIDI ${selectedOriginalAttack.midi} -> ${selectedAttack.midi}`
       : "Edited: no";
   void selectedEditLabel; // used in pitch-edit UI if desired
-
-  useEffect(() => {
-    const result = micAssessment.result;
-    if (!result) {
-      setSelectedAssessmentNoteIndex(null);
-      return;
-    }
-    setSelectedAssessmentNoteIndex((current) =>
-      current !== null && current < result.segmentedNotes.length
-        ? current
-        : null,
-    );
-  }, [micAssessment.result]);
 
   // ── Effects ───────────────────────────────────────────────────────────────
 
@@ -706,40 +416,7 @@ function AppContent(): JSX.Element {
   });
 
   const handleGenerateNewMelody = () => {
-    micAssessment.clearAssessment();
-    calibration.clearCalibration();
-    setSelectedAssessmentNoteIndex(null);
-    setShowAssessmentWorkflowModal(false);
     runWithNewSeed();
-  };
-
-  const resetAssessmentWorkflow = () => {
-    calibration.clearCalibration();
-    micAssessment.clearAssessment();
-    setSelectedAssessmentNoteIndex(null);
-  };
-
-  const openAssessmentWorkflow = () => {
-    resetAssessmentWorkflow();
-    setShowAssessmentWorkflowModal(true);
-  };
-
-  const closeAssessmentWorkflow = () => {
-    if (
-      calibration.status === "requesting_permission" ||
-      calibration.status === "recording" ||
-      calibration.status === "processing"
-    ) {
-      calibration.clearCalibration();
-    }
-    if (
-      micAssessment.status === "requesting_permission" ||
-      micAssessment.status === "recording" ||
-      micAssessment.status === "processing"
-    ) {
-      micAssessment.clearAssessment();
-    }
-    setShowAssessmentWorkflowModal(false);
   };
 
   const handleNotationKeyDownWhileStopped: React.KeyboardEventHandler<
@@ -768,26 +445,18 @@ function AppContent(): JSX.Element {
       await auth.signOut();
       return;
     }
-    setShowAuthChoiceModal(true);
+    modalState.openAuthChoiceModal();
   };
 
   const handleTeacherSignIn = async () => {
-    setShowAuthChoiceModal(false);
+    modalState.closeAuthChoiceModal();
     const redirectPath = location.pathname;
     await auth.signInWithGoogle(redirectPath);
   };
 
-  const handleAssessmentUpgrade = async () => {
-    if (mode === "teacher" && auth.authUser) {
-      await teacher.startCheckout();
-      return;
-    }
-    setShowAuthChoiceModal(true);
-  };
-
   const handleStudentSignIn = () => {
-    setShowAuthChoiceModal(false);
-    setShowStudentSignInModal(true);
+    modalState.closeAuthChoiceModal();
+    modalState.openStudentSignInModal();
     if (!student.studentSession)
       student.setStudentJoinMessage(
         "Enter your classroom code, passcode, and student ID.",
@@ -867,7 +536,7 @@ function AppContent(): JSX.Element {
       teacher.selectedFolderId,
       teacher.selectedFolder?.name ?? "Class",
     );
-    setShowBatchModal(true);
+    modalState.openBatchModal();
   };
 
   const classAccessView = (
@@ -875,9 +544,9 @@ function AppContent(): JSX.Element {
       formatSavedDate={formatSavedDate}
       mode={mode}
       onExportSavedPacketZip={handleExportSavedPacketZip}
-      onOpenAddStudents={() => setShowAddStudentsModal(true)}
+      onOpenAddStudents={modalState.openAddStudentsModal}
       onOpenBatchGenerate={openBatchGenerateModal}
-      onOpenClassroomAccess={() => setShowClassroomAccessModal(true)}
+      onOpenClassroomAccess={modalState.openClassroomAccessModal}
       onOpenSavedPacket={handleOpenSavedPacket}
       onPreviewSubmission={handlePreviewSubmission}
       teacher={teacher}
@@ -944,13 +613,7 @@ function AppContent(): JSX.Element {
             <GeneratorPage
               currentMelody={currentMelody}
               currentSpecSnapshot={currentSpecSnapshot}
-              assessmentNoteOutcomeByIndex={assessmentOutcomeByIndex}
-              assessmentResult={micAssessment.result}
               climaxNoteIndices={climaxNoteIndices}
-              selectedAssessmentNoteIndex={selectedAssessmentNoteIndex}
-              assessmentAccessMessage={assessmentAccess.access.message}
-              assessmentAccessBlocked={!assessmentAccess.access.canRun}
-              assessmentPlaybackDisabled={assessmentPlaybackDisabled}
               displayNotationMusicXml={displayNotationMusicXml}
               error={error}
               exportMusicXml={exportMusicXml}
@@ -966,12 +629,7 @@ function AppContent(): JSX.Element {
               mode={mode}
               notationContainerRef={notationContainerRef}
               onExport={handleExport}
-              onOpenMelodyPreferences={() =>
-                setShowMelodyPreferencesModal(true)
-              }
-              onAssessmentNoteSelect={setSelectedAssessmentNoteIndex}
-              onAssessmentUpgrade={() => void handleAssessmentUpgrade()}
-              onRunAssessment={openAssessmentWorkflow}
+              onOpenMelodyPreferences={modalState.openMelodyPreferencesModal}
               pitchEditMode={pitchEditMode}
               playback={playback}
               projection={projection}
@@ -1012,16 +670,16 @@ function AppContent(): JSX.Element {
 
       <AuthChoiceModal
         authUser={auth.authUser}
-        isOpen={showAuthChoiceModal}
-        onClose={() => setShowAuthChoiceModal(false)}
+        isOpen={modalState.showAuthChoiceModal}
+        onClose={modalState.closeAuthChoiceModal}
         onStudentSignIn={handleStudentSignIn}
         onTeacherSignIn={handleTeacherSignIn}
       />
 
       <StudentSignInModal
         authUser={auth.authUser}
-        isOpen={showStudentSignInModal}
-        onClose={() => setShowStudentSignInModal(false)}
+        isOpen={modalState.showStudentSignInModal}
+        onClose={modalState.closeStudentSignInModal}
         onJoin={handleJoinClassroom}
         onLeave={handleLeaveClassroom}
         onResetToMySettings={() => {
@@ -1039,16 +697,16 @@ function AppContent(): JSX.Element {
       />
 
       <ClassroomAccessModal
-        isOpen={showClassroomAccessModal}
+        isOpen={modalState.showClassroomAccessModal}
         mode={mode}
-        onClose={() => setShowClassroomAccessModal(false)}
+        onClose={modalState.closeClassroomAccessModal}
         teacher={teacher}
       />
 
       <AddStudentsModal
-        isOpen={showAddStudentsModal}
+        isOpen={modalState.showAddStudentsModal}
         mode={mode}
-        onClose={() => setShowAddStudentsModal(false)}
+        onClose={modalState.closeAddStudentsModal}
         teacher={teacher}
       />
 
@@ -1081,46 +739,18 @@ function AppContent(): JSX.Element {
       />
 
       <BatchGenerateModal
-        isOpen={showBatchModal}
-        onClose={() => setShowBatchModal(false)}
+        isOpen={modalState.showBatchModal}
+        onClose={modalState.closeBatchModal}
         onGenerate={handleBatchGenerate}
         teacher={teacher}
       />
 
-      <AssessmentWorkflowModal
-        isOpen={showAssessmentWorkflowModal}
-        spec={currentSpecSnapshot ?? spec}
-        targetMelody={currentPatchedMelody}
-        displayNotationMusicXml={displayNotationMusicXml}
-        calibrationStatus={calibration.status}
-        calibrationResult={calibration.result}
-        calibrationError={calibration.errorMessage}
-        assessmentStatus={micAssessment.status}
-        assessmentResult={micAssessment.result}
-        assessmentError={micAssessment.errorMessage}
-        assessmentAccessMessage={assessmentAccess.access.message}
-        assessmentAccessBlocked={!assessmentAccess.access.canRun}
-        debugSemantics={projectedDebugSemantics}
-        selectedNoteIndex={selectedAssessmentNoteIndex}
-        noteOutcomeByIndex={assessmentOutcomeByIndex}
-        climaxNoteIndices={climaxNoteIndices}
-        showDeveloperDebug={teacher.subscriptionIsAdmin}
-        onClose={closeAssessmentWorkflow}
-        onSelectNote={setSelectedAssessmentNoteIndex}
-        onStartCalibration={() => calibration.startCalibration()}
-        onFinishCalibration={() => calibration.stopCalibration()}
-        onClearCalibration={calibration.clearCalibration}
-        onStartAssessment={() => micAssessment.startAssessment()}
-        onFinishAssessment={() => micAssessment.stopAssessment()}
-        onResetWorkflow={resetAssessmentWorkflow}
-      />
-
       <MelodyPreferencesModal
         isGuestMode={isGuestMode}
-        isOpen={showMelodyPreferencesModal}
+        isOpen={modalState.showMelodyPreferencesModal}
         mode={mode}
         normalizeSpec={normalizeUserConstraintsInSpec}
-        onClose={() => setShowMelodyPreferencesModal(false)}
+        onClose={modalState.closeMelodyPreferencesModal}
         onExport={handleExport}
         onRandomizeSeed={handleGenerateNewMelody}
         projection={projection}

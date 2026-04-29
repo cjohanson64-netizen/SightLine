@@ -8,7 +8,6 @@ type ProjectionState = ReturnType<typeof useProjection>;
 type SolfegeState = ReturnType<typeof useSolfege>;
 
 interface GeneratorNotationControlsProps {
-  assessmentPlaybackDisabled: boolean;
   currentMelodyCount: number;
   exportMusicXml: string;
   interactionDisabled: boolean;
@@ -40,7 +39,6 @@ interface GeneratorNotationControlsProps {
 }
 
 export default function GeneratorNotationControls({
-  assessmentPlaybackDisabled,
   currentMelodyCount,
   exportMusicXml,
   interactionDisabled,
@@ -91,7 +89,7 @@ export default function GeneratorNotationControls({
             playback.setTempoBpm(normalized);
             setTempoInput(String(normalized));
           }}
-          disabled={interactionDisabled || assessmentPlaybackDisabled}
+          disabled={interactionDisabled}
         />
       </label>
       <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField AppPlaybackControlsField">
@@ -101,7 +99,7 @@ export default function GeneratorNotationControls({
           onChange={(event) =>
             playback.setInstrument(event.target.value as OscillatorType)
           }
-          disabled={interactionDisabled || assessmentPlaybackDisabled}
+          disabled={interactionDisabled}
         >
           <option value="sine">SINE</option>
           <option value="triangle">TRIANGLE</option>
@@ -113,7 +111,7 @@ export default function GeneratorNotationControls({
         type="button"
         className={`AppHistoryButton AppProjectionToggleButton ${playback.isPlaying ? "ToolbarStopButton" : "ToolbarGenerateButton"}`}
         onClick={() => playback.play()}
-        disabled={currentMelodyCount === 0 || assessmentPlaybackDisabled}
+        disabled={currentMelodyCount === 0}
         data-allow-while-playing="true"
       >
         {playback.isPlaying ? "Stop" : "Play"}
@@ -125,7 +123,7 @@ export default function GeneratorNotationControls({
           className="AppLibraryCheckbox AppCountInCheckbox"
           checked={playback.countInEnabled}
           onChange={(event) => playback.setCountInEnabled(event.target.checked)}
-          disabled={interactionDisabled || assessmentPlaybackDisabled}
+          disabled={interactionDisabled}
         />
       </label>
       <label className="AppHistoryLabel AppPlaybackField AppToolbarCompactField AppCountInField AppPlaybackControlsField">
@@ -202,11 +200,6 @@ export default function GeneratorNotationControls({
       >
         Projection
       </button>
-      {assessmentPlaybackDisabled ? (
-        <span className="AppHistoryLabel AppPlaybackDisabledNotice">
-          Playback is disabled while SightLine is listening.
-        </span>
-      ) : null}
     </div>
   );
 }

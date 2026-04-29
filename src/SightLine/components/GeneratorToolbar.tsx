@@ -70,11 +70,6 @@ type GeneratorToolbarProps = {
   titlePlaceholder: string;
   onTitleChange: (value: string) => void;
   onGenerate: () => void;
-  onRunAssessment: () => void;
-  assessmentAccessMessage: string | null;
-  assessmentAccessBlocked: boolean;
-  onAssessmentUpgrade: () => void;
-  assessmentDisabled: boolean;
   showUpdateSave: boolean;
   saveDisabled: boolean;
   onSaveNew: () => void;
@@ -86,6 +81,8 @@ type GeneratorToolbarProps = {
   studentSubmitLabel?: string;
   onStudentSubmit?: () => void;
   studentSubmitDisabled?: boolean;
+  onAssess: () => void;
+  assessDisabled?: boolean;
 };
 
 export default function GeneratorToolbar({
@@ -102,11 +99,6 @@ export default function GeneratorToolbar({
   titlePlaceholder,
   onTitleChange,
   onGenerate,
-  onRunAssessment,
-  assessmentAccessMessage,
-  assessmentAccessBlocked,
-  onAssessmentUpgrade,
-  assessmentDisabled,
   showUpdateSave,
   saveDisabled,
   onSaveNew,
@@ -118,14 +110,10 @@ export default function GeneratorToolbar({
   studentSubmitLabel,
   onStudentSubmit,
   studentSubmitDisabled = false,
+  onAssess,
+  assessDisabled = false,
 }: GeneratorToolbarProps): JSX.Element {
   const controlsDisabled = interactionDisabled;
-  const assessmentAccessTitle = assessmentAccessBlocked
-    ? "Today's free assessments are used up"
-    : "Free assessments";
-  const assessmentAccessDetail = assessmentAccessBlocked
-    ? "Upgrade for unlimited assessments."
-    : null;
   return (
     <div className="GeneratorToolbar">
       <div className="ToolbarRow">
@@ -142,7 +130,9 @@ export default function GeneratorToolbar({
               <select
                 value={selectedFolderId}
                 onChange={(event) => onSelectFolderId(event.target.value)}
-                disabled={controlsDisabled || creatingFolder || teacherFeaturesDisabled}
+                disabled={
+                  controlsDisabled || creatingFolder || teacherFeaturesDisabled
+                }
               >
                 {folders.map((folder) => (
                   <option key={folder.id} value={folder.id}>
@@ -192,43 +182,6 @@ export default function GeneratorToolbar({
           >
             Generate
           </button>
-          <button
-            type="button"
-            className="AppHistoryButton AppProjectionToggleButton"
-            onClick={onRunAssessment}
-            disabled={assessmentDisabled}
-          >
-            Begin Assessment
-          </button>
-          {assessmentAccessMessage ? (
-            <div
-              className={`ToolbarAssessmentAccess ${assessmentAccessBlocked ? "ToolbarAssessmentAccess--blocked" : ""}`}
-            >
-              <div className="ToolbarAssessmentAccessCopy">
-                <span className="ToolbarAssessmentAccessTitle">
-                  {assessmentAccessTitle}
-                </span>
-                <span className="ToolbarAssessmentAccessText">
-                  {assessmentAccessMessage}
-                </span>
-                {assessmentAccessDetail ? (
-                  <span className="ToolbarAssessmentAccessDetail">
-                    {assessmentAccessDetail}
-                  </span>
-                ) : null}
-              </div>
-              {assessmentAccessBlocked ? (
-                <button
-                  type="button"
-                  className="AppHistoryButton AppProjectionToggleButton ToolbarAssessmentUpgradeButton"
-                  onClick={onAssessmentUpgrade}
-                  disabled={controlsDisabled}
-                >
-                  Upgrade for unlimited assessments
-                </button>
-              ) : null}
-            </div>
-          ) : null}
           {mode === "student" && onStudentSubmit ? (
             <button
               type="button"
@@ -239,20 +192,30 @@ export default function GeneratorToolbar({
               {studentSubmitLabel ?? "Submit"}
             </button>
           ) : null}
+          <button
+            type="button"
+            className="AppHistoryButton AppProjectionToggleButton"
+            onClick={onAssess}
+            disabled={controlsDisabled || assessDisabled}
+          >
+            Assess
+          </button>
           {mode === "teacher" ? (
             <SaveMenu
               showUpdate={showUpdateSave}
-              disabled={controlsDisabled || saveDisabled || teacherFeaturesDisabled}
+              disabled={
+                controlsDisabled || saveDisabled || teacherFeaturesDisabled
+              }
               upgradeLocked={teacherFeaturesDisabled}
-              disabledTitle={teacherFeaturesDisabled ? upgradeRequiredTitle : ""}
+              disabledTitle={
+                teacherFeaturesDisabled ? upgradeRequiredTitle : ""
+              }
               onSaveNew={onSaveNew}
               onUpdate={onSaveUpdate}
             />
           ) : null}
         </div>
-
       </div>
-
     </div>
   );
 }

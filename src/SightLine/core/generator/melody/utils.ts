@@ -1,6 +1,8 @@
 import type { HarmonyEvent } from '@/SightLine/domain/music';
 import { midiToPitch, pitchOctaveForMidi, toOctave } from '../../midi';
+import { midiToDegree, nextScaleStepMidi } from '../../scale';
 export { pitchOctaveForMidi, toOctave } from '../../midi';
+export { midiToDegree, nextScaleStepMidi } from '../../scale';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -18,12 +20,6 @@ export function toPitchString(midi: number, key?: string, mode: 'major' | 'minor
   }
   const pc = ((midi % 12) + 12) % 12;
   return `${toPitchName(pc)}${toOctave(midi)}`;
-}
-
-export function midiToDegree(midi: number, keyScale: number[]): number {
-  const pc = ((midi % 12) + 12) % 12;
-  const idx = keyScale.indexOf(pc);
-  return idx === -1 ? 1 : idx + 1;
 }
 
 export function chordToneCandidatesInRange(chordPcs: number[], rangeMin: number, rangeMax: number): number[] {
@@ -105,16 +101,6 @@ export function nearestAllowedPcWithinLeapCap(
     }
   }
   return best;
-}
-
-export function nextScaleStepMidi(currentMidi: number, direction: 1 | -1, keyScale: number[], rangeMin: number, rangeMax: number): number | null {
-  for (let midi = currentMidi + direction; midi >= rangeMin && midi <= rangeMax; midi += direction) {
-    const pc = ((midi % 12) + 12) % 12;
-    if (keyScale.includes(pc)) {
-      return midi;
-    }
-  }
-  return null;
 }
 
 export function collectCandidateMidisFromPcs(pcs: number[], rangeMin: number, rangeMax: number): number[] {

@@ -19,8 +19,8 @@ const quickStartSteps = [
   "Open the generator.",
   "Set the musical parameters you want to practice.",
   "Generate an exercise.",
-  "Sing into the microphone.",
-  "Review the feedback and repeat with more reps.",
+  "Play or project the melody for practice.",
+  "Repeat with more reps or generate a new variation.",
 ];
 
 const teacherWorkflow = [
@@ -32,8 +32,8 @@ const teacherWorkflow = [
 
 const studentWorkflow = [
   "Open the assigned exercise or join with class access details.",
-  "Sing independently while SightLine listens.",
-  "Review the feedback on each attempt.",
+  "Practice independently with playback, projection, and solfege support.",
+  "Submit completed work to your teacher when needed.",
   "Repeat for more reps and cleaner accuracy.",
 ];
 
@@ -47,8 +47,8 @@ const keyFeatures = [
     body: "Move from setup to singing quickly so more class time goes toward actual reps.",
   },
   {
-    title: "Real-time feedback",
-    body: "Use microphone assessment to spot what was accurate, near, or missed.",
+    title: "Flexible presentation",
+    body: "Use playback, projection mode, and solfege overlays to support practice in class or independently.",
   },
   {
     title: "Classroom usefulness",

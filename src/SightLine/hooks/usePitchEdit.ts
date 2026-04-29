@@ -7,64 +7,23 @@ import {
   noteKey,
   pitchOctaveForMidi,
   prefersFlatsForKey,
-  toOctave,
 } from "../core/midi";
+import {
+  allPcCandidatesInRange,
+  applyPitchPatch,
+  midiToDegree,
+  modeScale,
+  nextScaleStepMidi,
+  tessituraRange,
+  type PitchPatchEntry,
+} from "../core/scale";
 import type { ExerciseSpec, MelodyEvent } from "@/SightLine/domain/music";
 
 type StepMode = "diatonic" | "octave" | "chromatic";
 
-export interface PitchPatchEntry {
-  midi: number;
-  pitch: string;
-  octave?: number;
-}
-
 interface RenderableAttack {
   midi: number;
   noteId: string;
-}
-
-function modeScale(mode: ExerciseSpec["mode"]): number[] {
-  return mode === "major" ? [0, 2, 4, 5, 7, 9, 11] : [0, 2, 3, 5, 7, 8, 10];
-}
-
-function midiToDegree(midi: number, keyScale: number[]): number {
-  const idx = keyScale.indexOf(midiToPc(midi));
-  return idx === -1 ? 1 : idx + 1;
-}
-
-function applyPitchPatch(melody: MelodyEvent[], patch: Record<string, PitchPatchEntry>): MelodyEvent[] {
-  return melody.map((event, index) => {
-    if (event.isAttack === false) return event;
-    const override = patch[noteKey(event, index)];
-    if (!override) return event;
-    return { ...event, midi: override.midi, pitch: override.pitch, octave: override.octave ?? pitchOctaveForMidi(override.midi), isEdited: true };
-  });
-}
-
-function nextScaleStepMidi(currentMidi: number, direction: 1 | -1, keyScale: number[]): number | null {
-  for (let midi = currentMidi + direction; midi >= 0 && midi <= 127; midi += direction) {
-    if (keyScale.includes(midiToPc(midi))) return midi;
-  }
-  return null;
-}
-
-function allPcCandidatesInRange(pc: number, minMidi: number, maxMidi: number): number[] {
-  const result: number[] = [];
-  for (let midi = minMidi; midi <= maxMidi; midi += 1) {
-    if (midiToPc(midi) === pc) result.push(midi);
-  }
-  return result;
-}
-
-function tessituraRange(specInput: ExerciseSpec): { minMidi: number; maxMidi: number } {
-  const tonicPc = KEY_TO_PC[specInput.key] ?? 0;
-  const scale = modeScale(specInput.mode).map((step) => (tonicPc + step) % 12);
-  const lowPc = scale[(specInput.range.lowDegree - 1 + 700) % 7] ?? tonicPc;
-  const highPc = scale[(specInput.range.highDegree - 1 + 700) % 7] ?? tonicPc;
-  const lowMidi = (specInput.range.lowOctave + 1) * 12 + lowPc;
-  const highMidi = (specInput.range.highOctave + 1) * 12 + highPc;
-  return { minMidi: Math.min(lowMidi, highMidi), maxMidi: Math.max(lowMidi, highMidi) };
 }
 
 function isIllegalTransition(

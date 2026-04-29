@@ -11,8 +11,8 @@ import { scoreMelody } from './generator/scoring';
 import { toMusicXml } from './projection/toMusicXml';
 import { buildTonnetz } from './tonnetz/buildTonnetz';
 import { createRng } from '../utils/rng';
-import { buildAssessmentBindings } from './tatBridge/buildAssessmentBindings';
-import { projectAssessmentResult } from './tatBridge/projectAssessmentResult';
+import { buildArtifactBindings } from './tatBridge/buildArtifactBindings';
+import { projectArtifactResult } from './tatBridge/projectArtifactResult';
 import { runTatProgram } from './tatBridge/runTatProgram';
 
 export interface GenerateExerciseInput {
@@ -137,7 +137,7 @@ export function generateExercise({ spec, seed }: GenerateExerciseInput): Generat
 
   const result = runTatProgram({
     program: programSource,
-    initialState: buildAssessmentBindings({
+    initialState: buildArtifactBindings({
       seed,
       spec,
       harmony,
@@ -152,7 +152,7 @@ export function generateExercise({ spec, seed }: GenerateExerciseInput): Generat
   const warnings = result.validation.filter((issue) => issue.severity !== 'error');
   logs.push(...warnings.map((issue) => `tat_${issue.severity}: ${issue.message}`));
 
-  const artifact = projectAssessmentResult(result.execution);
+  const artifact = projectArtifactResult(result.execution);
   const musicXml = toMusicXml(artifact, seed);
   const relaxationTierNode = artifact.nodes.find((node) => node.id === 'artifact-body-relaxation-tier');
   const relaxedRulesNode = artifact.nodes.find((node) => node.id === 'artifact-body-relaxed-rules');

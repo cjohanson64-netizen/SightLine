@@ -72,7 +72,6 @@ export function loadExerciseIntoViewer(
   controls.playback.setPlaybackHighlightIndex(null);
   controls.setDebugSemantics?.({
     targetNotes: [],
-    assessmentExplanations: [],
     phraseSummaries: [],
     strengths: [],
     weaknesses: [],
