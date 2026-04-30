@@ -1088,6 +1088,42 @@ body {
   color: #90a4bc;
 }
 
+.AppAssessmentScoreStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 0.35rem 0 0.65rem;
+}
+
+.AppAssessmentScoreItem {
+  min-width: 118px;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid rgba(142, 164, 190, 0.32);
+  border-radius: 8px;
+  background: rgba(14, 20, 30, 0.58);
+}
+
+.AppAssessmentScoreItem strong {
+  display: block;
+  margin-top: 0.08rem;
+  color: #f1f6ff;
+  font-size: 1.15rem;
+  line-height: 1.15;
+}
+
+.AppAssessmentScoreLabel {
+  display: block;
+  color: #90a4bc;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.AppAssessmentScoreMastery strong {
+  color: #1ecf87;
+}
+
 .AppHistoryLabel input:not([type="checkbox"]),
 .AppHistoryLabel select,
 .AppHistoryLabel textarea {
@@ -1256,6 +1292,23 @@ body {
 
 .AppThemeLight .AppHistoryLabel {
   color: #32455e;
+}
+
+.AppThemeLight .AppAssessmentScoreItem {
+  background: #f8fbff;
+  border-color: #c5d2e1;
+}
+
+.AppThemeLight .AppAssessmentScoreItem strong {
+  color: #1f2f44;
+}
+
+.AppThemeLight .AppAssessmentScoreLabel {
+  color: #526982;
+}
+
+.AppThemeLight .AppAssessmentScoreMastery strong {
+  color: #12875d;
 }
 
 .AppThemeLight .AppHistoryButton,

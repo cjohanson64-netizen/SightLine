@@ -17,6 +17,11 @@ import { useStudentSession } from "../hooks/useStudentSession";
 import { useTeacherLibrary } from "../hooks/useTeacherLibrary";
 import { normalizeUserConstraintsInSpec } from "../core/spec";
 import { runAssessment } from "../core/assessment/runAssessment";
+import {
+  buildAssessmentScore,
+  type AssessmentScore,
+  type PitchAssessmentStatus,
+} from "../core/assessment/assessmentScoring";
 import { midiToFrequency } from "../core/midi";
 import type {
   DetectedTonic,
@@ -49,7 +54,7 @@ const NOTE_FEEDBACK_COLORS = {
   lowConfidence: "#ff9f43",
   incorrect: "#e25555",
   missing: "#8a98aa",
-};
+} satisfies Record<PitchAssessmentStatus, string>;
 
 const LOW_CONFIDENCE_THRESHOLD = 0.65;
 const ASSESSMENT_SCALE_OFFSETS = [0, 2, 4, 5, 7, 5, 4, 2, 0];
@@ -103,10 +108,9 @@ function getAssessmentReferenceOffset(params: {
   return 0;
 }
 
-function buildNoteColorMapFromAssessment(params: {
+function buildPitchStatusMapFromAssessment(params: {
   result: AssessmentResult;
-  melody: MelodyEvent[];
-}): Record<number, string | undefined> {
+}): Record<number, PitchAssessmentStatus | undefined> {
   const {
     result: {
       normalized: {
@@ -115,10 +119,8 @@ function buildNoteColorMapFromAssessment(params: {
         actualNotes,
       },
     },
-    melody,
   } = params;
-  const colorsByIndex: Record<number, string | undefined> = {};
-  const attackEventIndices = getRenderableAttackEventIndices(melody);
+  const statusesByIndex: Record<number, PitchAssessmentStatus | undefined> = {};
   const referenceOffset = getAssessmentReferenceOffset({
     alignedPairs,
     expectedNotes,
@@ -132,26 +134,20 @@ function buildNoteColorMapFromAssessment(params: {
       continue;
     }
 
-    const eventIndex = attackEventIndices[expected.index];
-
-    if (eventIndex === undefined) {
-      continue;
-    }
-
     if (pair.kind === "omission") {
-      colorsByIndex[eventIndex] = NOTE_FEEDBACK_COLORS.missing;
+      statusesByIndex[expected.index] = "missing";
       continue;
     }
 
     const actual = findActualNote(actualNotes, pair.actualNoteId);
 
     if (!actual) {
-      colorsByIndex[eventIndex] = NOTE_FEEDBACK_COLORS.missing;
+      statusesByIndex[expected.index] = "missing";
       continue;
     }
 
     if (actual.confidence < LOW_CONFIDENCE_THRESHOLD) {
-      colorsByIndex[eventIndex] = NOTE_FEEDBACK_COLORS.lowConfidence;
+      statusesByIndex[expected.index] = "lowConfidence";
       continue;
     }
 
@@ -160,12 +156,36 @@ function buildNoteColorMapFromAssessment(params: {
     );
 
     if (pitchDelta <= 0.5) {
-      colorsByIndex[eventIndex] = NOTE_FEEDBACK_COLORS.correct;
+      statusesByIndex[expected.index] = "correct";
     } else if (pitchDelta <= 2) {
-      colorsByIndex[eventIndex] = NOTE_FEEDBACK_COLORS.close;
+      statusesByIndex[expected.index] = "close";
     } else {
-      colorsByIndex[eventIndex] = NOTE_FEEDBACK_COLORS.incorrect;
+      statusesByIndex[expected.index] = "incorrect";
     }
+  }
+
+  return statusesByIndex;
+}
+
+function buildNoteColorMapFromPitchStatuses(params: {
+  pitchStatusesByIndex: Record<number, PitchAssessmentStatus | undefined>;
+  melody: MelodyEvent[];
+}): Record<number, string | undefined> {
+  const { pitchStatusesByIndex, melody } = params;
+  const colorsByIndex: Record<number, string | undefined> = {};
+  const attackEventIndices = getRenderableAttackEventIndices(melody);
+
+  for (const [rawExpectedIndex, status] of Object.entries(
+    pitchStatusesByIndex,
+  )) {
+    const expectedIndex = Number(rawExpectedIndex);
+    const eventIndex = attackEventIndices[expectedIndex];
+
+    if (!status || eventIndex === undefined) {
+      continue;
+    }
+
+    colorsByIndex[eventIndex] = NOTE_FEEDBACK_COLORS[status];
   }
 
   return colorsByIndex;
@@ -193,6 +213,68 @@ function buildRhythmMarkerMapFromAssessment(
   }
 
   return markersByIndex;
+}
+
+function rounded(value: number, fractionDigits = 2): number {
+  return Number(value.toFixed(fractionDigits));
+}
+
+function formatScorePercent(value: number): string {
+  return `${Math.round(value)}%`;
+}
+
+function buildRhythmDurationsMs(
+  events: AssessmentResult["rhythmNotes"]["noteEvents"],
+): number[] {
+  return events.map((event, index) => {
+    const next = events[index + 1];
+    const durationMs = next
+      ? next.startMs - event.startMs
+      : event.endMs - event.startMs;
+
+    return rounded(Math.max(0, durationMs), 1);
+  });
+}
+
+function logAssessmentRhythmDebug(params: {
+  result: AssessmentResult;
+  expectedRhythmUnits: number[];
+  expectedNoteCount: number;
+}): void {
+  const { result, expectedRhythmUnits, expectedNoteCount } = params;
+  const rhythmAnalysis = result.rhythmAnalysis;
+
+  console.log("SightLine rhythm assessment", {
+    expectedRhythmUnits,
+    rawDetectedRhythmMs: buildRhythmDurationsMs(result.rhythmNotes.noteEvents),
+    analyzedRhythmMs: buildRhythmDurationsMs(
+      result.rhythmAnalysisNotes.noteEvents,
+    ),
+    actualSungRhythmUnits:
+      rhythmAnalysis?.windows.map((window) =>
+        window.expectedMs > 0
+          ? rounded((window.actualMs / window.expectedMs) * window.expectedUnits)
+          : null,
+      ) ?? [],
+    rhythmWindows:
+      rhythmAnalysis?.windows.map((window) => ({
+        index: window.index,
+        expectedUnits: window.expectedUnits,
+        actualMs: rounded(window.actualMs, 1),
+        expectedMs: rounded(window.expectedMs, 1),
+        classification: window.classification,
+        isFinal: window.isFinal,
+    })) ?? [],
+    expectedNoteCount,
+    pitchNoteCount: result.pitchNotes.noteEvents.length,
+    rawRhythmNoteCount: result.rhythmNotes.noteEvents.length,
+    analyzedRhythmNoteCount: result.rhythmAnalysisNotes.noteEvents.length,
+    rhythmIsProvisional: rhythmAnalysis?.isProvisional ?? false,
+    rhythmProvisionalReason: rhythmAnalysis?.provisionalReason ?? null,
+    rhythmConfidence: rhythmAnalysis
+      ? rounded(rhythmAnalysis.rhythmConfidence)
+      : null,
+  });
 }
 
 function getAssessButtonLabel(params: {
@@ -434,11 +516,21 @@ export default function GeneratorPage({
         enableRhythmAnalysis: true,
       });
 
+      const pitchStatusesByIndex = buildPitchStatusMapFromAssessment({
+        result,
+      });
+
+      logAssessmentRhythmDebug({
+        result,
+        expectedRhythmUnits: expectedRhythm.units,
+        expectedNoteCount: expectedMelody.notes.length,
+      });
+
       setAssessmentResult(result);
       setAssessmentStatus("complete");
       onAssessmentNoteColorsChange(
-        buildNoteColorMapFromAssessment({
-          result,
+        buildNoteColorMapFromPitchStatuses({
+          pitchStatusesByIndex,
           melody: assessmentSourceMelody,
         }),
       );
@@ -489,6 +581,26 @@ export default function GeneratorPage({
   const rhythmMarkersByIndex = useMemo(
     () => buildRhythmMarkerMapFromAssessment(assessmentResult),
     [assessmentResult],
+  );
+  const pitchStatusesByIndex = useMemo(
+    () =>
+      assessmentResult
+        ? buildPitchStatusMapFromAssessment({ result: assessmentResult })
+        : {},
+    [assessmentResult],
+  );
+  const assessmentScore: AssessmentScore | null = useMemo(
+    () =>
+      assessmentResult
+        ? buildAssessmentScore({
+            pitchStatusesByIndex,
+            rhythmMarkersByIndex,
+            expectedNoteCount: assessmentResult.normalized.expectedNotes.length,
+            rhythmIsProvisional:
+              assessmentResult.rhythmAnalysis?.isProvisional ?? true,
+          })
+        : null,
+    [assessmentResult, pitchStatusesByIndex, rhythmMarkersByIndex],
   );
   const assessLabel = getAssessButtonLabel({
     status: assessmentStatus,
@@ -652,6 +764,42 @@ export default function GeneratorPage({
             >
               {saveStatus === "saving" ? "Saving..." : saveMessage}
             </p>
+          ) : null}
+          {assessmentScore ? (
+            <section
+              className="AppAssessmentScoreStrip"
+              aria-label="Assessment scores"
+            >
+              <div className="AppAssessmentScoreItem AppAssessmentScoreMastery">
+                <span className="AppAssessmentScoreLabel">Mastery</span>
+                <strong>{assessmentScore.mastery}</strong>
+              </div>
+              <div className="AppAssessmentScoreItem">
+                <span className="AppAssessmentScoreLabel">
+                  Pitch Accuracy
+                </span>
+                <strong>
+                  {formatScorePercent(assessmentScore.pitchAccuracy)}
+                </strong>
+              </div>
+              <div className="AppAssessmentScoreItem">
+                <span className="AppAssessmentScoreLabel">
+                  Rhythm Accuracy
+                </span>
+                <strong>
+                  {assessmentScore.rhythmIncluded &&
+                  assessmentScore.rhythmAccuracy !== null
+                    ? formatScorePercent(assessmentScore.rhythmAccuracy)
+                    : "Not reliable"}
+                </strong>
+              </div>
+              <div className="AppAssessmentScoreItem">
+                <span className="AppAssessmentScoreLabel">Melody Score</span>
+                <strong>
+                  {formatScorePercent(assessmentScore.melodyScore)}
+                </strong>
+              </div>
+            </section>
           ) : null}
         </>
       ) : null}
