@@ -1,5 +1,5 @@
 import type { PhraseSpec, RhythmWeights } from "@/SightLine/domain/music";
-import { generatePhraseGrid, type PhraseGridPlan } from "./phraseGridPlanner";
+import { generatePhraseGrid, type PhraseGridPlan } from "./phraseGridPlanner/phraseGridPlanner";
 import type { PhrasePlan } from "./phrasePlanner";
 
 export interface BuildMelodyGridInput {

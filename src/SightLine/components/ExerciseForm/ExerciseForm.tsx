@@ -1,32 +1,13 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import "../../styles/ExerciseForm.css";
-import type { ExerciseSpec, PhraseSpec } from "@/SightLine/domain/music";
-import {
-  LABEL_ORDER,
-  MAJOR_KEY_OPTIONS,
-  MAX_PHRASES,
-  SOLFEGE_DEGREES,
-} from "./helpers/exerciseForm.constants";
 
-import {
-  allowedLabelsForIndex,
-  normalizePhrases,
-} from "./helpers/phraseNormalization";
-import {
-  addPhraseToSpec,
-  removePhraseFromSpec,
-  updatePhraseInSpec,
-} from "./helpers/phraseMutations";
-import {
-  hasAllIntervals,
-  updateIllegalDegreeInSpec,
-  updateIllegalIntervalsInSpec,
-} from "./helpers/intervalRules";
-import {
-  addTransitionRuleToSpec,
-  removeTransitionRuleFromSpec,
-} from "./helpers/transitionRules";
+import type { ExerciseSpec, PhraseSpec } from "@/SightLine/domain/music";
+
+import { normalizePhrases } from "./helpers/phraseNormalization";
+import { addPhraseToSpec, removePhraseFromSpec, updatePhraseInSpec } from "./helpers/phraseMutations";
+import { hasAllIntervals, updateIllegalDegreeInSpec, updateIllegalIntervalsInSpec } from "./helpers/intervalRules";
+import { addTransitionRuleToSpec, removeTransitionRuleFromSpec } from "./helpers/transitionRules";
 
 import { CorePreferencesPanel } from "./components/CorePreferencesPanel";
 import { IllegalRulesPanel } from "./components/IllegalRulesPanel";

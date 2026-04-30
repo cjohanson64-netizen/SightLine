@@ -12,6 +12,7 @@ import type { CleanPitchFrame } from "./audio";
 export interface NoteSegmentationInput {
   frames: CleanPitchFrame[];
   minNoteDurationMs: DurationMs;
+  tonicPitchClass?: number;
 }
 
 export interface GuidedSegmentationInput {
@@ -68,6 +69,7 @@ export interface NormalizedExpectedNote {
   id: string;
   index: number;
   midiFloat: MidiFloat;
+  snappedMidiFloat: MidiFloat;
   scaleDegree: ScaleDegree;
 }
 
@@ -76,6 +78,7 @@ export interface NormalizedActualNote {
   index: number;
   sourceEventId: string;
   midiFloat: MidiFloat;
+  snappedMidiFloat: MidiFloat;
   scaleDegree: ScaleDegree;
   startMs: TimestampMs;
   endMs: TimestampMs;

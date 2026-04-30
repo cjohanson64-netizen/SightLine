@@ -1,8 +1,8 @@
-import { buildTonnetz } from '../src/core/tonnetz/buildTonnetz';
-import { buildHarmonySpine } from '../src/core/generator/harmony';
-import { createMelodyCandidates } from '../src/core/generator/melody';
-import { createRng } from '../src/utils/rng';
-import type { ExerciseSpec, MelodyEvent } from '../src/tat/models/schema';
+import { buildTonnetz } from '../src/SightLine/core/tonnetz/buildTonnetz';
+import { buildHarmonySpine } from '../src/SightLine/core/generator/harmony';
+import { createMelodyCandidates } from '../src/SightLine/core/generator/melody';
+import type { ExerciseSpec, MelodyEvent } from '../src/SightLine/domain/music';
+import { createRng } from '../src/SightLine/utils/rng';
 
 function modeScale(mode: ExerciseSpec['mode']): number[] {
   return mode === 'major' ? [0, 2, 4, 5, 7, 9, 11] : [0, 2, 3, 5, 7, 8, 10];

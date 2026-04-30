@@ -1,5 +1,5 @@
 import type { ExerciseSpec, HarmonyEvent, MelodyEvent, PhraseSpec } from "@/SightLine/domain/music";
-import type { PhraseGridPlan } from "./phraseGridPlanner";
+import type { PhraseGridPlan } from "./phraseGridPlanner/phraseGridPlanner";
 import type { PhrasePlan } from "./phrasePlanner";
 import {
   generateStructuralSkeleton,

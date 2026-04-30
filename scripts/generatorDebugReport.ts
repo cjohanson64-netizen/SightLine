@@ -1,8 +1,8 @@
-import { buildTonnetz } from '../src/core/tonnetz/buildTonnetz';
-import { buildHarmonySpine } from '../src/core/generator/harmony';
-import { createMelodyCandidates } from '../src/core/generator/melody';
-import { createRng } from '../src/utils/rng';
-import type { ExerciseSpec } from '../src/tat/models/schema';
+import { buildTonnetz } from '../src/SightLine/core/tonnetz/buildTonnetz';
+import { buildHarmonySpine } from '../src/SightLine/core/generator/harmony';
+import { createMelodyCandidates } from '../src/SightLine/core/generator/melody';
+import type { ExerciseSpec } from '../src/SightLine/domain/music';
+import { createRng } from '../src/SightLine/utils/rng';
 
 type Bucket = '1' | '5' | 'other';
 type LeapBucket = 'leap' | 'step' | 'other';

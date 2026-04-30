@@ -1,7 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import type { KeyboardEvent, MutableRefObject, ReactNode } from 'react';
-import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
+import type { KeyboardEvent, ReactNode } from 'react';
+import type { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 import '../../styles/NotationViewer.css';
+import { countMeasures, hasRenderableMusicXml } from './musicXml';
+import {
+  CANVAS_HORIZONTAL_PADDING_PX,
+  MIN_RENDER_WIDTH_PX,
+  configureResponsiveLayout,
+  createNotationDisplay,
+  getResponsiveZoom,
+  renderOsmdWithoutSkyBottomWarnings
+} from './osmdService';
+import { scheduleNotationDecorations } from './notationDecorations';
+
+type RhythmMarker = "match" | "close" | "mismatch" | "missing";
+const EMPTY_RHYTHM_MARKERS: Record<number, RhythmMarker | undefined> = {};
 
 interface NotationViewerProps {
   musicXml: string;
@@ -18,530 +31,7 @@ interface NotationViewerProps {
   climaxNoteIndices?: number[];
   showClimaxMarkers?: boolean;
   enableGlowEffects?: boolean;
-}
-
-const SOLFEGE_COLOR_MAP: Record<string, string> = {
-  DO: '#ff3b30',
-  DI: '#ff3b30',
-  RE: '#ff9500',
-  RI: '#ff9500',
-  RA: '#ff9500',
-  MI: '#ffd60a',
-  ME: '#ffd60a',
-  FA: '#32d74b',
-  FI: '#32d74b',
-  SOL: '#00c7be',
-  SO: '#00c7be',
-  SI: '#00c7be',
-  SE: '#00c7be',
-  LA: '#bf5af2',
-  LE: '#bf5af2',
-  LI: '#bf5af2',
-  TI: '#ff2d95',
-  TE: '#ff2d95'
-};
-
-const HIGHLIGHT_COLOR_RGB: Record<string, string> = {
-  '#1ecf87': '30,207,135',
-  '#ff2da6': '255,45,166'
-};
-
-const CANVAS_HORIZONTAL_PADDING_PX = 24;
-const MIN_RENDER_WIDTH_PX = 280;
-
-function countMeasures(musicXml: string): number {
-  const matches = musicXml.match(/<measure\b/gi);
-  return matches?.length ?? 0;
-}
-
-function hasRenderableMusicXml(musicXml: string): boolean {
-  if (!musicXml.trim()) {
-    return false;
-  }
-
-  try {
-    const doc = new DOMParser().parseFromString(musicXml, 'application/xml');
-    if (doc.querySelector('parsererror')) {
-      return false;
-    }
-    return doc.querySelector('measure note') !== null;
-  } catch {
-    return false;
-  }
-}
-
-function renderOsmdWithoutSkyBottomWarnings(osmd: OpenSheetMusicDisplay): void {
-  const originalWarn = console.warn;
-  const originalError = console.error;
-  const shouldSuppress = (args: unknown[]): boolean =>
-    args.some(
-      (arg) =>
-        typeof arg === 'string' &&
-        arg.includes('SkyBottomLineCalculator: width not > 0')
-    );
-
-  console.warn = (...args: unknown[]) => {
-    if (shouldSuppress(args)) {
-      return;
-    }
-    originalWarn(...args);
-  };
-
-  console.error = (...args: unknown[]) => {
-    if (shouldSuppress(args)) {
-      return;
-    }
-    originalError(...args);
-  };
-
-  try {
-    osmd.render();
-  } finally {
-    console.warn = originalWarn;
-    console.error = originalError;
-  }
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function getMeasuresPerSystem(
-  measureCount: number,
-  availableWidth: number,
-  projectionMode: boolean,
-  timeSig?: string,
-  phraseLengthMeasures?: number
-): number {
-  if (typeof phraseLengthMeasures === 'number' && phraseLengthMeasures > 0) {
-    if (timeSig === '2/4') {
-      return clamp(phraseLengthMeasures * 2, 1, measureCount);
-    }
-    if (timeSig === '3/4' || timeSig === '4/4') {
-      return clamp(phraseLengthMeasures, 1, measureCount);
-    }
-  }
-
-  if (measureCount <= 2) {
-    return measureCount;
-  }
-  if (measureCount <= 4) {
-    return Math.min(measureCount, availableWidth >= 880 ? 4 : 3);
-  }
-  if (projectionMode) {
-    if (availableWidth >= 1400) {
-      return 6;
-    }
-    if (availableWidth >= 1100) {
-      return 5;
-    }
-  }
-  if (availableWidth >= 1200) {
-    return 5;
-  }
-  if (availableWidth >= 900) {
-    return 4;
-  }
-  if (availableWidth >= 640) {
-    return 3;
-  }
-  return 2;
-}
-
-function getShortPhraseStretchLimit(measureCount: number, projectionMode: boolean): number {
-  if (projectionMode) {
-    return measureCount <= 2 ? 2.8 : measureCount <= 4 ? 2.15 : 1.55;
-  }
-  return measureCount <= 2 ? 2.35 : measureCount <= 4 ? 1.85 : 1.35;
-}
-
-function getResponsiveZoom(
-  baseZoom: number,
-  measureCount: number,
-  availableWidth: number,
-  projectionMode: boolean
-): number {
-  if (projectionMode) {
-    return baseZoom;
-  }
-  const shortPhraseBoost =
-    measureCount <= 2
-      ? availableWidth >= 920
-        ? 1.22
-        : 1.12
-      : measureCount <= 4
-        ? availableWidth >= 920
-          ? 1.12
-          : 1.04
-        : 1;
-  return baseZoom * shortPhraseBoost;
-}
-
-function configureResponsiveLayout(
-  osmd: OpenSheetMusicDisplay,
-  availableWidth: number,
-  measureCount: number,
-  projectionMode: boolean,
-  timeSig?: string,
-  phraseLengthMeasures?: number
-): void {
-  const rules = osmd.EngravingRules;
-  const measuresPerSystem = getMeasuresPerSystem(
-    measureCount,
-    availableWidth,
-    projectionMode,
-    timeSig,
-    phraseLengthMeasures
-  );
-
-  rules.PageLeftMargin = projectionMode ? 8 : 6;
-  rules.PageRightMargin = projectionMode ? 8 : 6;
-  rules.SystemLeftMargin = 0;
-  rules.SystemRightMargin = 0;
-  rules.MinimumDistanceBetweenSystems = projectionMode ? 8 : 7;
-  rules.MinSkyBottomDistBetweenSystems = projectionMode ? 5 : 4;
-  rules.StretchLastSystemLine = true;
-  rules.LastSystemMaxScalingFactor = getShortPhraseStretchLimit(measureCount, projectionMode);
-  rules.RenderXMeasuresPerLineAkaSystem =
-    measureCount > 0 ? clamp(measuresPerSystem, 1, measureCount) : 0;
-  rules.SheetMaximumWidth = Math.max(MIN_RENDER_WIDTH_PX, Math.floor(availableWidth));
-}
-
-function applySolfegeLyricColors(container: HTMLElement): void {
-  const textNodes = Array.from(container.querySelectorAll('svg text'));
-  for (const node of textNodes) {
-    const raw = node.textContent?.trim() ?? '';
-    if (!raw) {
-      continue;
-    }
-    const key = raw.toUpperCase();
-    const color = SOLFEGE_COLOR_MAP[key];
-    if (!color) {
-      continue;
-    }
-    node.setAttribute('fill', color);
-    (node as SVGTextElement).style.setProperty('fill', color, 'important');
-    (node as SVGTextElement).style.fontWeight = '700';
-  }
-}
-
-function safeCenterX(element: Element): number | null {
-  try {
-    const box = (element as SVGGraphicsElement).getBBox();
-    if (!Number.isFinite(box.x) || !Number.isFinite(box.width)) {
-      return null;
-    }
-    return box.x + box.width / 2;
-  } catch {
-    return null;
-  }
-}
-
-function paintNoteheadElement(notehead: Element, color: string): void {
-  const targets = notehead.matches('path, ellipse, circle, polygon')
-    ? [notehead]
-    : Array.from(notehead.querySelectorAll('path, ellipse, circle, polygon'));
-  for (const target of targets) {
-    (target as SVGElement).style.setProperty('fill', color, 'important');
-    (target as SVGElement).style.setProperty('stroke', color, 'important');
-  }
-}
-
-function normalizeColorToken(color: string): string {
-  return color.replace(/\s+/g, '').toLowerCase();
-}
-
-function parseHighlightHex(color: string | null | undefined): string | null {
-  if (!color) {
-    return null;
-  }
-  const normalized = normalizeColorToken(color);
-  for (const hex of Object.keys(HIGHLIGHT_COLOR_RGB)) {
-    if (normalized === hex) {
-      return hex;
-    }
-    const rgb = HIGHLIGHT_COLOR_RGB[hex];
-    if (
-      normalized === `rgb(${rgb})` ||
-      normalized === `rgba(${rgb},1)` ||
-      normalized === `rgba(${rgb},1.0)`
-    ) {
-      return hex;
-    }
-  }
-  return null;
-}
-
-function readPaintColor(target: SVGElement): string | null {
-  const styleFill = target.style.getPropertyValue('fill');
-  if (styleFill) {
-    return styleFill;
-  }
-  const styleStroke = target.style.getPropertyValue('stroke');
-  if (styleStroke) {
-    return styleStroke;
-  }
-  const attrFill = target.getAttribute('fill');
-  if (attrFill) {
-    return attrFill;
-  }
-  const attrStroke = target.getAttribute('stroke');
-  if (attrStroke) {
-    return attrStroke;
-  }
-  return null;
-}
-
-function clearPaintStyling(target: SVGElement): void {
-  target.style.removeProperty('fill');
-  target.style.removeProperty('stroke');
-  target.removeAttribute('fill');
-  target.removeAttribute('stroke');
-}
-
-function applyNoteheadHighlightShadow(notehead: Element, hex: string): void {
-  const rgb = HIGHLIGHT_COLOR_RGB[hex];
-  if (!rgb) {
-    return;
-  }
-  const glowOuter = `rgba(${rgb},1)`;
-  const glowInner = `rgba(${rgb},1)`;
-  const svgNode = notehead as SVGElement;
-  svgNode.style.setProperty(
-    'filter',
-    `drop-shadow(0 0 3px ${glowInner}) drop-shadow(0 0 6px ${glowOuter})`,
-    'important'
-  );
-  svgNode.style.setProperty('stroke-width', '1.25px', 'important');
-  const paintTargets = notehead.matches('path, ellipse, circle, polygon')
-    ? [notehead]
-    : Array.from(notehead.querySelectorAll('path, ellipse, circle, polygon'));
-  for (const target of paintTargets) {
-    clearPaintStyling(target as SVGElement);
-  }
-}
-
-function applyHighlightedNoteheadShadows(container: HTMLElement): void {
-  let noteheads = Array.from(container.querySelectorAll('svg g.vf-notehead'));
-  if (noteheads.length === 0) {
-    noteheads = Array.from(container.querySelectorAll('svg .vf-notehead'));
-  }
-  for (const notehead of noteheads) {
-    const paintTargets = notehead.matches('path, ellipse, circle, polygon')
-      ? [notehead]
-      : Array.from(notehead.querySelectorAll('path, ellipse, circle, polygon'));
-    let highlightHex: string | null = null;
-    for (const target of paintTargets) {
-      const candidate = parseHighlightHex(readPaintColor(target as SVGElement));
-      if (candidate) {
-        highlightHex = candidate;
-        break;
-      }
-    }
-    if (!highlightHex) {
-      continue;
-    }
-    applyNoteheadHighlightShadow(notehead, highlightHex);
-  }
-}
-
-function applySolfegeNoteheadColors(container: HTMLElement): void {
-  const lyricEntries = Array.from(container.querySelectorAll('svg text'))
-    .map((node) => {
-      const raw = node.textContent?.trim() ?? '';
-      const key = raw.toUpperCase();
-      const color = SOLFEGE_COLOR_MAP[key];
-      const x = safeCenterX(node);
-      if (!color || x === null) {
-        return null;
-      }
-      return { x, color };
-    })
-    .filter((entry): entry is { x: number; color: string } => entry !== null)
-    .sort((a, b) => a.x - b.x);
-
-  if (lyricEntries.length === 0) {
-    return;
-  }
-
-  let noteheads = Array.from(container.querySelectorAll('svg g.vf-notehead'));
-  if (noteheads.length === 0) {
-    noteheads = Array.from(container.querySelectorAll('svg .vf-notehead'));
-  }
-  const noteheadEntries = noteheads
-    .map((node) => {
-      const x = safeCenterX(node);
-      return x === null ? null : { node, x };
-    })
-    .filter((entry): entry is { node: Element; x: number } => entry !== null)
-    .sort((a, b) => a.x - b.x);
-
-  if (noteheadEntries.length === 0) {
-    return;
-  }
-
-  const used = new Set<number>();
-  for (const lyric of lyricEntries) {
-    let bestIndex = -1;
-    let bestDistance = Number.POSITIVE_INFINITY;
-    for (let index = 0; index < noteheadEntries.length; index += 1) {
-      if (used.has(index)) {
-        continue;
-      }
-      const distance = Math.abs(noteheadEntries[index].x - lyric.x);
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        bestIndex = index;
-      }
-    }
-    if (bestIndex === -1 || bestDistance > 28) {
-      continue;
-    }
-    used.add(bestIndex);
-    paintNoteheadElement(noteheadEntries[bestIndex].node, lyric.color);
-  }
-}
-
-function applyNotationDecorations(
-  container: HTMLElement,
-  solfegeColorizeLyrics: boolean,
-  solfegeOverlayNoteheads: boolean,
-  enableGlowEffects: boolean
-): void {
-  if (solfegeColorizeLyrics) {
-    applySolfegeLyricColors(container);
-  }
-  if (enableGlowEffects) {
-    applyHighlightedNoteheadShadows(container);
-  }
-  if (solfegeOverlayNoteheads) {
-    applySolfegeNoteheadColors(container);
-  }
-}
-
-function getOrderedNoteheads(container: HTMLElement): SVGElement[] {
-  let noteheads = Array.from(container.querySelectorAll('svg g.vf-notehead'));
-  if (noteheads.length === 0) {
-    noteheads = Array.from(container.querySelectorAll('svg .vf-notehead'));
-  }
-
-  return noteheads
-    .map((node) => {
-      const x = safeCenterX(node);
-      return x === null ? null : { node, x };
-    })
-    .filter((entry): entry is { node: Element; x: number } => entry !== null)
-    .sort((a, b) => a.x - b.x)
-    .map(({ node }) => node as SVGElement);
-}
-
-function decorateClimaxNoteheads(
-  container: HTMLElement,
-  climaxNoteIndices: number[],
-  showClimaxMarkers: boolean
-): void {
-  Array.from(container.querySelectorAll('svg .NotationViewer-climaxBadge')).forEach((node) =>
-    node.remove()
-  );
-
-  const noteheads = getOrderedNoteheads(container);
-  const climaxIndices = new Set(climaxNoteIndices);
-
-  noteheads.forEach((node, index) => {
-    node.classList.remove('NotationViewer-notehead--climax');
-    node.removeAttribute('data-climax-marker');
-    if (!showClimaxMarkers || !climaxIndices.has(index)) {
-      return;
-    }
-    node.classList.add('NotationViewer-notehead--climax');
-    node.setAttribute('data-climax-marker', 'Climax');
-
-    try {
-      const svg = node.ownerSVGElement;
-      const box = (node as SVGGraphicsElement).getBBox();
-      if (!svg || !Number.isFinite(box.x) || !Number.isFinite(box.y)) {
-        return;
-      }
-
-      const namespace = 'http://www.w3.org/2000/svg';
-      const badgeGroup = document.createElementNS(namespace, 'g');
-      badgeGroup.setAttribute('class', 'NotationViewer-climaxBadge');
-      badgeGroup.setAttribute('pointer-events', 'none');
-
-      const label = 'Climax';
-      const charWidth = 5.4;
-      const horizontalPadding = 6;
-      const badgeWidth = label.length * charWidth + horizontalPadding * 2;
-      const badgeHeight = 14;
-      const badgeX = box.x + box.width / 2 - badgeWidth / 2;
-      const badgeY = box.y - 22;
-
-      const rect = document.createElementNS(namespace, 'rect');
-      rect.setAttribute('x', badgeX.toFixed(2));
-      rect.setAttribute('y', badgeY.toFixed(2));
-      rect.setAttribute('width', badgeWidth.toFixed(2));
-      rect.setAttribute('height', badgeHeight.toFixed(2));
-      rect.setAttribute('rx', '7');
-      rect.setAttribute('ry', '7');
-      rect.setAttribute('class', 'NotationViewer-climaxBadgeRect');
-
-      const text = document.createElementNS(namespace, 'text');
-      text.setAttribute('x', (box.x + box.width / 2).toFixed(2));
-      text.setAttribute('y', (badgeY + 9.6).toFixed(2));
-      text.setAttribute('text-anchor', 'middle');
-      text.setAttribute('class', 'NotationViewer-climaxBadgeText');
-      text.textContent = label;
-
-      badgeGroup.appendChild(rect);
-      badgeGroup.appendChild(text);
-      svg.appendChild(badgeGroup);
-    } catch {
-      // If a badge cannot be placed, leave the note tagged without blocking render.
-    }
-  });
-}
-
-function scheduleNotationDecorations(
-  container: HTMLElement,
-  renderSeqRef: MutableRefObject<number>,
-  solfegeColorizeLyrics: boolean,
-  solfegeOverlayNoteheads: boolean,
-  climaxNoteIndices: number[],
-  showClimaxMarkers: boolean,
-  enableGlowEffects: boolean
-): void {
-  const seq = renderSeqRef.current;
-  applyNotationDecorations(
-    container,
-    solfegeColorizeLyrics,
-    solfegeOverlayNoteheads,
-    enableGlowEffects
-  );
-  decorateClimaxNoteheads(container, climaxNoteIndices, showClimaxMarkers);
-  requestAnimationFrame(() => {
-    if (seq !== renderSeqRef.current || !container.isConnected) {
-      return;
-    }
-    applyNotationDecorations(
-      container,
-      solfegeColorizeLyrics,
-      solfegeOverlayNoteheads,
-      enableGlowEffects
-    );
-    decorateClimaxNoteheads(container, climaxNoteIndices, showClimaxMarkers);
-    requestAnimationFrame(() => {
-      if (seq !== renderSeqRef.current || !container.isConnected) {
-        return;
-      }
-      applyNotationDecorations(
-        container,
-        solfegeColorizeLyrics,
-        solfegeOverlayNoteheads,
-        enableGlowEffects
-      );
-      decorateClimaxNoteheads(container, climaxNoteIndices, showClimaxMarkers);
-    });
-  });
+  rhythmMarkersByIndex?: Record<number, RhythmMarker | undefined>;
 }
 
 export default function NotationViewer({
@@ -558,7 +48,8 @@ export default function NotationViewer({
   solfegeOverlayNoteheads = false,
   climaxNoteIndices = [],
   showClimaxMarkers = false,
-  enableGlowEffects = false
+  enableGlowEffects = false,
+  rhythmMarkersByIndex = EMPTY_RHYTHM_MARKERS
 }: NotationViewerProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
@@ -571,31 +62,7 @@ export default function NotationViewer({
       return;
     }
 
-    osmdRef.current = new OpenSheetMusicDisplay(containerRef.current, {
-      drawingParameters: 'default',
-      autoResize: false,
-      backend: 'svg',
-      pageFormat: 'Endless',
-      stretchLastSystemLine: true
-    });
-    const rules = (osmdRef.current as unknown as {
-      EngravingRules?: {
-        RenderTitle?: boolean;
-        RenderSubtitle?: boolean;
-        RenderComposer?: boolean;
-        RenderLyricist?: boolean;
-        RenderPartNames?: boolean;
-        RenderPartAbbreviations?: boolean;
-      };
-    }).EngravingRules;
-    if (rules) {
-      rules.RenderTitle = false;
-      rules.RenderSubtitle = false;
-      rules.RenderComposer = false;
-      rules.RenderLyricist = false;
-      rules.RenderPartNames = false;
-      rules.RenderPartAbbreviations = false;
-    }
+    osmdRef.current = createNotationDisplay(containerRef.current);
   }, []);
 
   useEffect(() => {
@@ -664,15 +131,14 @@ export default function NotationViewer({
           getResponsiveZoom(zoom, measureCount, containerWidth, projectionMode)
         );
         renderOsmdWithoutSkyBottomWarnings(osmd);
-        scheduleNotationDecorations(
-          container,
-          renderSeqRef,
+        scheduleNotationDecorations(container, renderSeqRef, {
           solfegeColorizeLyrics,
           solfegeOverlayNoteheads,
           climaxNoteIndices,
           showClimaxMarkers,
-          enableGlowEffects
-        );
+          enableGlowEffects,
+          rhythmMarkersByIndex
+        });
       })
       .catch(() => {
         if (seq !== renderSeqRef.current) {
@@ -692,7 +158,8 @@ export default function NotationViewer({
     containerWidth,
     solfegeColorizeLyrics,
     solfegeOverlayNoteheads,
-    enableGlowEffects
+    enableGlowEffects,
+    rhythmMarkersByIndex
   ]);
 
   useEffect(() => {
@@ -701,15 +168,14 @@ export default function NotationViewer({
       return;
     }
 
-    scheduleNotationDecorations(
-      container,
-      renderSeqRef,
+    scheduleNotationDecorations(container, renderSeqRef, {
       solfegeColorizeLyrics,
       solfegeOverlayNoteheads,
       climaxNoteIndices,
       showClimaxMarkers,
-      enableGlowEffects
-    );
+      enableGlowEffects,
+      rhythmMarkersByIndex
+    });
   }, [
     musicXml,
     solfegeActive,
@@ -719,7 +185,8 @@ export default function NotationViewer({
     headerControls,
     climaxNoteIndices,
     showClimaxMarkers,
-    enableGlowEffects
+    enableGlowEffects,
+    rhythmMarkersByIndex
   ]);
 
   return (

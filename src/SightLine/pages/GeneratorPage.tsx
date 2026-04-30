@@ -1,6 +1,6 @@
 //GeneratorPage.tsx
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import type { ExerciseSpec, MelodyEvent } from "@/SightLine/domain/music";
 import GeneratorNotationControls from "../components/GeneratorNotationControls";
@@ -17,33 +17,233 @@ import { useStudentSession } from "../hooks/useStudentSession";
 import { useTeacherLibrary } from "../hooks/useTeacherLibrary";
 import { normalizeUserConstraintsInSpec } from "../core/spec";
 import { runAssessment } from "../core/assessment/runAssessment";
+import { midiToFrequency } from "../core/midi";
 import type {
   DetectedTonic,
-  ExpectedMelody,
-  ExpectedRhythm,
+  NormalizedActualNote,
+  NormalizedExpectedNote,
+  PcmAudioBuffer,
 } from "../core/assessment/types";
 import {
-  noteSegmentationService,
-  normalizationAlignmentService,
-  pitchExtractionService,
-  relationalAnalysisService,
-  rhythmAnalysisService,
-  signalCleaningService,
-} from "../core/assessment/services";
-import { normalize } from "zod";
-
+  buildDetectedTonicFromGeneratedExercise,
+  buildExpectedMelodyFromGeneratedExercise,
+  buildExpectedRhythmFromGeneratedExercise,
+} from "../core/assessment/buildExpectedFromGeneratedExercise";
 type PlaybackState = ReturnType<typeof usePlayback>;
 type ProjectionState = ReturnType<typeof useProjection>;
 type SolfegeState = ReturnType<typeof useSolfege>;
 type StudentState = ReturnType<typeof useStudentSession>;
 type TeacherState = ReturnType<typeof useTeacherLibrary>;
+type AssessmentResult = Awaited<ReturnType<typeof runAssessment>>;
+type AssessmentStatus =
+  | "idle"
+  | "recording"
+  | "processing"
+  | "complete"
+  | "error";
+type RhythmMarker = "match" | "close" | "mismatch" | "missing";
 
-function logJSON(label: string, value: unknown): void {
-  console.log(`${label}:\n`, JSON.stringify(value, null, 2));
+const NOTE_FEEDBACK_COLORS = {
+  correct: "#1ecf87",
+  close: "#ffd54a",
+  lowConfidence: "#ff9f43",
+  incorrect: "#e25555",
+  missing: "#8a98aa",
+};
+
+const LOW_CONFIDENCE_THRESHOLD = 0.65;
+const ASSESSMENT_SCALE_OFFSETS = [0, 2, 4, 5, 7, 5, 4, 2, 0];
+
+function findExpectedNote(
+  notes: NormalizedExpectedNote[],
+  id: string | null,
+): NormalizedExpectedNote | null {
+  return id ? notes.find((note) => note.id === id) ?? null : null;
+}
+
+function findActualNote(
+  notes: NormalizedActualNote[],
+  id: string | null,
+): NormalizedActualNote | null {
+  return id ? notes.find((note) => note.id === id) ?? null : null;
+}
+
+function getRenderableAttackEventIndices(melody: MelodyEvent[]): number[] {
+  const indices: number[] = [];
+
+  for (let index = 0; index < melody.length; index += 1) {
+    if (melody[index].isAttack !== false) {
+      indices.push(index);
+    }
+  }
+
+  return indices;
+}
+
+function getAssessmentReferenceOffset(params: {
+  alignedPairs: AssessmentResult["normalized"]["alignedPairs"];
+  expectedNotes: NormalizedExpectedNote[];
+  actualNotes: NormalizedActualNote[];
+}): number {
+  const { alignedPairs, expectedNotes, actualNotes } = params;
+
+  for (const pair of alignedPairs) {
+    if (pair.kind !== "matched") {
+      continue;
+    }
+
+    const expected = findExpectedNote(expectedNotes, pair.expectedNoteId);
+    const actual = findActualNote(actualNotes, pair.actualNoteId);
+
+    if (expected && actual) {
+      return actual.midiFloat - expected.midiFloat;
+    }
+  }
+
+  return 0;
+}
+
+function buildNoteColorMapFromAssessment(params: {
+  result: AssessmentResult;
+  melody: MelodyEvent[];
+}): Record<number, string | undefined> {
+  const {
+    result: {
+      normalized: {
+        alignedPairs,
+        expectedNotes,
+        actualNotes,
+      },
+    },
+    melody,
+  } = params;
+  const colorsByIndex: Record<number, string | undefined> = {};
+  const attackEventIndices = getRenderableAttackEventIndices(melody);
+  const referenceOffset = getAssessmentReferenceOffset({
+    alignedPairs,
+    expectedNotes,
+    actualNotes,
+  });
+
+  for (const pair of alignedPairs) {
+    const expected = findExpectedNote(expectedNotes, pair.expectedNoteId);
+
+    if (!expected) {
+      continue;
+    }
+
+    const eventIndex = attackEventIndices[expected.index];
+
+    if (eventIndex === undefined) {
+      continue;
+    }
+
+    if (pair.kind === "omission") {
+      colorsByIndex[eventIndex] = NOTE_FEEDBACK_COLORS.missing;
+      continue;
+    }
+
+    const actual = findActualNote(actualNotes, pair.actualNoteId);
+
+    if (!actual) {
+      colorsByIndex[eventIndex] = NOTE_FEEDBACK_COLORS.missing;
+      continue;
+    }
+
+    if (actual.confidence < LOW_CONFIDENCE_THRESHOLD) {
+      colorsByIndex[eventIndex] = NOTE_FEEDBACK_COLORS.lowConfidence;
+      continue;
+    }
+
+    const pitchDelta = Math.abs(
+      actual.midiFloat - referenceOffset - expected.midiFloat,
+    );
+
+    if (pitchDelta <= 0.5) {
+      colorsByIndex[eventIndex] = NOTE_FEEDBACK_COLORS.correct;
+    } else if (pitchDelta <= 2) {
+      colorsByIndex[eventIndex] = NOTE_FEEDBACK_COLORS.close;
+    } else {
+      colorsByIndex[eventIndex] = NOTE_FEEDBACK_COLORS.incorrect;
+    }
+  }
+
+  return colorsByIndex;
+}
+
+function buildRhythmMarkerMapFromAssessment(
+  result: AssessmentResult | null,
+): Record<number, RhythmMarker | undefined> {
+  if (!result?.rhythmAnalysis) {
+    return {};
+  }
+
+  const markersByIndex: Record<number, RhythmMarker | undefined> = {};
+
+  for (const expectedNote of result.normalized.expectedNotes) {
+    markersByIndex[expectedNote.index] = "missing";
+  }
+
+  if (result.rhythmAnalysis.isProvisional) {
+    return markersByIndex;
+  }
+
+  for (const window of result.rhythmAnalysis.windows) {
+    markersByIndex[window.index] = window.classification;
+  }
+
+  return markersByIndex;
+}
+
+function getAssessButtonLabel(params: {
+  status: AssessmentStatus;
+  isRecording: boolean;
+  isRequestingPermission: boolean;
+}): string {
+  if (params.isRequestingPermission) {
+    return "Requesting Mic...";
+  }
+
+  if (params.status === "processing") {
+    return "Assessing...";
+  }
+
+  if (params.isRecording || params.status === "recording") {
+    return "Stop + Assess";
+  }
+
+  return "Assess";
+}
+
+function scheduleAssessmentScaleTone(params: {
+  audioContext: AudioContext;
+  midi: number;
+  startTime: number;
+  durationSeconds: number;
+  oscillatorType: OscillatorType;
+}): void {
+  const { audioContext, midi, startTime, durationSeconds, oscillatorType } =
+    params;
+  const endTime = startTime + Math.max(0.08, durationSeconds);
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+
+  oscillator.type = oscillatorType;
+  oscillator.frequency.setValueAtTime(midiToFrequency(midi), startTime);
+  gain.gain.setValueAtTime(0.0001, startTime);
+  gain.gain.linearRampToValueAtTime(0.18, startTime + 0.02);
+  gain.gain.setValueAtTime(0.15, Math.max(startTime + 0.03, endTime - 0.04));
+  gain.gain.linearRampToValueAtTime(0.0001, endTime);
+
+  oscillator.connect(gain);
+  gain.connect(audioContext.destination);
+  oscillator.start(startTime);
+  oscillator.stop(endTime);
 }
 
 interface GeneratorPageProps {
   currentMelody: MelodyEvent[];
+  currentPatchedMelody: MelodyEvent[];
   currentSpecSnapshot: ExerciseSpec | null;
   climaxNoteIndices: number[];
   displayNotationMusicXml: string;
@@ -80,10 +280,14 @@ interface GeneratorPageProps {
   teacherFeaturesDisabled: boolean;
   updateExerciseTitle: (value: string) => void;
   interactionDisabled: boolean;
+  onAssessmentNoteColorsChange: (
+    value: Record<number, string | undefined>,
+  ) => void;
 }
 
 export default function GeneratorPage({
   currentMelody,
+  currentPatchedMelody,
   currentSpecSnapshot,
   climaxNoteIndices,
   displayNotationMusicXml,
@@ -120,9 +324,12 @@ export default function GeneratorPage({
   teacherFeaturesDisabled,
   updateExerciseTitle,
   interactionDisabled,
+  onAssessmentNoteColorsChange,
 }: GeneratorPageProps): JSX.Element {
   const notationSpec = currentSpecSnapshot ?? spec;
-  const assessmentTargetMelody = currentMelody.filter(
+  const assessmentSourceMelody =
+    currentPatchedMelody.length > 0 ? currentPatchedMelody : currentMelody;
+  const assessmentTargetMelody = assessmentSourceMelody.filter(
     (note) => note.isAttack !== false,
   );
   const currentExerciseId =
@@ -130,169 +337,182 @@ export default function GeneratorPage({
     spec.title.trim() ||
     "generated-exercise";
   const {
-    isRecording: isDebugRecording,
-    isRequestingPermission: isDebugRequestingPermission,
-    error: debugRecorderError,
+    isRecording: isAssessmentRecording,
+    isRequestingPermission: isAssessmentRequestingPermission,
     startRecording,
     stopRecording,
-    resetRecording,
   } = useAssessmentRecorder();
-  const [debugFrameCount, setDebugFrameCount] = useState(0);
-  const [debugVoicedCount, setDebugVoicedCount] = useState(0);
-  const [debugStableNoteCount, setDebugStableNoteCount] = useState(0);
-  const [debugRhythmEnabled, setDebugRhythmEnabled] = useState(true);
-  const [debugExpectedDegrees, setDebugExpectedDegrees] = useState<number[]>(
-    [],
-  );
-  const [debugActualDegrees, setDebugActualDegrees] = useState<number[]>([]);
+  const assessmentScalePlaybackRef = useRef<{
+    context: AudioContext;
+    timerId: number;
+  } | null>(null);
+  const [assessmentResult, setAssessmentResult] =
+    useState<AssessmentResult | null>(null);
+  const [assessmentStatus, setAssessmentStatus] =
+    useState<AssessmentStatus>("idle");
+  const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
 
-  async function handleAssess() {
+  function getWrittenTonic(): DetectedTonic {
+    return buildDetectedTonicFromGeneratedExercise(
+      notationSpec,
+      assessmentSourceMelody,
+    );
+  }
+
+  function clearAssessmentResult() {
+    setAssessmentResult(null);
+    setAssessmentStatus("idle");
+    onAssessmentNoteColorsChange({});
+  }
+
+  function stopAssessmentScale() {
+    const playbackState = assessmentScalePlaybackRef.current;
+
+    if (!playbackState) {
+      return;
+    }
+
+    window.clearTimeout(playbackState.timerId);
+    void playbackState.context.close();
+    assessmentScalePlaybackRef.current = null;
+  }
+
+  function handlePlayAssessmentScale() {
+    stopAssessmentScale();
+
+    const tonic = getWrittenTonic();
+    const audioContext = new AudioContext();
+    const beatSeconds = 60 / Math.max(30, Math.min(240, playback.tempoBpm));
+    const startTime = audioContext.currentTime + 0.05;
+    let maxEndTime = startTime;
+
+    ASSESSMENT_SCALE_OFFSETS.forEach((offset, index) => {
+      const noteStart = startTime + index * beatSeconds;
+      const noteDuration = beatSeconds * 0.92;
+
+      scheduleAssessmentScaleTone({
+        audioContext,
+        midi: tonic.tonicMidi + offset,
+        startTime: noteStart,
+        durationSeconds: noteDuration,
+        oscillatorType: playback.instrument,
+      });
+
+      maxEndTime = Math.max(maxEndTime, noteStart + noteDuration);
+    });
+
+    assessmentScalePlaybackRef.current = {
+      context: audioContext,
+      timerId: window.setTimeout(() => {
+        void audioContext.close();
+
+        if (assessmentScalePlaybackRef.current?.context === audioContext) {
+          assessmentScalePlaybackRef.current = null;
+        }
+      }, Math.ceil((maxEndTime - audioContext.currentTime) * 1000) + 100),
+    };
+  }
+
+  async function runAssessmentForAudio(pcmAudio: PcmAudioBuffer) {
+    setAssessmentStatus("processing");
+    const tonic = getWrittenTonic();
+    const expectedMelody = buildExpectedMelodyFromGeneratedExercise(
+      assessmentSourceMelody,
+      currentExerciseId,
+    );
+    const expectedRhythm = buildExpectedRhythmFromGeneratedExercise(
+      assessmentSourceMelody,
+    );
+
     try {
-      const expectedMelody: ExpectedMelody = {
-        exerciseId: currentExerciseId,
-        notes: assessmentTargetMelody.map((note, index) => ({
-          id: note.keyId || `e${index}`,
-          index,
-          writtenMidi: note.midi,
-          writtenNoteName: `${note.pitch}${note.octave}`,
-        })),
-      };
-
       const result = await runAssessment({
         exerciseId: currentExerciseId,
         expectedMelody,
+        expectedRhythm,
+        tonic,
+        melodyAudio: pcmAudio,
+        enableRhythmAnalysis: true,
       });
 
-      console.log("Assessment result:", result);
+      setAssessmentResult(result);
+      setAssessmentStatus("complete");
+      onAssessmentNoteColorsChange(
+        buildNoteColorMapFromAssessment({
+          result,
+          melody: assessmentSourceMelody,
+        }),
+      );
+
     } catch (err) {
+      setAssessmentResult(null);
+      setAssessmentStatus("error");
+      onAssessmentNoteColorsChange({});
       console.error("Assessment failed:", err);
     }
   }
 
-  async function handleStartDebugRecord() {
-    setDebugFrameCount(0);
-    setDebugVoicedCount(0);
-    setDebugStableNoteCount(0);
-    await startRecording();
-  }
+  async function handleBeginAssessment() {
+    setIsAssessmentModalOpen(false);
+    stopAssessmentScale();
 
-  async function handleStopAndExtractPitch() {
-    const pcmAudio = await stopRecording();
+    if (isAssessmentRecording) {
+      const pcmAudio = await stopRecording();
 
-    if (!pcmAudio) {
+      if (!pcmAudio) {
+        setAssessmentStatus("error");
+        return;
+      }
+
+      await runAssessmentForAudio(pcmAudio);
       return;
     }
 
-    const pitch = await pitchExtractionService.run({
-      melodyAudio: pcmAudio,
-      frameSize: 2048,
-      hopSize: 256,
-      clarityThreshold: 0.8,
-    });
+    clearAssessmentResult();
+    setAssessmentStatus("recording");
+    await startRecording();
+  }
 
-    const cleaned = signalCleaningService.run({
-      frames: pitch.frames,
-      clarityThreshold: 0.8,
-      smoothingWindowSize: 5,
-    });
-
-    const detectedTonic: DetectedTonic = {
-      tonicHz: 130.81,
-      tonicMidi: 48,
-      tonicPitchClass: 0,
-      tonicNoteName: "C3",
-      confidence: 1,
-    };
-
-    const expectedMelody: ExpectedMelody = {
-      exerciseId: "arch-1",
-      notes: [
-        { id: "e1", index: 0, writtenMidi: 48, writtenNoteName: "C3" }, // DO
-        { id: "e2", index: 1, writtenMidi: 50, writtenNoteName: "D3" }, // RE
-        { id: "e3", index: 2, writtenMidi: 52, writtenNoteName: "E3" }, // MI
-        { id: "e4", index: 3, writtenMidi: 55, writtenNoteName: "G3" }, // SOL
-        { id: "e5", index: 4, writtenMidi: 52, writtenNoteName: "E3" }, // MI
-        { id: "e6", index: 5, writtenMidi: 50, writtenNoteName: "D3" }, // RE
-        { id: "e7", index: 6, writtenMidi: 48, writtenNoteName: "C3" }, // DO
-      ],
-    };
-
-    const expectedRhythm: ExpectedRhythm = {
-      units: [2, 1, 1, 2, 2, 2, 2],
-    };
-
-    const stableNotes = noteSegmentationService.run({
-      frames: cleaned.frames,
-      minNoteDurationMs: 40,
-    });
-
-    const normalized = normalizationAlignmentService.run({
-      tonic: detectedTonic,
-      expectedMelody,
-      actualNotes: stableNotes.noteEvents,
-    });
-
-    const analysis = relationalAnalysisService.run({
-      tonic: detectedTonic,
-      expectedNotes: normalized.expectedNotes,
-      actualNotes: normalized.actualNotes,
-      alignedPairs: normalized.alignedPairs,
-      expectedIntervals: normalized.expectedIntervals,
-      actualIntervals: normalized.actualIntervals,
-      windows: [],
-    });
-
-    const rhythmAnalysis = debugRhythmEnabled
-      ? rhythmAnalysisService.run({
-          expectedRhythm,
-          actualEvents: stableNotes.noteEvents,
-          melodicConfidence: analysis.analysisConfidence,
-          melodicIsReliable:
-            stableNotes.noteEvents.length === expectedMelody.notes.length,
-          melodicStructureReliable:
-            stableNotes.noteEvents.length === expectedMelody.notes.length,
-          melodicStructureReason:
-            stableNotes.noteEvents.length === expectedMelody.notes.length
-              ? undefined
-              : "Stable note-event structure did not match expected note count.",
-        })
-      : null;
-
-    const voicedRaw = pitch.frames.filter((frame) => frame.isVoiced);
-
-    setDebugFrameCount(cleaned.frames.length);
-    setDebugVoicedCount(voicedRaw.length);
-    setDebugStableNoteCount(stableNotes.noteEvents.length);
-    setDebugExpectedDegrees(normalized.expectedDegrees);
-    setDebugActualDegrees(normalized.actualDegrees);
-
-    logJSON("Expected degrees", normalized.expectedDegrees);
-    logJSON("Actual degrees", normalized.actualDegrees);
-    logJSON("Relational analysis", analysis);
-    if (rhythmAnalysis) {
-      logJSON("Rhythm windows", rhythmAnalysis.windows);
-      logJSON("Rhythm findings", rhythmAnalysis.findings);
-      logJSON("Rhythm confidence", {
-        rhythmConfidence: rhythmAnalysis.rhythmConfidence,
-        bodyRhythmConfidence: rhythmAnalysis.bodyRhythmConfidence,
-        finalRhythmConfidence: rhythmAnalysis.finalRhythmConfidence,
-        tailAnomalyIndices: rhythmAnalysis.tailAnomalyIndices ?? [],
-        windowWeights: rhythmAnalysis.windowWeights ?? [],
-      });
-      logJSON("Rhythm provisional", {
-        isProvisional: rhythmAnalysis.isProvisional,
-        provisionalReason: rhythmAnalysis.provisionalReason ?? null,
-      });
-      logJSON("Rhythm debug payload", rhythmAnalysis);
+  function handleAssess() {
+    if (isAssessmentRecording) {
+      void handleBeginAssessment();
+      return;
     }
+
+    setIsAssessmentModalOpen(true);
   }
 
-  function handleResetDebug() {
-    resetRecording();
-    setDebugFrameCount(0);
-    setDebugVoicedCount(0);
-    setDebugStableNoteCount(0);
+  function handleCloseAssessmentModal() {
+    setIsAssessmentModalOpen(false);
+    stopAssessmentScale();
   }
+
+  const rhythmMarkersByIndex = useMemo(
+    () => buildRhythmMarkerMapFromAssessment(assessmentResult),
+    [assessmentResult],
+  );
+  const assessLabel = getAssessButtonLabel({
+    status: assessmentStatus,
+    isRecording: isAssessmentRecording,
+    isRequestingPermission: isAssessmentRequestingPermission,
+  });
+
+  useEffect(() => {
+    if (!isAssessmentModalOpen) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        handleCloseAssessmentModal();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isAssessmentModalOpen]);
+
+  useEffect(() => () => stopAssessmentScale(), []);
 
   return (
     <div
@@ -316,10 +536,16 @@ export default function GeneratorPage({
                 currentMelody.length > 0 ? "Exercise title" : "SightLine Melody"
               }
               onTitleChange={updateExerciseTitle}
-              onGenerate={runWithNewSeed}
+              onGenerate={() => {
+                clearAssessmentResult();
+                runWithNewSeed();
+              }}
               onAssess={() => void handleAssess()}
+              assessLabel={assessLabel}
               assessDisabled={
-                interactionDisabled || assessmentTargetMelody.length === 0
+                assessmentStatus === "processing" ||
+                isAssessmentRequestingPermission ||
+                assessmentTargetMelody.length === 0
               }
               showUpdateSave={Boolean(teacher.activeExerciseId)}
               saveDisabled={
@@ -350,6 +576,57 @@ export default function GeneratorPage({
             />
           </div>
 
+          {isAssessmentModalOpen ? (
+            <div
+              className="AppModalBackdrop"
+              onClick={handleCloseAssessmentModal}
+              role="presentation"
+            >
+              <div
+                className="AppModal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="assessment-start-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  className="AppModalClose"
+                  onClick={handleCloseAssessmentModal}
+                >
+                  ×
+                </button>
+                <h3 id="assessment-start-title">Ready to Assess?</h3>
+                <p className="AppHistoryLabel">
+                  Listen to the scale, then begin when you are ready.
+                </p>
+                <div className="AppBatchActions">
+                  <button
+                    type="button"
+                    className="AppHistoryButton AppProjectionToggleButton"
+                    onClick={handleCloseAssessmentModal}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="AppHistoryButton AppProjectionToggleButton"
+                    onClick={handlePlayAssessmentScale}
+                  >
+                    Play Scale
+                  </button>
+                  <button
+                    type="button"
+                    className="AppHistoryButton AppProjectionToggleButton"
+                    onClick={() => void handleBeginAssessment()}
+                  >
+                    Begin
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {teacher.foldersError ? (
             <p
               className="AppHistoryLabel"
@@ -376,85 +653,6 @@ export default function GeneratorPage({
               {saveStatus === "saving" ? "Saving..." : saveMessage}
             </p>
           ) : null}
-          <div
-            style={{
-              margin: "0.2rem 0 0.5rem",
-              padding: "0.65rem 0.8rem",
-              border: "1px dashed rgba(142, 164, 190, 0.45)",
-              borderRadius: "10px",
-              background: "rgba(14, 20, 30, 0.45)",
-            }}
-          >
-            <p className="AppHistoryLabel" style={{ margin: "0 0 0.45rem" }}>
-              Temporary Debug: Recorder + Blind/Guided Segmentation
-            </p>
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              <button
-                type="button"
-                className="AppHistoryButton AppProjectionToggleButton"
-                onClick={() => void handleStartDebugRecord()}
-                disabled={
-                  interactionDisabled ||
-                  isDebugRecording ||
-                  isDebugRequestingPermission
-                }
-              >
-                {isDebugRequestingPermission
-                  ? "Requesting Mic..."
-                  : "Start Debug Record"}
-              </button>
-              <button
-                type="button"
-                className="AppHistoryButton AppProjectionToggleButton"
-                onClick={() => void handleStopAndExtractPitch()}
-                disabled={interactionDisabled || !isDebugRecording}
-              >
-                Stop + Extract Pitch
-              </button>
-              <button
-                type="button"
-                className="AppHistoryButton AppProjectionToggleButton"
-                onClick={handleResetDebug}
-                disabled={interactionDisabled}
-              >
-                Reset Debug
-              </button>
-              <button
-                type="button"
-                className="AppHistoryButton AppProjectionToggleButton"
-                onClick={() => setDebugRhythmEnabled((value) => !value)}
-                disabled={interactionDisabled}
-              >
-                Rhythm {debugRhythmEnabled ? "On" : "Off"}
-              </button>
-            </div>
-            <div style={{ marginTop: "0.45rem" }}>
-              <p className="AppHistoryLabel" style={{ margin: 0 }}>
-                Recording: {isDebugRecording ? "yes" : "no"}
-              </p>
-              <p className="AppHistoryLabel" style={{ margin: 0 }}>
-                Cleaned Frames: {debugFrameCount}
-              </p>
-              <p className="AppHistoryLabel" style={{ margin: 0 }}>
-                Raw Voiced Frames: {debugVoicedCount}
-              </p>
-              <p className="AppHistoryLabel" style={{ margin: 0 }}>
-                Stable Notes: {debugStableNoteCount}
-              </p>
-              <p className="AppHistoryLabel" style={{ margin: 0 }}>
-                Expected Degrees: [{debugExpectedDegrees.join(", ")}]
-              </p>
-              <p className="AppHistoryLabel" style={{ margin: 0 }}>
-                Actual Degrees: [{debugActualDegrees.join(", ")}]
-              </p>
-              <p className="AppHistoryLabel" style={{ margin: 0 }}>
-                Rhythm Analysis: {debugRhythmEnabled ? "enabled" : "disabled"}
-              </p>
-              <p className="AppHistoryLabel" style={{ margin: 0 }}>
-                Error: {debugRecorderError ?? "none"}
-              </p>
-            </div>
-          </div>
         </>
       ) : null}
 
@@ -494,6 +692,7 @@ export default function GeneratorPage({
               projectionMode={projection.isProjectionMode}
               solfegeActive={solfege.solfegeMode !== "off"}
               solfegeColorizeLyrics={solfege.solfegeColorizeMode !== "off"}
+              rhythmMarkersByIndex={rhythmMarkersByIndex}
               solfegeOverlayNoteheads={
                 solfege.solfegeMode !== "off" && solfege.solfegeOverlayMode
               }

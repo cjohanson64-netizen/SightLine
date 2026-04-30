@@ -3,7 +3,7 @@ import { KEY_TO_PC } from '../midi';
 import { midiToDegree, modeScale, nextScaleStepMidi } from '../scale';
 import type { TonnetzGraph } from '../tonnetz/buildTonnetz';
 import { generatePhrasePlan, type PhrasePlan } from './phrasePlanner';
-import { generatePhraseGrid, type PhraseGridPlan } from './phraseGridPlanner';
+import { generatePhraseGrid, type PhraseGridPlan } from './phraseGridPlanner/phraseGridPlanner';
 import { applyCadencePolicy } from './cadenceVoiceLeading';
 import {
   chooseGrid,

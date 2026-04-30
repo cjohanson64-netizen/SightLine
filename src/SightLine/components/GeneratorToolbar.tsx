@@ -82,6 +82,7 @@ type GeneratorToolbarProps = {
   onStudentSubmit?: () => void;
   studentSubmitDisabled?: boolean;
   onAssess: () => void;
+  assessLabel?: string;
   assessDisabled?: boolean;
 };
 
@@ -111,6 +112,7 @@ export default function GeneratorToolbar({
   onStudentSubmit,
   studentSubmitDisabled = false,
   onAssess,
+  assessLabel = "Assess",
   assessDisabled = false,
 }: GeneratorToolbarProps): JSX.Element {
   const controlsDisabled = interactionDisabled;
@@ -198,7 +200,7 @@ export default function GeneratorToolbar({
             onClick={onAssess}
             disabled={controlsDisabled || assessDisabled}
           >
-            Assess
+            {assessLabel}
           </button>
           {mode === "teacher" ? (
             <SaveMenu

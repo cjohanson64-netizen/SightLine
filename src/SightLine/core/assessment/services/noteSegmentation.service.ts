@@ -12,6 +12,7 @@ const MIN_NOTE_DURATION_MS = 40;
 const POST_MERGE_MIN_NOTE_DURATION_MS = 80;
 const MAX_MERGE_PITCH_DIFF_HZ = 6;
 const MAX_MERGE_GAP_MS = 150;
+const MIN_SURVIVING_NOTE_DURATION_MS = 180;
 
 function emptyNoteSegmentationOutput(): NoteSegmentationOutput {
   return { noteEvents: [] };
@@ -96,14 +97,32 @@ function buildNoteEvent(
   };
 }
 
+function buildPreliminaryNotes(runs: CleanPitchFrame[][]): SungNoteEvent[] {
+  const noteEvents: SungNoteEvent[] = [];
+
+  for (let index = 0; index < runs.length; index += 1) {
+    const noteEvent = buildNoteEvent(runs[index], index);
+
+    if (noteEvent) {
+      noteEvents.push(noteEvent);
+    }
+  }
+
+  return noteEvents;
+}
+
 function areMergeable(a: SungNoteEvent, b: SungNoteEvent): boolean {
   const pitchDiffHz = Math.abs(a.pitchHz - b.pitchHz);
   const gapMs = b.startMs - a.endMs;
   const midiFloatDiff = Math.abs(a.midiFloat - b.midiFloat);
+  const oneNoteIsShort =
+    a.durationMs < POST_MERGE_MIN_NOTE_DURATION_MS ||
+    b.durationMs < POST_MERGE_MIN_NOTE_DURATION_MS;
 
   return (
     gapMs >= 0 &&
     gapMs <= MAX_MERGE_GAP_MS &&
+    oneNoteIsShort &&
     (midiFloatDiff <= 0.5 || pitchDiffHz <= MAX_MERGE_PITCH_DIFF_HZ)
   );
 }
@@ -160,35 +179,37 @@ function mergeAdjacentSimilarNotes(
   return merged;
 }
 
+function shouldKeepPostMergeNote(note: SungNoteEvent): boolean {
+  return note.durationMs >= MIN_SURVIVING_NOTE_DURATION_MS;
+}
+
 function filterShortPostMergeNotes(
   noteEvents: SungNoteEvent[],
 ): SungNoteEvent[] {
-  if (noteEvents.length === 0) {
-    return [];
-  }
+  return noteEvents.filter(shouldKeepPostMergeNote);
+}
 
-  return noteEvents.filter((note, index, allNotes) => {
-    if (note.durationMs >= POST_MERGE_MIN_NOTE_DURATION_MS) {
-      return true;
-    }
+function isTransientOutlierNote(
+  previous: SungNoteEvent,
+  current: SungNoteEvent,
+  next: SungNoteEvent,
+): boolean {
+  const currentIsShort = current.durationMs <= 160;
 
-    const previous = index > 0 ? allNotes[index - 1] : null;
-    const next = index < allNotes.length - 1 ? allNotes[index + 1] : null;
+  const prevToCurrentSemitones = Math.abs(
+    previous.midiFloat - current.midiFloat,
+  );
+  const currentToNextSemitones = Math.abs(current.midiFloat - next.midiFloat);
+  const prevToNextSemitones = Math.abs(previous.midiFloat - next.midiFloat);
 
-    const previousMuchLonger =
-      previous !== null &&
-      previous.durationMs >= POST_MERGE_MIN_NOTE_DURATION_MS * 2;
-    const nextMuchLonger =
-      next !== null && next.durationMs >= POST_MERGE_MIN_NOTE_DURATION_MS * 2;
+  const currentIsFarFromBoth =
+    prevToCurrentSemitones >= 7 && currentToNextSemitones >= 7;
 
-    const isEdgeFragment = index === 0 || index === allNotes.length - 1;
+  const neighborsAreCloserToEachOther = prevToNextSemitones <= 5;
 
-    if (isEdgeFragment && (previousMuchLonger || nextMuchLonger)) {
-      return false;
-    }
-
-    return false;
-  });
+  return (
+    currentIsShort && currentIsFarFromBoth && neighborsAreCloserToEachOther
+  );
 }
 
 function filterTransientOutlierNotes(
@@ -205,32 +226,60 @@ function filterTransientOutlierNotes(
     const current = noteEvents[index];
     const next = noteEvents[index + 1];
 
-    const currentIsShort = current.durationMs <= 160;
-
-    const prevToCurrentSemitones = Math.abs(
-      previous.midiFloat - current.midiFloat,
-    );
-    const currentToNextSemitones = Math.abs(current.midiFloat - next.midiFloat);
-    const prevToNextSemitones = Math.abs(previous.midiFloat - next.midiFloat);
-
-    const currentIsFarFromBoth =
-      prevToCurrentSemitones >= 7 && currentToNextSemitones >= 7;
-
-    const neighborsAreCloserToEachOther = prevToNextSemitones <= 5;
-
-    if (
-      currentIsShort &&
-      currentIsFarFromBoth &&
-      neighborsAreCloserToEachOther
-    ) {
-      continue;
+    if (!isTransientOutlierNote(previous, current, next)) {
+      filtered.push(current);
     }
-
-    filtered.push(current);
   }
 
   filtered.push(noteEvents[noteEvents.length - 1]);
   return filtered;
+}
+
+function filterShortNonScaleArtifacts(
+  noteEvents: SungNoteEvent[],
+  tonicPitchClass: number,
+): SungNoteEvent[] {
+  return noteEvents.filter((note) => {
+    const relativePitchClass =
+      ((Math.round(note.midiFloat) % 12) - tonicPitchClass + 12) % 12;
+
+    const majorScalePitchClasses = [0, 2, 4, 5, 7, 9, 11];
+
+    const isScaleTone = majorScalePitchClasses.includes(relativePitchClass);
+
+    const isVeryShort = note.durationMs <= 220;
+
+    // Suppress likely transition artifacts.
+    if (!isScaleTone && isVeryShort) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function mergeTrailingSamePitchFragment(
+  noteEvents: SungNoteEvent[],
+): SungNoteEvent[] {
+  if (noteEvents.length < 2) {
+    return noteEvents;
+  }
+
+  const last = noteEvents[noteEvents.length - 1];
+  const previous = noteEvents[noteEvents.length - 2];
+
+  const pitchDistance = Math.abs(last.midiFloat - previous.midiFloat);
+  const isShortFinalFragment = last.durationMs <= 300;
+  const isSamePitch = pitchDistance <= 0.5;
+  const previousIsMuchLonger = previous.durationMs >= last.durationMs * 2;
+
+  if (!isShortFinalFragment || !isSamePitch || !previousIsMuchLonger) {
+    return noteEvents;
+  }
+
+  const mergedFinalNote = mergeTwoNotes(previous, last);
+
+  return [...noteEvents.slice(0, noteEvents.length - 2), mergedFinalNote];
 }
 
 function reindexNotes(noteEvents: SungNoteEvent[]): SungNoteEvent[] {
@@ -246,23 +295,34 @@ export const noteSegmentationService: NoteSegmentationService = {
       return emptyNoteSegmentationOutput();
     }
 
+    // Phase 1: Group stable pitch frames into note-like regions.
     const runs = groupNoteRuns(input.frames);
 
-    const preliminaryNotes: SungNoteEvent[] = [];
+    // Phase 2: Convert valid runs into preliminary note events.
+    const preliminaryNotes = buildPreliminaryNotes(runs);
 
-    for (let index = 0; index < runs.length; index += 1) {
-      const noteEvent = buildNoteEvent(runs[index], index);
-
-      if (noteEvent) {
-        preliminaryNotes.push(noteEvent);
-      }
-    }
-
+    // Phase 3: Merge adjacent note events that represent the same pitch.
     const mergedNotes = mergeAdjacentSimilarNotes(preliminaryNotes);
+
+    // Phase 4: Remove short fragments created or exposed after merging.
     const noShortFragments = filterShortPostMergeNotes(mergedNotes);
+
+    // Phase 5: Remove brief transient pitch outliers.
     const noTransientOutliers = filterTransientOutlierNotes(noShortFragments);
-    const noteEvents = reindexNotes(noTransientOutliers);
-    
+
+    // Phase 6: Remove short non-scale artifact notes.
+    const noNonScaleArtifacts = filterShortNonScaleArtifacts(
+      noTransientOutliers,
+      input.tonicPitchClass ?? 0,
+    );
+
+    // Phase 7: Merge phrase-final release fragments.
+    const noTrailingFragment =
+      mergeTrailingSamePitchFragment(noNonScaleArtifacts);
+
+    // Phase 8: Normalize note ids after cleanup.
+    const noteEvents = reindexNotes(noTrailingFragment);
+
     return { noteEvents };
   },
 };
