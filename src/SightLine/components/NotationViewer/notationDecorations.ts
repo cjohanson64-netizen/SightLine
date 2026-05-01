@@ -47,6 +47,8 @@ const RHYTHM_MARKER_TEXT: Record<RhythmMarker, string> = {
   mismatch: "×",
   missing: "—",
 };
+const RHYTHM_MARKER_ROW_TOLERANCE = 36;
+const RHYTHM_MARKER_BASELINE_OFFSET = 18;
 
 type DecorationOptions = {
   solfegeColorizeLyrics: boolean;
@@ -346,12 +348,47 @@ function getRhythmMarkerTargets(container: HTMLElement): RhythmMarkerTarget[] {
     return [];
   }
 
-  const sharedBaseline = Math.max(...entries.map((entry) => entry.bottom)) + 18;
+  const rows = groupRhythmMarkerTargetsByRow(entries);
 
-  return entries.map((entry) => ({
-    ...entry,
-    bottom: sharedBaseline,
-  }));
+  for (const row of rows) {
+    const sharedBaseline =
+      Math.max(...row.map((entry) => entry.bottom)) +
+      RHYTHM_MARKER_BASELINE_OFFSET;
+
+    for (const entry of row) {
+      entry.bottom = sharedBaseline;
+    }
+  }
+
+  return entries;
+}
+
+function groupRhythmMarkerTargetsByRow(
+  entries: RhythmMarkerTarget[],
+): RhythmMarkerTarget[][] {
+  const rows: RhythmMarkerTarget[][] = [];
+
+  for (const entry of entries) {
+    const row = rows.find((candidate) => {
+      const averageCenterY =
+        candidate.reduce(
+          (total, candidateEntry) =>
+            total + candidateEntry.box.y + candidateEntry.box.height / 2,
+          0,
+        ) / candidate.length;
+      const centerY = entry.box.y + entry.box.height / 2;
+
+      return Math.abs(centerY - averageCenterY) <= RHYTHM_MARKER_ROW_TOLERANCE;
+    });
+
+    if (row) {
+      row.push(entry);
+    } else {
+      rows.push([entry]);
+    }
+  }
+
+  return rows;
 }
 
 function appendRhythmMarker(

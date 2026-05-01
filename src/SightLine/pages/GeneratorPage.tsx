@@ -155,7 +155,7 @@ function buildPitchStatusMapFromAssessment(params: {
       actual.midiFloat - referenceOffset - expected.midiFloat,
     );
 
-    if (pitchDelta <= 0.5) {
+    if (pitchDelta <= 0.7) {
       statusesByIndex[expected.index] = "correct";
     } else if (pitchDelta <= 2) {
       statusesByIndex[expected.index] = "close";
@@ -433,6 +433,7 @@ export default function GeneratorPage({
   const [assessmentStatus, setAssessmentStatus] =
     useState<AssessmentStatus>("idle");
   const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
+  const [isLegendOpen, setIsLegendOpen] = useState(false);
 
   function getWrittenTonic(): DetectedTonic {
     return buildDetectedTonicFromGeneratedExercise(
@@ -578,6 +579,10 @@ export default function GeneratorPage({
     stopAssessmentScale();
   }
 
+  function handleCloseLegend() {
+    setIsLegendOpen(false);
+  }
+
   const rhythmMarkersByIndex = useMemo(
     () => buildRhythmMarkerMapFromAssessment(assessmentResult),
     [assessmentResult],
@@ -609,20 +614,26 @@ export default function GeneratorPage({
   });
 
   useEffect(() => {
-    if (!isAssessmentModalOpen) {
+    if (!isAssessmentModalOpen && !isLegendOpen) {
       return;
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        handleCloseAssessmentModal();
+        if (isAssessmentModalOpen) {
+          handleCloseAssessmentModal();
+        }
+
+        if (isLegendOpen) {
+          handleCloseLegend();
+        }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isAssessmentModalOpen]);
+  }, [isAssessmentModalOpen, isLegendOpen]);
 
   useEffect(() => () => stopAssessmentScale(), []);
 
@@ -739,6 +750,115 @@ export default function GeneratorPage({
             </div>
           ) : null}
 
+          {isLegendOpen ? (
+            <div
+              className="AppModalBackdrop"
+              onClick={handleCloseLegend}
+              role="presentation"
+            >
+              <div
+                className="AppModal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="assessment-legend-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  className="AppModalClose"
+                  onClick={handleCloseLegend}
+                >
+                  ×
+                </button>
+                <h3 id="assessment-legend-title">Assessment Legend</h3>
+                <div className="AppAssessmentLegend">
+                  <section>
+                    <h4>Pitch Colors</h4>
+                    <ul>
+                      <li>
+                        <span
+                          className="AppAssessmentLegendSwatch"
+                          style={{ background: NOTE_FEEDBACK_COLORS.correct }}
+                        />
+                        Green: Correct / nearly correct
+                      </li>
+                      <li>
+                        <span
+                          className="AppAssessmentLegendSwatch"
+                          style={{ background: NOTE_FEEDBACK_COLORS.close }}
+                        />
+                        Yellow: Close
+                      </li>
+                      <li>
+                        <span
+                          className="AppAssessmentLegendSwatch"
+                          style={{
+                            background: NOTE_FEEDBACK_COLORS.lowConfidence,
+                          }}
+                        />
+                        Orange: Low confidence
+                      </li>
+                      <li>
+                        <span
+                          className="AppAssessmentLegendSwatch"
+                          style={{
+                            background: NOTE_FEEDBACK_COLORS.incorrect,
+                          }}
+                        />
+                        Red: Incorrect
+                      </li>
+                      <li>
+                        <span
+                          className="AppAssessmentLegendSwatch"
+                          style={{ background: NOTE_FEEDBACK_COLORS.missing }}
+                        />
+                        Gray: Missing / not assessed
+                      </li>
+                    </ul>
+                  </section>
+                  <section>
+                    <h4>Rhythm Markings</h4>
+                    <ul>
+                      <li>
+                        <span className="AppAssessmentLegendMarker AppAssessmentLegendMarker--match">
+                          ✓
+                        </span>
+                        Correct rhythm
+                      </li>
+                      <li>
+                        <span className="AppAssessmentLegendMarker AppAssessmentLegendMarker--close">
+                          ~
+                        </span>
+                        Close rhythm
+                      </li>
+                      <li>
+                        <span className="AppAssessmentLegendMarker AppAssessmentLegendMarker--mismatch">
+                          ×
+                        </span>
+                        Incorrect rhythm
+                      </li>
+                      <li>
+                        <span className="AppAssessmentLegendMarker AppAssessmentLegendMarker--missing">
+                          —
+                        </span>
+                        Not assessed / unreliable
+                      </li>
+                    </ul>
+                  </section>
+                </div>
+                <div className="AppBatchActions">
+                  <button
+                    type="button"
+                    className="AppHistoryButton AppProjectionToggleButton"
+                    onClick={handleCloseLegend}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {teacher.foldersError ? (
             <p
               className="AppHistoryLabel"
@@ -765,6 +885,15 @@ export default function GeneratorPage({
               {saveStatus === "saving" ? "Saving..." : saveMessage}
             </p>
           ) : null}
+          <div className="AppAssessmentControlsRow">
+            <button
+              type="button"
+              className="AppHistoryButton AppProjectionToggleButton AppAssessmentLegendButton"
+              onClick={() => setIsLegendOpen(true)}
+            >
+              Legend
+            </button>
+          </div>
           {assessmentScore ? (
             <section
               className="AppAssessmentScoreStrip"

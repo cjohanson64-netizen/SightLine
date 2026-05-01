@@ -182,19 +182,19 @@
 }
 
 .NotationViewer-rhythmMarker--match {
-  fill: #1ecf87;
+  fill: #1ecf87 !important;
 }
 
 .NotationViewer-rhythmMarker--close {
-  fill: #ffd54a;
+  fill: #ffd54a !important;
 }
 
 .NotationViewer-rhythmMarker--mismatch {
-  fill: #e25555;
+  fill: #e25555 !important;
 }
 
 .NotationViewer-rhythmMarker--missing {
-  fill: #8a98aa;
+  fill: #8a98aa !important;
 }
 
 .NotationViewer-notehead--correct path,
