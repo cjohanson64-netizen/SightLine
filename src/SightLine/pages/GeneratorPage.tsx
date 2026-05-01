@@ -16,30 +16,23 @@ import { useSolfege } from "../hooks/useSolfege";
 import { useStudentSession } from "../hooks/useStudentSession";
 import { useTeacherLibrary } from "../hooks/useTeacherLibrary";
 import { normalizeUserConstraintsInSpec } from "../core/spec";
-import { runAssessment } from "../core/assessment/runAssessment";
 import {
-  buildAssessmentScore,
+  runAssessment,
+  type AssessmentPitchStatus,
+  type AssessmentResult,
   type AssessmentScore,
-  type PitchAssessmentStatus,
-} from "../core/assessment/assessmentScoring";
-import { midiToFrequency } from "../core/midi";
-import type {
-  DetectedTonic,
-  NormalizedActualNote,
-  NormalizedExpectedNote,
-  PcmAudioBuffer,
-} from "../core/assessment/types";
+} from "../core/assessment";
 import {
-  buildDetectedTonicFromGeneratedExercise,
-  buildExpectedMelodyFromGeneratedExercise,
-  buildExpectedRhythmFromGeneratedExercise,
-} from "../core/assessment/buildExpectedFromGeneratedExercise";
+  toPcmAudioBuffer,
+  type RecordedAudioBuffer,
+} from "../core/assessment/intake/audioAdapter";
+import { KEY_TO_PC, midiToFrequency } from "../core/midi";
+
 type PlaybackState = ReturnType<typeof usePlayback>;
 type ProjectionState = ReturnType<typeof useProjection>;
 type SolfegeState = ReturnType<typeof useSolfege>;
 type StudentState = ReturnType<typeof useStudentSession>;
 type TeacherState = ReturnType<typeof useTeacherLibrary>;
-type AssessmentResult = Awaited<ReturnType<typeof runAssessment>>;
 type AssessmentStatus =
   | "idle"
   | "recording"
@@ -51,27 +44,13 @@ type RhythmMarker = "match" | "close" | "mismatch" | "missing";
 const NOTE_FEEDBACK_COLORS = {
   correct: "#1ecf87",
   close: "#ffd54a",
-  lowConfidence: "#ff9f43",
+  partial: "#ff9f43",
   incorrect: "#e25555",
   missing: "#8a98aa",
-} satisfies Record<PitchAssessmentStatus, string>;
+  unassessable: "#8a98aa",
+} satisfies Record<AssessmentPitchStatus, string>;
 
-const LOW_CONFIDENCE_THRESHOLD = 0.65;
 const ASSESSMENT_SCALE_OFFSETS = [0, 2, 4, 5, 7, 5, 4, 2, 0];
-
-function findExpectedNote(
-  notes: NormalizedExpectedNote[],
-  id: string | null,
-): NormalizedExpectedNote | null {
-  return id ? notes.find((note) => note.id === id) ?? null : null;
-}
-
-function findActualNote(
-  notes: NormalizedActualNote[],
-  id: string | null,
-): NormalizedActualNote | null {
-  return id ? notes.find((note) => note.id === id) ?? null : null;
-}
 
 function getRenderableAttackEventIndices(melody: MelodyEvent[]): number[] {
   const indices: number[] = [];
@@ -85,107 +64,22 @@ function getRenderableAttackEventIndices(melody: MelodyEvent[]): number[] {
   return indices;
 }
 
-function getAssessmentReferenceOffset(params: {
-  alignedPairs: AssessmentResult["normalized"]["alignedPairs"];
-  expectedNotes: NormalizedExpectedNote[];
-  actualNotes: NormalizedActualNote[];
-}): number {
-  const { alignedPairs, expectedNotes, actualNotes } = params;
-
-  for (const pair of alignedPairs) {
-    if (pair.kind !== "matched") {
-      continue;
-    }
-
-    const expected = findExpectedNote(expectedNotes, pair.expectedNoteId);
-    const actual = findActualNote(actualNotes, pair.actualNoteId);
-
-    if (expected && actual) {
-      return actual.midiFloat - expected.midiFloat;
-    }
-  }
-
-  return 0;
-}
-
-function buildPitchStatusMapFromAssessment(params: {
-  result: AssessmentResult;
-}): Record<number, PitchAssessmentStatus | undefined> {
-  const {
-    result: {
-      normalized: {
-        alignedPairs,
-        expectedNotes,
-        actualNotes,
-      },
-    },
-  } = params;
-  const statusesByIndex: Record<number, PitchAssessmentStatus | undefined> = {};
-  const referenceOffset = getAssessmentReferenceOffset({
-    alignedPairs,
-    expectedNotes,
-    actualNotes,
-  });
-
-  for (const pair of alignedPairs) {
-    const expected = findExpectedNote(expectedNotes, pair.expectedNoteId);
-
-    if (!expected) {
-      continue;
-    }
-
-    if (pair.kind === "omission") {
-      statusesByIndex[expected.index] = "missing";
-      continue;
-    }
-
-    const actual = findActualNote(actualNotes, pair.actualNoteId);
-
-    if (!actual) {
-      statusesByIndex[expected.index] = "missing";
-      continue;
-    }
-
-    if (actual.confidence < LOW_CONFIDENCE_THRESHOLD) {
-      statusesByIndex[expected.index] = "lowConfidence";
-      continue;
-    }
-
-    const pitchDelta = Math.abs(
-      actual.midiFloat - referenceOffset - expected.midiFloat,
-    );
-
-    if (pitchDelta <= 0.7) {
-      statusesByIndex[expected.index] = "correct";
-    } else if (pitchDelta <= 2) {
-      statusesByIndex[expected.index] = "close";
-    } else {
-      statusesByIndex[expected.index] = "incorrect";
-    }
-  }
-
-  return statusesByIndex;
-}
-
-function buildNoteColorMapFromPitchStatuses(params: {
-  pitchStatusesByIndex: Record<number, PitchAssessmentStatus | undefined>;
+function mapAssessmentNoteResultsToNoteColors(params: {
+  noteResults: AssessmentResult["ui"]["noteResults"];
   melody: MelodyEvent[];
 }): Record<number, string | undefined> {
-  const { pitchStatusesByIndex, melody } = params;
+  const { noteResults, melody } = params;
   const colorsByIndex: Record<number, string | undefined> = {};
   const attackEventIndices = getRenderableAttackEventIndices(melody);
 
-  for (const [rawExpectedIndex, status] of Object.entries(
-    pitchStatusesByIndex,
-  )) {
-    const expectedIndex = Number(rawExpectedIndex);
-    const eventIndex = attackEventIndices[expectedIndex];
+  for (const noteResult of noteResults) {
+    const eventIndex = attackEventIndices[noteResult.noteIndex];
 
-    if (!status || eventIndex === undefined) {
+    if (eventIndex === undefined) {
       continue;
     }
 
-    colorsByIndex[eventIndex] = NOTE_FEEDBACK_COLORS[status];
+    colorsByIndex[eventIndex] = NOTE_FEEDBACK_COLORS[noteResult.pitchStatus];
   }
 
   return colorsByIndex;
@@ -194,87 +88,231 @@ function buildNoteColorMapFromPitchStatuses(params: {
 function buildRhythmMarkerMapFromAssessment(
   result: AssessmentResult | null,
 ): Record<number, RhythmMarker | undefined> {
-  if (!result?.rhythmAnalysis) {
+  if (!result) {
     return {};
   }
 
   const markersByIndex: Record<number, RhythmMarker | undefined> = {};
 
-  for (const expectedNote of result.normalized.expectedNotes) {
-    markersByIndex[expectedNote.index] = "missing";
-  }
-
-  if (result.rhythmAnalysis.isProvisional) {
-    return markersByIndex;
-  }
-
-  for (const window of result.rhythmAnalysis.windows) {
-    markersByIndex[window.index] = window.classification;
+  for (const noteResult of result.ui.noteResults) {
+    markersByIndex[noteResult.noteIndex] = noteResult.rhythmStatus;
   }
 
   return markersByIndex;
-}
-
-function rounded(value: number, fractionDigits = 2): number {
-  return Number(value.toFixed(fractionDigits));
 }
 
 function formatScorePercent(value: number): string {
   return `${Math.round(value)}%`;
 }
 
-function buildRhythmDurationsMs(
-  events: AssessmentResult["rhythmNotes"]["noteEvents"],
-): number[] {
-  return events.map((event, index) => {
-    const next = events[index + 1];
-    const durationMs = next
-      ? next.startMs - event.startMs
-      : event.endMs - event.startMs;
-
-    return rounded(Math.max(0, durationMs), 1);
-  });
+function formatScoreValue(value: number): string {
+  return `${Math.round(value)}%`;
 }
 
-function logAssessmentRhythmDebug(params: {
-  result: AssessmentResult;
-  expectedRhythmUnits: number[];
-  expectedNoteCount: number;
-}): void {
-  const { result, expectedRhythmUnits, expectedNoteCount } = params;
-  const rhythmAnalysis = result.rhythmAnalysis;
+function getWrittenTonicMidi(params: {
+  spec: ExerciseSpec;
+  melody: MelodyEvent[];
+}): number {
+  const keyPitchClass = KEY_TO_PC[params.spec.key] ?? 0;
+  const firstAttack = params.melody.find((event) => event.isAttack !== false);
+  const referenceMidi = firstAttack?.midi ?? 60;
+  const referenceOctaveBase = Math.floor(referenceMidi / 12) * 12;
+  const candidates = [
+    referenceOctaveBase + keyPitchClass - 12,
+    referenceOctaveBase + keyPitchClass,
+    referenceOctaveBase + keyPitchClass + 12,
+  ];
 
-  console.log("SightLine rhythm assessment", {
-    expectedRhythmUnits,
-    rawDetectedRhythmMs: buildRhythmDurationsMs(result.rhythmNotes.noteEvents),
-    analyzedRhythmMs: buildRhythmDurationsMs(
-      result.rhythmAnalysisNotes.noteEvents,
-    ),
-    actualSungRhythmUnits:
-      rhythmAnalysis?.windows.map((window) =>
-        window.expectedMs > 0
-          ? rounded((window.actualMs / window.expectedMs) * window.expectedUnits)
-          : null,
-      ) ?? [],
-    rhythmWindows:
-      rhythmAnalysis?.windows.map((window) => ({
-        index: window.index,
-        expectedUnits: window.expectedUnits,
-        actualMs: rounded(window.actualMs, 1),
-        expectedMs: rounded(window.expectedMs, 1),
-        classification: window.classification,
-        isFinal: window.isFinal,
-    })) ?? [],
-    expectedNoteCount,
-    pitchNoteCount: result.pitchNotes.noteEvents.length,
-    rawRhythmNoteCount: result.rhythmNotes.noteEvents.length,
-    analyzedRhythmNoteCount: result.rhythmAnalysisNotes.noteEvents.length,
-    rhythmIsProvisional: rhythmAnalysis?.isProvisional ?? false,
-    rhythmProvisionalReason: rhythmAnalysis?.provisionalReason ?? null,
-    rhythmConfidence: rhythmAnalysis
-      ? rounded(rhythmAnalysis.rhythmConfidence)
-      : null,
-  });
+  return candidates.reduce((best, candidate) =>
+    Math.abs(candidate - referenceMidi) < Math.abs(best - referenceMidi)
+      ? candidate
+      : best,
+  );
+}
+
+function AssessmentAlignmentDebugPanel({
+  result,
+}: {
+  result: AssessmentResult | null;
+}): JSX.Element | null {
+  if (!result) {
+    return null;
+  }
+
+  const missingExpectedSlots = result.sung.alignment.alignedNotes
+    .filter((note) => note.alignmentStatus === "missing")
+    .map((note) => note.expectedNoteIndex);
+  const alignedNoteCount = result.sung.alignment.alignedNotes.filter((note) => {
+    return note.alignmentStatus === "matched";
+  }).length;
+  const extraAfterAlignment = result.sung.alignment.extraNotes.length;
+
+  return (
+    <section
+      className="AppAssessmentDebugPanel"
+      aria-label="Assessment alignment debug"
+    >
+      <div className="AppAssessmentDebugHeader">
+        <div>
+          <span className="AppAssessmentDebugEyebrow">Assessment Debug</span>
+          <h3>Structural Note Alignment</h3>
+        </div>
+        <div className="AppAssessmentDebugCounts">
+          <span>Expected: {result.sung.noteCount.expectedCount}</span>
+          <span>Detected fragments: {result.sung.noteCount.sungCount}</span>
+          <span>Aligned notes: {alignedNoteCount}</span>
+          <span>
+            Extra after alignment:{" "}
+            {extraAfterAlignment > 0 ? extraAfterAlignment : "none"}
+          </span>
+        </div>
+      </div>
+
+      <div className="AppAssessmentDebugScoreGrid">
+        <div>
+          <span>Pitch</span>
+          <strong>{formatScoreValue(result.score.pitchAccuracy)}</strong>
+        </div>
+        <div>
+          <span>Rhythm</span>
+          <strong>{formatScoreValue(result.score.rhythmAccuracy)}</strong>
+        </div>
+        <div>
+          <span>Melody</span>
+          <strong>{formatScoreValue(result.score.melodyScore)}</strong>
+        </div>
+        <div>
+          <span>Mastery</span>
+          <strong>{result.score.mastery}</strong>
+        </div>
+        <div>
+          <span>Note Count</span>
+          <strong>{formatScoreValue(result.score.noteCountAccuracy)}</strong>
+        </div>
+        <div>
+          <span>Stability</span>
+          <strong>{formatScoreValue(result.score.stabilityAccuracy)}</strong>
+        </div>
+      </div>
+
+      <div className="AppAssessmentDebugGrid">
+        <div className="AppAssessmentDebugTableWrap">
+          <h4>Note Alignment</h4>
+          <table className="AppAssessmentDebugTable">
+            <thead>
+              <tr>
+                <th>Expected Slot</th>
+                <th>Sung Note</th>
+                <th>Sung ID</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.sung.alignment.alignedNotes.map((note) => (
+                <tr key={note.expectedNoteIndex}>
+                  <td>{note.expectedNoteIndex}</td>
+                  <td>{note.sungNote ? note.sungNote.index : "None"}</td>
+                  <td>{note.sungNote ? note.sungNote.id : "None"}</td>
+                  <td>{note.alignmentStatus}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="AppAssessmentDebugSummary">
+          <p>
+            <strong>Missing expected slots</strong>
+            <span>
+              {missingExpectedSlots.length > 0
+                ? missingExpectedSlots.join(", ")
+                : "None"}
+            </span>
+          </p>
+          <p>
+            <strong>Extra sung notes</strong>
+            <span>
+              {result.sung.alignment.extraNotes.length > 0
+                ? result.sung.alignment.extraNotes
+                    .map((extra) => extra.sungNote.index)
+                    .join(", ")
+                : "None"}
+            </span>
+          </p>
+        </div>
+      </div>
+
+      <div className="AppAssessmentDebugGrid AppAssessmentDebugGrid--wide">
+        <div className="AppAssessmentDebugTableWrap">
+          <h4>Intervals</h4>
+          <table className="AppAssessmentDebugTable">
+            <thead>
+              <tr>
+                <th>To Slot</th>
+                <th>Expected</th>
+                <th>Sung</th>
+                <th>Diff</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.intervals.results.map((interval) => (
+                <tr key={interval.index}>
+                  <td>{interval.toNoteIndex}</td>
+                  <td>{interval.expectedSemitones}</td>
+                  <td>
+                    {interval.normalizedSungSemitones !== null
+                      ? interval.normalizedSungSemitones.toFixed(2)
+                      : "None"}
+                  </td>
+                  <td>
+                    {interval.intervalDifference !== null
+                      ? interval.intervalDifference.toFixed(2)
+                      : "None"}
+                  </td>
+                  <td>{interval.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="AppAssessmentDebugTableWrap">
+          <h4>Rhythm</h4>
+          <table className="AppAssessmentDebugTable">
+            <thead>
+              <tr>
+                <th>Slot</th>
+                <th>Expected</th>
+                <th>Sung</th>
+                <th>Error</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.rhythm.results.map((rhythm) => (
+                <tr key={rhythm.noteIndex}>
+                  <td>{rhythm.noteIndex}</td>
+                  <td>{rhythm.expectedBeats}</td>
+                  <td>
+                    {rhythm.sungBeats !== null
+                      ? rhythm.sungBeats.toFixed(2)
+                      : "None"}
+                  </td>
+                  <td>
+                    {rhythm.proportionalError !== null
+                      ? rhythm.proportionalError.toFixed(2)
+                      : "None"}
+                  </td>
+                  <td>{rhythm.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function getAssessButtonLabel(params: {
@@ -435,13 +473,6 @@ export default function GeneratorPage({
   const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
   const [isLegendOpen, setIsLegendOpen] = useState(false);
 
-  function getWrittenTonic(): DetectedTonic {
-    return buildDetectedTonicFromGeneratedExercise(
-      notationSpec,
-      assessmentSourceMelody,
-    );
-  }
-
   function clearAssessmentResult() {
     setAssessmentResult(null);
     setAssessmentStatus("idle");
@@ -463,7 +494,10 @@ export default function GeneratorPage({
   function handlePlayAssessmentScale() {
     stopAssessmentScale();
 
-    const tonic = getWrittenTonic();
+    const tonicMidi = getWrittenTonicMidi({
+      spec: notationSpec,
+      melody: assessmentSourceMelody,
+    });
     const audioContext = new AudioContext();
     const beatSeconds = 60 / Math.max(30, Math.min(240, playback.tempoBpm));
     const startTime = audioContext.currentTime + 0.05;
@@ -475,7 +509,7 @@ export default function GeneratorPage({
 
       scheduleAssessmentScaleTone({
         audioContext,
-        midi: tonic.tonicMidi + offset,
+        midi: tonicMidi + offset,
         startTime: noteStart,
         durationSeconds: noteDuration,
         oscillatorType: playback.instrument,
@@ -496,42 +530,23 @@ export default function GeneratorPage({
     };
   }
 
-  async function runAssessmentForAudio(pcmAudio: PcmAudioBuffer) {
+  async function runAssessmentForAudio(recordedAudio: RecordedAudioBuffer) {
     setAssessmentStatus("processing");
-    const tonic = getWrittenTonic();
-    const expectedMelody = buildExpectedMelodyFromGeneratedExercise(
-      assessmentSourceMelody,
-      currentExerciseId,
-    );
-    const expectedRhythm = buildExpectedRhythmFromGeneratedExercise(
-      assessmentSourceMelody,
-    );
 
     try {
+      const audio = toPcmAudioBuffer(recordedAudio);
       const result = await runAssessment({
         exerciseId: currentExerciseId,
-        expectedMelody,
-        expectedRhythm,
-        tonic,
-        melodyAudio: pcmAudio,
-        enableRhythmAnalysis: true,
-      });
-
-      const pitchStatusesByIndex = buildPitchStatusMapFromAssessment({
-        result,
-      });
-
-      logAssessmentRhythmDebug({
-        result,
-        expectedRhythmUnits: expectedRhythm.units,
-        expectedNoteCount: expectedMelody.notes.length,
+        melody: assessmentSourceMelody,
+        audio,
+        recordedAt: new Date().toISOString(),
       });
 
       setAssessmentResult(result);
       setAssessmentStatus("complete");
       onAssessmentNoteColorsChange(
-        buildNoteColorMapFromPitchStatuses({
-          pitchStatusesByIndex,
+        mapAssessmentNoteResultsToNoteColors({
+          noteResults: result.ui.noteResults,
           melody: assessmentSourceMelody,
         }),
       );
@@ -587,25 +602,9 @@ export default function GeneratorPage({
     () => buildRhythmMarkerMapFromAssessment(assessmentResult),
     [assessmentResult],
   );
-  const pitchStatusesByIndex = useMemo(
-    () =>
-      assessmentResult
-        ? buildPitchStatusMapFromAssessment({ result: assessmentResult })
-        : {},
-    [assessmentResult],
-  );
   const assessmentScore: AssessmentScore | null = useMemo(
-    () =>
-      assessmentResult
-        ? buildAssessmentScore({
-            pitchStatusesByIndex,
-            rhythmMarkersByIndex,
-            expectedNoteCount: assessmentResult.normalized.expectedNotes.length,
-            rhythmIsProvisional:
-              assessmentResult.rhythmAnalysis?.isProvisional ?? true,
-          })
-        : null,
-    [assessmentResult, pitchStatusesByIndex, rhythmMarkersByIndex],
+    () => assessmentResult?.score ?? null,
+    [assessmentResult],
   );
   const assessLabel = getAssessButtonLabel({
     status: assessmentStatus,
@@ -793,10 +792,10 @@ export default function GeneratorPage({
                         <span
                           className="AppAssessmentLegendSwatch"
                           style={{
-                            background: NOTE_FEEDBACK_COLORS.lowConfidence,
+                            background: NOTE_FEEDBACK_COLORS.partial,
                           }}
                         />
-                        Orange: Low confidence
+                        Orange: Partial interval
                       </li>
                       <li>
                         <span
@@ -885,15 +884,6 @@ export default function GeneratorPage({
               {saveStatus === "saving" ? "Saving..." : saveMessage}
             </p>
           ) : null}
-          <div className="AppAssessmentControlsRow">
-            <button
-              type="button"
-              className="AppHistoryButton AppProjectionToggleButton AppAssessmentLegendButton"
-              onClick={() => setIsLegendOpen(true)}
-            >
-              Legend
-            </button>
-          </div>
           {assessmentScore ? (
             <section
               className="AppAssessmentScoreStrip"
@@ -916,10 +906,7 @@ export default function GeneratorPage({
                   Rhythm Accuracy
                 </span>
                 <strong>
-                  {assessmentScore.rhythmIncluded &&
-                  assessmentScore.rhythmAccuracy !== null
-                    ? formatScorePercent(assessmentScore.rhythmAccuracy)
-                    : "Not reliable"}
+                  {formatScorePercent(assessmentScore.rhythmAccuracy)}
                 </strong>
               </div>
               <div className="AppAssessmentScoreItem">
@@ -927,6 +914,28 @@ export default function GeneratorPage({
                 <strong>
                   {formatScorePercent(assessmentScore.melodyScore)}
                 </strong>
+              </div>
+              <div className="AppAssessmentScoreItem">
+                <span className="AppAssessmentScoreLabel">Note Count</span>
+                <strong>
+                  {formatScorePercent(assessmentScore.noteCountAccuracy)}
+                </strong>
+              </div>
+              <div className="AppAssessmentScoreItem">
+                <span className="AppAssessmentScoreLabel">Stability</span>
+                <strong>
+                  {formatScorePercent(assessmentScore.stabilityAccuracy)}
+                </strong>
+              </div>
+              <div className="AppAssessmentScoreItem AppAssessmentLegendScoreItem">
+                <span className="AppAssessmentScoreLabel">Guide</span>
+                <button
+                  type="button"
+                  className="AppHistoryButton AppProjectionToggleButton AppAssessmentLegendButton"
+                  onClick={() => setIsLegendOpen(true)}
+                >
+                  Legend
+                </button>
               </div>
             </section>
           ) : null}
@@ -939,6 +948,10 @@ export default function GeneratorPage({
         <div
           className={`AppPrimaryColumn ${projection.isProjectionMode ? "AppPrimaryColumnProjection" : ""}`}
         >
+          {!projection.isProjectionMode ? (
+            <AssessmentAlignmentDebugPanel result={assessmentResult} />
+          ) : null}
+
           <div
             ref={notationContainerRef as React.RefObject<HTMLDivElement>}
             className={`AppNotationPane ${projection.isProjectionMode ? "AppNotationPaneProjection" : ""}`}

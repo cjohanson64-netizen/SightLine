@@ -4,7 +4,7 @@ import type {
   MouseEvent as ReactMouseEvent,
 } from "react";
 
-import Logo from "../assets/SightLine Logo.svg";
+import Logo from "../assets/SightLine-Logo.svg";
 
 import {
   Navigate,
@@ -24,11 +24,7 @@ import LibraryPreviewModal from "../components/modals/LibraryPreviewModal";
 import MelodyPreferencesModal from "../components/modals/MelodyPreferencesModal";
 import StudentSignInModal from "../components/modals/StudentSignInModal";
 
-import {
-  midiToPitch,
-  noteKey,
-  prefersFlatsForKey,
-} from "../core/midi";
+import { midiToPitch, noteKey, prefersFlatsForKey } from "../core/midi";
 
 import { applyPitchPatch } from "../core/scale";
 import { defaultSpec, normalizeUserConstraintsInSpec } from "../core/spec";
@@ -119,8 +115,7 @@ export default function AppContent(): JSX.Element {
 
   const [logs, setLogs] = useState<string[]>([]);
 
-  const [debugSemantics, setDebugSemantics] =
-    useState(EMPTY_DEBUG_SEMANTICS);
+  const [debugSemantics, setDebugSemantics] = useState(EMPTY_DEBUG_SEMANTICS);
 
   const [assessmentNoteColorsByIndex, setAssessmentNoteColorsByIndex] =
     useState<Record<number, string | undefined>>({});
@@ -174,10 +169,7 @@ export default function AppContent(): JSX.Element {
 
     const activeSpec = currentSpecSnapshot ?? spec;
 
-    const preferFlats = prefersFlatsForKey(
-      activeSpec.key,
-      activeSpec.mode,
-    );
+    const preferFlats = prefersFlatsForKey(activeSpec.key, activeSpec.mode);
 
     return patched.map((event) =>
       event.isAttack === false
@@ -234,12 +226,7 @@ export default function AppContent(): JSX.Element {
         currentPatchedMelody,
         fallbackMusicXml: musicXml,
       }),
-    [
-      currentSpecSnapshot,
-      currentMelody,
-      currentPatchedMelody,
-      musicXml,
-    ],
+    [currentSpecSnapshot, currentMelody, currentPatchedMelody, musicXml],
   );
 
   const notationMusicXml = useMemo(
@@ -268,12 +255,10 @@ export default function AppContent(): JSX.Element {
     () =>
       buildDisplayNotationMusicXml({
         notationMusicXml,
-        addSolfegeLyricsToMusicXml:
-          solfege.addSolfegeLyricsToMusicXml,
+        addSolfegeLyricsToMusicXml: solfege.addSolfegeLyricsToMusicXml,
         solfegeMode: solfege.solfegeMode,
         accidentalMode: solfege.solfegeAccidentalMode,
-        colorizeLyrics:
-          solfege.solfegeColorizeMode !== "off",
+        colorizeLyrics: solfege.solfegeColorizeMode !== "off",
         fallback: {
           key: currentSpecSnapshot?.key ?? spec.key,
           mode: currentSpecSnapshot?.mode ?? spec.mode,
@@ -292,8 +277,7 @@ export default function AppContent(): JSX.Element {
   );
 
   const selectedOriginalAttack =
-    selectedMelodyIndex >= 0 &&
-    currentMelody.length > 0
+    selectedMelodyIndex >= 0 && currentMelody.length > 0
       ? currentMelody[selectedMelodyIndex]
       : null;
 
@@ -332,9 +316,7 @@ export default function AppContent(): JSX.Element {
     const billing = params.get("billing");
 
     if (billing === "success") {
-      setBillingNotice(
-        "Checkout complete. Verifying subscription status...",
-      );
+      setBillingNotice("Checkout complete. Verifying subscription status...");
 
       void teacher.refreshSubscriptionStatus();
 
@@ -419,8 +401,7 @@ export default function AppContent(): JSX.Element {
     },
     playback: {
       stop: playback.stop,
-      setPlaybackHighlightIndex:
-        playback.setPlaybackHighlightIndex,
+      setPlaybackHighlightIndex: playback.setPlaybackHighlightIndex,
     },
     seed,
     setCurrentBeatsPerMeasure,
@@ -436,13 +417,10 @@ export default function AppContent(): JSX.Element {
     setSpec,
     setDebugSemantics,
     solfege: {
-      addSolfegeLyricsToMusicXml:
-        solfege.addSolfegeLyricsToMusicXml,
+      addSolfegeLyricsToMusicXml: solfege.addSolfegeLyricsToMusicXml,
       solfegeMode: solfege.solfegeMode,
-      solfegeAccidentalMode:
-        solfege.solfegeAccidentalMode,
-      solfegeColorizeMode:
-        solfege.solfegeColorizeMode,
+      solfegeAccidentalMode: solfege.solfegeAccidentalMode,
+      solfegeColorizeMode: solfege.solfegeColorizeMode,
     },
     spec,
     student,
@@ -454,10 +432,9 @@ export default function AppContent(): JSX.Element {
     runWithNewSeed();
   };
 
-  const handleNotationKeyDownWhileStopped:
-    React.KeyboardEventHandler<HTMLDivElement> = (
-    event,
-  ) => {
+  const handleNotationKeyDownWhileStopped: React.KeyboardEventHandler<
+    HTMLDivElement
+  > = (event) => {
     if (playback.isPlaying) {
       event.preventDefault();
       return;
@@ -533,11 +510,10 @@ export default function AppContent(): JSX.Element {
 
   const modeLabel = getModeLabel(mode);
 
-  const teacherFeaturesDisabled =
-    getTeacherFeaturesDisabled(
-      mode,
-      teacher.hasActiveSubscription,
-    );
+  const teacherFeaturesDisabled = getTeacherFeaturesDisabled(
+    mode,
+    teacher.hasActiveSubscription,
+  );
 
   const {
     showBillingAction,
@@ -549,19 +525,16 @@ export default function AppContent(): JSX.Element {
     teacher,
   });
 
-  const navAuthLabel = getNavAuthLabel(
-    mode,
-    Boolean(auth.authUser),
-  );
+  const navAuthLabel = getNavAuthLabel(mode, Boolean(auth.authUser));
 
   const handleNavAuthClick = () => {
-  if (mode === "student") {
-    handleLeaveClassroom();
-    return;
-  }
+    if (mode === "student") {
+      handleLeaveClassroom();
+      return;
+    }
 
-  void handleAuthClick();
-};
+    void handleAuthClick();
+  };
 
   // ── Route Views ───────────────────────────────────────────────────────────
 
@@ -589,19 +562,13 @@ export default function AppContent(): JSX.Element {
       formatSavedDate={formatSavedDate}
       mode={mode}
       onExportSavedPacketZip={handleExportSavedPacketZip}
-      onOpenAddStudents={
-        modalState.openAddStudentsModal
-      }
+      onOpenAddStudents={modalState.openAddStudentsModal}
       onOpenBatchGenerate={openBatchGenerateModal}
-      onOpenClassroomAccess={
-        modalState.openClassroomAccessModal
-      }
+      onOpenClassroomAccess={modalState.openClassroomAccessModal}
       onOpenSavedPacket={handleOpenSavedPacket}
       onPreviewSubmission={handlePreviewSubmission}
       teacher={teacher}
-      teacherFeaturesDisabled={
-        teacherFeaturesDisabled
-      }
+      teacherFeaturesDisabled={teacherFeaturesDisabled}
     />
   );
 
@@ -610,67 +577,31 @@ export default function AppContent(): JSX.Element {
   return (
     <div
       className={`AppShell AppThemeDark ${
-        projection.isProjectionMode
-          ? "AppProjectionMode"
-          : ""
+        projection.isProjectionMode ? "AppProjectionMode" : ""
       }`}
-      onClickCapture={
-        handleStudentInteractionClickCapture
-      }
-      onChangeCapture={
-        handleStudentInteractionChangeCapture
-      }
+      onClickCapture={handleStudentInteractionClickCapture}
+      onChangeCapture={handleStudentInteractionChangeCapture}
     >
       <AppNavbar
         modeLabel={modeLabel}
         authLabel={navAuthLabel}
         onAuthClick={handleNavAuthClick}
         onBillingAction={() =>
-          void (
-            teacher.hasActiveSubscription
-              ? teacher.startPortalSession()
-              : teacher.startCheckout()
-          )
+          void (teacher.hasActiveSubscription
+            ? teacher.startPortalSession()
+            : teacher.startCheckout())
         }
         showBillingAction={showBillingAction}
-        billingActionDisabled={
-          billingActionDisabled
-        }
+        billingActionDisabled={billingActionDisabled}
         billingActionLabel={billingActionLabel}
         billingActionTitle={billingActionTitle}
-        isProjectionMode={
-          projection.isProjectionMode
-        }
+        isProjectionMode={projection.isProjectionMode}
         canAccessClass={mode === "teacher"}
         interactionDisabled={interactionDisabled}
       />
+      <img src={Logo} alt="SightLine Logo" className="logo" />
 
-      {!projection.isProjectionMode &&
-      location.pathname === "/guide" ? (
-        <div className="AppIntro">
-          <div className="AppBrand">
-            <img
-              src={Logo}
-              alt="SightLine Logo"
-              className="logo"
-            />
-
-            <div>
-              <p className="AppSubtitle">
-                SightLine Guide
-              </p>
-
-              <p className="AppSubtitle">
-                Practical setup help for teachers
-                and students.
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {auth.authMessage &&
-      !projection.isProjectionMode ? (
+      {auth.authMessage && !projection.isProjectionMode ? (
         <p
           className="AppSubtitle"
           style={{
@@ -688,244 +619,138 @@ export default function AppContent(): JSX.Element {
           element={
             <GeneratorPage
               currentMelody={currentMelody}
-              currentPatchedMelody={
-                currentPatchedMelody
-              }
-              currentSpecSnapshot={
-                currentSpecSnapshot
-              }
-              climaxNoteIndices={
-                climaxNoteIndices
-              }
-              displayNotationMusicXml={
-                displayNotationMusicXml
-              }
+              currentPatchedMelody={currentPatchedMelody}
+              currentSpecSnapshot={currentSpecSnapshot}
+              climaxNoteIndices={climaxNoteIndices}
+              displayNotationMusicXml={displayNotationMusicXml}
               error={error}
               exportMusicXml={exportMusicXml}
               formatSavedDate={formatSavedDate}
-              handleJoinClassroom={
-                handleJoinClassroom
-              }
-              handleLeaveClassroom={
-                handleLeaveClassroom
-              }
-              handleLoadClassroomExercise={
-                handleLoadClassroomExercise
-              }
-              handleLoadSavedExercise={
-                handleLoadSavedExercise
-              }
-              handleNotationKeyDown={
-                handleNotationKeyDownWhileStopped
-              }
-              handleSaveToSupabase={
-                handleSaveToSupabase
-              }
-              handleSubmitToTeacher={
-                handleSubmitToTeacher
-              }
+              handleJoinClassroom={handleJoinClassroom}
+              handleLeaveClassroom={handleLeaveClassroom}
+              handleLoadClassroomExercise={handleLoadClassroomExercise}
+              handleLoadSavedExercise={handleLoadSavedExercise}
+              handleNotationKeyDown={handleNotationKeyDownWhileStopped}
+              handleSaveToSupabase={handleSaveToSupabase}
+              handleSubmitToTeacher={handleSubmitToTeacher}
               isGuestMode={isGuestMode}
               mode={mode}
-              notationContainerRef={
-                notationContainerRef
-              }
+              notationContainerRef={notationContainerRef}
               onExport={handleExport}
-              onOpenMelodyPreferences={
-                modalState.openMelodyPreferencesModal
-              }
+              onOpenMelodyPreferences={modalState.openMelodyPreferencesModal}
               pitchEditMode={pitchEditMode}
               playback={playback}
               projection={projection}
-              relaxationNotice={
-                relaxationNotice
-              }
-              runWithNewSeed={
-                handleGenerateNewMelody
-              }
-              rerunWithCurrentSeed={
-                rerunWithCurrentSeed
-              }
+              relaxationNotice={relaxationNotice}
+              runWithNewSeed={handleGenerateNewMelody}
+              rerunWithCurrentSeed={rerunWithCurrentSeed}
               saveMessage={saveMessage}
               saveStatus={saveStatus}
               setEditMessage={setEditMessage}
-              setPitchEditMode={
-                setPitchEditMode
-              }
+              setPitchEditMode={setPitchEditMode}
               setSpec={setSpec}
               solfege={solfege}
               spec={spec}
               student={student}
               teacher={teacher}
-              teacherFeaturesDisabled={
-                teacherFeaturesDisabled
-              }
-              updateExerciseTitle={
-                updateExerciseTitle
-              }
-              interactionDisabled={
-                interactionDisabled
-              }
-              onAssessmentNoteColorsChange={
-                setAssessmentNoteColorsByIndex
-              }
+              teacherFeaturesDisabled={teacherFeaturesDisabled}
+              updateExerciseTitle={updateExerciseTitle}
+              interactionDisabled={interactionDisabled}
+              onAssessmentNoteColorsChange={setAssessmentNoteColorsByIndex}
             />
           }
         />
 
-        <Route
-          path="/guide"
-          element={guideView}
-        />
+        <Route path="/guide" element={guideView} />
 
-        <Route
-          path="/dashboard"
-          element={<Navigate to="/guide" replace />}
-        />
+        <Route path="/dashboard" element={<Navigate to="/guide" replace />} />
 
-        <Route
-          path="/generator"
-          element={<Navigate to="/" replace />}
-        />
+        <Route path="/generator" element={<Navigate to="/" replace />} />
 
         <Route
           path="/class"
           element={
-            mode === "teacher" ? (
-              classAccessView
-            ) : (
-              <Navigate to="/" replace />
-            )
+            mode === "teacher" ? classAccessView : <Navigate to="/" replace />
           }
         />
 
-        <Route
-          path="*"
-          element={<Navigate to="/" replace />}
-        />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
       <AuthChoiceModal
         authUser={auth.authUser}
         isOpen={modalState.showAuthChoiceModal}
-        onClose={
-          modalState.closeAuthChoiceModal
-        }
-        onStudentSignIn={
-          handleStudentSignIn
-        }
-        onTeacherSignIn={
-          handleTeacherSignIn
-        }
+        onClose={modalState.closeAuthChoiceModal}
+        onStudentSignIn={handleStudentSignIn}
+        onTeacherSignIn={handleTeacherSignIn}
       />
 
       <StudentSignInModal
         authUser={auth.authUser}
-        isOpen={
-          modalState.showStudentSignInModal
-        }
-        onClose={
-          modalState.closeStudentSignInModal
-        }
+        isOpen={modalState.showStudentSignInModal}
+        onClose={modalState.closeStudentSignInModal}
         onJoin={handleJoinClassroom}
         onLeave={handleLeaveClassroom}
         onResetToMySettings={() => {
-          const prev =
-            student.resetToMySettings();
+          const prev = student.resetToMySettings();
 
           if (prev) {
-            setSpec(
-              normalizeUserConstraintsInSpec(
-                prev,
-              ),
-            );
+            setSpec(normalizeUserConstraintsInSpec(prev));
           }
         }}
         onUseTeacherSettings={() => {
-          const next =
-            student.applyTeacherSettings(
-              spec,
-              normalizeUserConstraintsInSpec(
-                spec,
-              ),
-            );
+          const next = student.applyTeacherSettings(
+            spec,
+            normalizeUserConstraintsInSpec(spec),
+          );
 
           if (next) {
-            setSpec(
-              normalizeUserConstraintsInSpec(
-                next,
-              ),
-            );
+            setSpec(normalizeUserConstraintsInSpec(next));
           }
         }}
         student={student}
       />
 
       <ClassroomAccessModal
-        isOpen={
-          modalState.showClassroomAccessModal
-        }
+        isOpen={modalState.showClassroomAccessModal}
         mode={mode}
-        onClose={
-          modalState.closeClassroomAccessModal
-        }
+        onClose={modalState.closeClassroomAccessModal}
         teacher={teacher}
       />
 
       <AddStudentsModal
-        isOpen={
-          modalState.showAddStudentsModal
-        }
+        isOpen={modalState.showAddStudentsModal}
         mode={mode}
-        onClose={
-          modalState.closeAddStudentsModal
-        }
+        onClose={modalState.closeAddStudentsModal}
         teacher={teacher}
       />
 
       <CreatePacketFromSelectedModal
-        isOpen={
-          teacher.showCreatePacketFromSelectedModal
-        }
+        isOpen={teacher.showCreatePacketFromSelectedModal}
         mode={mode}
-        onClose={() =>
-          teacher.setShowCreatePacketFromSelectedModal(
-            false,
-          )
-        }
+        onClose={() => teacher.setShowCreatePacketFromSelectedModal(false)}
         onExportSavedPacketZip={() =>
           teacher.lastCreatedPacket
-            ? handleExportSavedPacketZip(
-                teacher.lastCreatedPacket,
-              )
+            ? handleExportSavedPacketZip(teacher.lastCreatedPacket)
             : Promise.resolve()
         }
         onOpenSavedPacket={() =>
           teacher.lastCreatedPacket
-            ? handleOpenSavedPacket(
-                teacher.lastCreatedPacket,
-              )
+            ? handleOpenSavedPacket(teacher.lastCreatedPacket)
             : Promise.resolve()
         }
         teacher={teacher}
       />
 
       <LibraryPreviewModal
-        currentSpecSnapshot={
-          currentSpecSnapshot
-        }
-        isOpen={
-          teacher.showLibraryPreviewModal
-        }
+        currentSpecSnapshot={currentSpecSnapshot}
+        isOpen={teacher.showLibraryPreviewModal}
         mode={mode}
-        onClose={() =>
-          teacher.closeLibraryPreview()
-        }
+        onClose={() => teacher.closeLibraryPreview()}
         solfege={solfege}
         spec={spec}
         teacher={teacher}
-        interactionDisabled={
-          interactionDisabled
-        }
+        interactionDisabled={interactionDisabled}
       />
 
       <BatchGenerateModal
@@ -937,27 +762,17 @@ export default function AppContent(): JSX.Element {
 
       <MelodyPreferencesModal
         isGuestMode={isGuestMode}
-        isOpen={
-          modalState.showMelodyPreferencesModal
-        }
+        isOpen={modalState.showMelodyPreferencesModal}
         mode={mode}
-        normalizeSpec={
-          normalizeUserConstraintsInSpec
-        }
-        onClose={
-          modalState.closeMelodyPreferencesModal
-        }
+        normalizeSpec={normalizeUserConstraintsInSpec}
+        onClose={modalState.closeMelodyPreferencesModal}
         onExport={handleExport}
-        onRandomizeSeed={
-          handleGenerateNewMelody
-        }
+        onRandomizeSeed={handleGenerateNewMelody}
         projection={projection}
         setSpec={setSpec}
         spec={spec}
         teacher={teacher}
-        interactionDisabled={
-          interactionDisabled
-        }
+        interactionDisabled={interactionDisabled}
       />
     </div>
   );

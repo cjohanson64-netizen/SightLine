@@ -1095,12 +1095,6 @@ body {
   margin: 0.35rem 0 0.65rem;
 }
 
-.AppAssessmentControlsRow {
-  display: flex;
-  justify-content: flex-end;
-  margin: 0.2rem 0 0.45rem;
-}
-
 .AppAssessmentLegendButton {
   padding: 0.35rem 0.55rem;
   font-size: 0.82rem;
@@ -1133,6 +1127,14 @@ body {
 
 .AppAssessmentScoreMastery strong {
   color: #1ecf87;
+}
+
+.AppAssessmentLegendScoreItem {
+  min-width: auto;
+}
+
+.AppAssessmentLegendScoreItem .AppAssessmentLegendButton {
+  margin-top: 0.25rem;
 }
 
 .AppAssessmentLegend {
@@ -1192,6 +1194,151 @@ body {
 
 .AppAssessmentLegendMarker--missing {
   color: #8a98aa;
+}
+
+.AppAssessmentDebugPanel {
+  border: 1px solid rgba(142, 164, 190, 0.32);
+  border-radius: 8px;
+  background: rgba(14, 20, 30, 0.62);
+  padding: 0.7rem;
+}
+
+.AppAssessmentDebugHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.AppAssessmentDebugHeader h3 {
+  margin: 0.12rem 0 0;
+  color: #f1f6ff;
+  font-size: 1rem;
+}
+
+.AppAssessmentDebugEyebrow {
+  display: block;
+  color: #90a4bc;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.AppAssessmentDebugCounts {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.AppAssessmentDebugCounts span {
+  border: 1px solid rgba(142, 164, 190, 0.28);
+  border-radius: 6px;
+  color: #d7e3f2;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.25rem 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.AppAssessmentDebugScoreGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 0.45rem;
+  margin: 0 0 0.75rem;
+}
+
+.AppAssessmentDebugScoreGrid div {
+  border: 1px solid rgba(142, 164, 190, 0.24);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.45rem 0.55rem;
+}
+
+.AppAssessmentDebugScoreGrid span {
+  display: block;
+  color: #90a4bc;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.AppAssessmentDebugScoreGrid strong {
+  display: block;
+  margin-top: 0.08rem;
+  color: #f1f6ff;
+  font-size: 1.05rem;
+}
+
+.AppAssessmentDebugGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(210px, 0.35fr);
+  gap: 0.7rem;
+}
+
+.AppAssessmentDebugGrid + .AppAssessmentDebugGrid {
+  margin-top: 0.8rem;
+}
+
+.AppAssessmentDebugGrid--wide {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.AppAssessmentDebugTableWrap {
+  overflow-x: auto;
+}
+
+.AppAssessmentDebugTableWrap h4 {
+  margin: 0 0 0.35rem;
+  color: #f1f6ff;
+  font-size: 0.86rem;
+}
+
+.AppAssessmentDebugTable {
+  width: 100%;
+  min-width: 420px;
+  border-collapse: collapse;
+}
+
+.AppAssessmentDebugTable th,
+.AppAssessmentDebugTable td {
+  border-bottom: 1px solid rgba(142, 164, 190, 0.18);
+  padding: 0.35rem 0.45rem;
+  text-align: left;
+  font-size: 0.84rem;
+}
+
+.AppAssessmentDebugTable th {
+  color: #b8c9dd;
+  font-weight: 700;
+}
+
+.AppAssessmentDebugTable td {
+  color: #d7e3f2;
+}
+
+.AppAssessmentDebugSummary {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+}
+
+.AppAssessmentDebugSummary p {
+  margin: 0;
+  display: grid;
+  gap: 0.18rem;
+  color: #d7e3f2;
+  font-size: 0.85rem;
+}
+
+.AppAssessmentDebugSummary strong {
+  color: #90a4bc;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .AppHistoryLabel input:not([type="checkbox"]),
@@ -1391,6 +1538,48 @@ body {
 
 .AppThemeLight .AppAssessmentLegendMarker {
   color: #1f2f44;
+}
+
+.AppThemeLight .AppAssessmentDebugPanel {
+  background: #f8fbff;
+  border-color: #c5d2e1;
+}
+
+.AppThemeLight .AppAssessmentDebugHeader h3,
+.AppThemeLight .AppAssessmentDebugTableWrap h4,
+.AppThemeLight .AppAssessmentDebugTable td,
+.AppThemeLight .AppAssessmentDebugSummary p {
+  color: #1f2f44;
+}
+
+.AppThemeLight .AppAssessmentDebugEyebrow,
+.AppThemeLight .AppAssessmentDebugTable th,
+.AppThemeLight .AppAssessmentDebugSummary strong {
+  color: #526982;
+}
+
+.AppThemeLight .AppAssessmentDebugCounts span {
+  background: #edf3fa;
+  border-color: #c5d2e1;
+  color: #24384f;
+}
+
+.AppThemeLight .AppAssessmentDebugScoreGrid div {
+  background: #edf3fa;
+  border-color: #c5d2e1;
+}
+
+.AppThemeLight .AppAssessmentDebugScoreGrid span {
+  color: #526982;
+}
+
+.AppThemeLight .AppAssessmentDebugScoreGrid strong {
+  color: #1f2f44;
+}
+
+.AppThemeLight .AppAssessmentDebugTable th,
+.AppThemeLight .AppAssessmentDebugTable td {
+  border-bottom-color: #d8e2ee;
 }
 
 .AppThemeLight .AppHistoryButton,

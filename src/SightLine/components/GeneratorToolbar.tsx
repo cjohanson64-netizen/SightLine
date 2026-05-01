@@ -196,7 +196,7 @@ export default function GeneratorToolbar({
           ) : null}
           <button
             type="button"
-            className="AppHistoryButton AppProjectionToggleButton"
+            className="AppHistoryButton AppProjectionToggleButton ToolbarGenerateButton"
             onClick={onAssess}
             disabled={controlsDisabled || assessDisabled}
           >

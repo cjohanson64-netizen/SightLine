@@ -1,12 +1,12 @@
 import { useCallback, useRef, useState, useEffect } from "react";
-import type { PcmAudioBuffer } from "@/SightLine/core/assessment/types";
+import type { RecordedAudioBuffer } from "@/SightLine/core/assessment/intake/audioAdapter";
 
 export interface UseAssessmentRecorderResult {
   isRecording: boolean;
   isRequestingPermission: boolean;
   error: string | null;
   startRecording: () => Promise<void>;
-  stopRecording: () => Promise<PcmAudioBuffer | null>;
+  stopRecording: () => Promise<RecordedAudioBuffer | null>;
   resetRecording: () => void;
 }
 
@@ -14,7 +14,7 @@ function stopTracks(stream: MediaStream | null): void {
   stream?.getTracks().forEach((track) => track.stop());
 }
 
-function audioBufferToPcm(audioBuffer: AudioBuffer): PcmAudioBuffer {
+function audioBufferToPcm(audioBuffer: AudioBuffer): RecordedAudioBuffer {
   const channelCount = audioBuffer.numberOfChannels;
   const channels = Array.from(
     { length: channelCount },
@@ -30,7 +30,7 @@ function audioBufferToPcm(audioBuffer: AudioBuffer): PcmAudioBuffer {
   };
 }
 
-async function decodeBlobToPcm(blob: Blob): Promise<PcmAudioBuffer> {
+async function decodeBlobToPcm(blob: Blob): Promise<RecordedAudioBuffer> {
   const arrayBuffer = await blob.arrayBuffer();
   const audioContext = new AudioContext();
 
@@ -128,7 +128,7 @@ export function useAssessmentRecorder(): UseAssessmentRecorderResult {
   }, [resetInternal]);
 
   const stopRecording =
-    useCallback(async (): Promise<PcmAudioBuffer | null> => {
+    useCallback(async (): Promise<RecordedAudioBuffer | null> => {
       const recorder = mediaRecorderRef.current;
 
       if (!recorder) {
